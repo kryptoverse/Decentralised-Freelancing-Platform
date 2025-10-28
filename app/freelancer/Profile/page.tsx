@@ -9,10 +9,9 @@ import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 
 import { ProfileLoader } from "@/components/freelancer/profile/ProfileLoader";
 import { ProfileDisplay } from "@/components/freelancer/profile/ProfileDisplay";
-import { ProfileForm } from "@/components/freelancer/profile/ProfileForm";
 import { ProfileEdit } from "@/components/freelancer/profile/ProfileEdit";
 import { ProfileNotFound } from "@/components/freelancer/profile/ProfileNotFound";
-import { ProfileSetupWizard } from "@/components/freelancer/profile/ProfileSetupWizard"; // ✅ added
+import { ProfileSetupWizard } from "@/components/freelancer/profile/ProfileSetupWizard"; // ✅ main wizard for creation & updates
 
 interface FreelancerProfile {
   name: string;
@@ -49,7 +48,7 @@ export default function FreelancerProfilePage() {
           params: [account.address],
         });
 
-        // 🔹 3. No profile deployed yet
+        // 🔹 3. If no profile deployed yet
         if (
           !profileAddr ||
           profileAddr === "0x0000000000000000000000000000000000000000"
@@ -115,7 +114,7 @@ export default function FreelancerProfilePage() {
   // 🌀 Loading state
   if (loading) return <ProfileLoader />;
 
-  // 🆕 1️⃣ No profile contract → show wizard
+  // 🆕 1️⃣ No profile contract → show setup wizard
   if (!profile) {
     return (
       <section className="space-y-6 max-w-3xl">

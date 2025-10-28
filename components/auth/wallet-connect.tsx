@@ -2,10 +2,11 @@
 
 import { useEffect } from "react";
 import { motion } from "framer-motion";
-import { Wallet } from "lucide-react";
+import { Wallet as WalletIcon } from "lucide-react";
 import {
   ConnectButton,
   useActiveAccount,
+  useActiveWallet, // ✅ added
   useDisconnect,
 } from "thirdweb/react";
 import { inAppWallet } from "thirdweb/wallets";
@@ -19,7 +20,8 @@ interface WalletConnectProps {
 
 export function WalletConnect({ selectedRole, onConnect }: WalletConnectProps) {
   const account = useActiveAccount();
-  const { disconnect } = useDisconnect(); // ✅ fixed destructuring
+  const wallet = useActiveWallet(); // ✅ gives Wallet<WalletId> instance
+  const { disconnect } = useDisconnect();
 
   useEffect(() => {
     if (account?.address) onConnect();
@@ -28,7 +30,6 @@ export function WalletConnect({ selectedRole, onConnect }: WalletConnectProps) {
   const wallets = [
     inAppWallet({
       auth: { options: ["google", "email"] },
-      // ✅ Enable EIP-4337 + gas sponsorship
       executionMode: {
         mode: "EIP4337",
         smartAccount: {
@@ -49,7 +50,7 @@ export function WalletConnect({ selectedRole, onConnect }: WalletConnectProps) {
       {/* Wallet Info Box */}
       <div className="p-4 rounded-2xl bg-surface-secondary border border-border">
         <div className="flex items-center gap-3 mb-2">
-          <Wallet className="w-5 h-5 text-secondary" />
+          <WalletIcon className="w-5 h-5 text-secondary" />
           <span className="font-medium text-foreground">Polygon Amoy Network</span>
         </div>
 
@@ -74,15 +75,15 @@ export function WalletConnect({ selectedRole, onConnect }: WalletConnectProps) {
       <ConnectButton
         client={client}
         wallets={wallets}
-        autoConnect={true} // ✅ Auto reconnects last session
+        autoConnect={true}
         theme="dark"
         connectModal={{ size: "compact" }}
       />
 
       {/* Disconnect Button */}
-      {account && (
+      {wallet && (
         <button
-          onClick={() => disconnect()}
+          onClick={() => disconnect(wallet)} // ✅ pass Wallet instance, not Account
           className="w-full text-sm text-red-400 hover:text-red-500 underline"
         >
           Disconnect Wallet

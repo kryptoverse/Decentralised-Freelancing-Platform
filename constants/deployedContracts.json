@@ -1,0 +1,14 @@
+{
+  "network": "polygonAmoy",
+  "chainId": 80002,
+  "addresses": {
+    "MockUSDT": "0x2dc739252b4089c812813af9b500adc9f0d69a44",
+    "FreelancerFactory": "0x5cee410d2de4fae0c8f9df494bb4eaa3abe00ecd",
+    "EscrowFactory": "0x3ea832d2af2ca06ca82a9a5b283047b46a9844b3",
+    "JobBoard": "0x5bf9fe85aa2028b6c9c5a5bc92f3df33f7f95f0f"
+  },
+  "roles": {
+    "platformWallet": "0xDE9aabc1421BA15ed9aCD975D11668272e26aaf5",
+    "resolver": "0xDE9aabc1421BA15ed9aCD975D11668272e26aaf5"
+  }
+}

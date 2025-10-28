@@ -1,3 +1,6 @@
+// app/api/deployAll/route.ts
+export const runtime = "nodejs"; // ✅ ensures Node runtime on Vercel
+
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";

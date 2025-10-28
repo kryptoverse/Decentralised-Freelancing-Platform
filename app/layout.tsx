@@ -11,7 +11,7 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "FYP",
   description:
-    "Web3 platform connecting freelancers, founders, and investors with AI support.",
+    "",
 };
 
 export default function RootLayout({

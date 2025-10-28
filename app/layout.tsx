@@ -9,7 +9,7 @@ import { ThirdwebProvider } from "thirdweb/react";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "FYP - Freelance. Launch. Invest.",
+  title: "FYP",
   description:
     "Web3 platform connecting freelancers, founders, and investors with AI support.",
 };

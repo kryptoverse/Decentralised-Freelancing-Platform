@@ -14,6 +14,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     "freelancer" | "client" | "founder" | "investor"
   >("client");
 
+  // ✅ Store current role in sessionStorage for public profile pages
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("currentUserRole", "client");
+    }
+  }, []);
+
   const [activeTab, setActiveTab] = useState("home");
   useEffect(() => {
     if (pathname.includes("/find-freelancer")) setActiveTab("find-freelancer");

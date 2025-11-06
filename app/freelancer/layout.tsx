@@ -14,19 +14,60 @@ export default function FreelancerLayout({
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isOpen, setIsOpen] = useState(true);
+  
+  // ✅ Check if this is a public profile route (/freelancer/[address])
+  const isPublicProfile = /^\/freelancer\/0x[a-fA-F0-9]{40}$/i.test(pathname);
+  
   const [userRole, setUserRole] = useState<
     "freelancer" | "client" | "founder" | "investor"
   >("freelancer");
 
-  // automatically detect current tab
+  // ✅ Store current role in sessionStorage for public profile pages
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    
+    // If viewing a public profile, preserve the user's actual role from sessionStorage
+    if (isPublicProfile) {
+      const storedRole = sessionStorage.getItem("currentUserRole") as 
+        | "freelancer" 
+        | "client" 
+        | "founder" 
+        | "investor" 
+        | null;
+      
+      if (storedRole) {
+        setUserRole(storedRole);
+      } else {
+        // Fallback: detect from referrer
+        const referrer = document.referrer;
+        if (referrer.includes("/client/")) {
+          setUserRole("client");
+        } else if (referrer.includes("/founder/")) {
+          setUserRole("founder");
+        } else if (referrer.includes("/investor/")) {
+          setUserRole("investor");
+        }
+        // Default stays "freelancer" if can't determine
+      }
+    } else {
+      // Normal freelancer route - set and store freelancer role
+      setUserRole("freelancer");
+      sessionStorage.setItem("currentUserRole", "freelancer");
+    }
+  }, [isPublicProfile]);
+
+  // automatically detect current tab (skip for public profiles)
   const [activeTab, setActiveTab] = useState("home");
   useEffect(() => {
+    // Don't set active tab for public profile routes
+    if (isPublicProfile) return;
+    
     if (pathname.includes("/profile")) setActiveTab("profile");
     else if (pathname.includes("/settings")) setActiveTab("settings");
     else if (pathname.includes("/orders")) setActiveTab("orders");
     else if (pathname.includes("/find-work")) setActiveTab("find-work");
     else setActiveTab("home");
-  }, [pathname]);
+  }, [pathname, isPublicProfile]);
 
   const handleRoleChange = (
     role: "freelancer" | "client" | "founder" | "investor"

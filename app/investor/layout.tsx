@@ -20,6 +20,13 @@ export default function InvestorLayout({
     "freelancer" | "client" | "founder" | "investor"
   >("investor");
 
+  // ✅ Store current role in sessionStorage for public profile pages
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("currentUserRole", "investor");
+    }
+  }, []);
+
   // ✅ Detect active tab by route
   useEffect(() => {
     if (pathname.includes("/investments")) setActiveTab("investments");

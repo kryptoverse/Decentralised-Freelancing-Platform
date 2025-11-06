@@ -1,87 +1,260 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Sidebar } from "@/components/dashboard/sidebar";
-import { TopNavbar } from "@/components/dashboard/top-navbar";
-import { AIAssistantChat } from "@/components/dashboard/ai-assistant-chat";
-import { useState } from "react";
+import { getContract, readContract } from "thirdweb";
+import { useActiveAccount } from "thirdweb/react";
+import { client } from "@/lib/thirdweb-client";
+import { CHAIN } from "@/lib/chains";
+import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
+import { ipfsToHttp } from "@/utils/ipfs";
+import { Briefcase, Clock, DollarSign, Tag, Loader2 } from "lucide-react";
 
-/**
- * ✅ Minimal FindWork Page
- * Uses Sidebar + TopNavbar layout
- */
+interface Job {
+  jobId: number;
+  client: string;
+  title: string;
+  description: string;
+  budgetUSDC: bigint;
+  status: number; // 0=Unknown, 1=Open, 2=Hired, 3=Cancelled, 4=Completed, 5=Expired
+  createdAt: bigint;
+  expiresAt: bigint;
+  tags: string[];
+}
+
 export default function FindWorkPage() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [aiChatOpen, setAiChatOpen] = useState(false);
+  const account = useActiveAccount();
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!account) return;
+
+    const fetchJobs = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // 1️⃣ Get JobBoard contract
+        const jobBoard = getContract({
+          client,
+          chain: CHAIN,
+          address: DEPLOYED_CONTRACTS.addresses.JobBoard,
+        });
+
+        // 2️⃣ Get total open jobs count
+        const totalOpen = await readContract({
+          contract: jobBoard,
+          method: "function totalOpenJobs() view returns (uint256)",
+        });
+
+        if (Number(totalOpen) === 0) {
+          setJobs([]);
+          return;
+        }
+
+        // 3️⃣ Fetch open job IDs (paginated)
+        const limit = 50; // Fetch first 50 jobs
+        const jobIds = await readContract({
+          contract: jobBoard,
+          method: "function openJobs(uint256,uint256) view returns (uint256[])",
+          params: [0n, BigInt(limit)],
+        });
+
+        if (!jobIds || jobIds.length === 0) {
+          setJobs([]);
+          return;
+        }
+
+        // 4️⃣ Fetch each job's details
+        const jobPromises = jobIds.map(async (jobId: bigint) => {
+          try {
+            const jobData = await readContract({
+              contract: jobBoard,
+              method: "function getJob(uint256) view returns (address,string,string,uint256,uint8,address,address,uint64,uint64,uint64,bytes32[],uint256)",
+              params: [jobId],
+            });
+
+            const [
+              clientAddr,
+              title,
+              descriptionURI,
+              budgetUSDC,
+              status,
+              hiredFreelancer,
+              escrow,
+              createdAt,
+              updatedAt,
+              expiresAt,
+              tags,
+              postingBond,
+            ] = jobData;
+
+            // Only show Open jobs (status = 1)
+            if (Number(status) !== 1) return null;
+
+            // Fetch description from IPFS
+            let description = "";
+            if (descriptionURI && typeof descriptionURI === "string" && descriptionURI.trim() !== "") {
+              try {
+                const res = await fetch(ipfsToHttp(descriptionURI));
+                if (res.ok) {
+                  const data = await res.json();
+                  description = data.description || descriptionURI;
+                }
+              } catch (e) {
+                console.warn("Failed to fetch job description:", e);
+                description = "Job description available on IPFS";
+              }
+            }
+
+            // Convert tags from bytes32 to strings
+            const tagStrings = (tags as `0x${string}`[]).map((tag) => {
+              try {
+                // Remove 0x prefix and convert from hex
+                const hex = tag.slice(2);
+                const bytes = new Uint8Array(
+                  hex.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16))
+                );
+                const text = new TextDecoder().decode(bytes);
+                return text.replace(/\0/g, "").trim(); // Remove null bytes
+              } catch {
+                return "";
+              }
+            }).filter((tag) => tag.length > 0);
+
+            return {
+              jobId: Number(jobId),
+              client: clientAddr as string,
+              title: title as string,
+              description: description || (descriptionURI as string),
+              budgetUSDC: budgetUSDC as bigint,
+              status: Number(status),
+              createdAt: createdAt as bigint,
+              expiresAt: expiresAt as bigint,
+              tags: tagStrings,
+            };
+          } catch (err) {
+            console.warn(`Failed to fetch job ${jobId}:`, err);
+            return null;
+          }
+        });
+
+        const results = await Promise.all(jobPromises);
+        setJobs(results.filter(Boolean) as Job[]);
+      } catch (err: any) {
+        console.error("❌ Failed to load jobs:", err);
+        setError(err?.message || "Failed to fetch jobs");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchJobs();
+  }, [account]);
+
+  if (!account) {
+    return (
+      <div className="p-8 text-center text-foreground-secondary">
+        Please connect your wallet to browse jobs.
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-[60vh]">
+        <Loader2 className="w-6 h-6 text-primary animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-8 text-center text-red-400">
+        <h2 className="text-xl font-semibold mb-2">Error</h2>
+        <p>{error}</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-background flex">
-      {/* ✅ Sidebar */}
-      <Sidebar
-        activeTab="find-work"
-        onTabChange={() => {}}
-        isOpen={sidebarOpen}
-        onToggle={() => setSidebarOpen(!sidebarOpen)}
-        isCollapsed={sidebarCollapsed}
-        onCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-        userRole="freelancer"
-      />
-
-      {/* ✅ Main content */}
-      <div
-        className="flex-1 flex flex-col overflow-hidden transition-all duration-300"
-        style={{
-          marginLeft: sidebarCollapsed ? "5rem" : "16rem", // 80px vs 256px
-        }}
-      >
-        {/* ✅ Top Navbar */}
-        <TopNavbar
-          userRole="freelancer"
-          onLogout={() => {}}
-          onRoleChange={() => {}}
-        />
-
-        {/* ✅ Page Content */}
-        <motion.main
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="flex-1 overflow-y-auto p-6 md:p-8"
-        >
-          <h1 className="text-3xl font-bold mb-6">Find Work</h1>
-          <p className="text-foreground-secondary mb-8 max-w-2xl">
-            Browse open projects and start earning by working with verified clients.
-          </p>
-
-          {/* 🔹 Example placeholder job list */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {[1, 2, 3].map((job) => (
-              <div
-                key={job}
-                className="glass-effect rounded-xl p-5 hover:shadow-lg transition-all duration-300"
-              >
-                <h3 className="text-lg font-semibold mb-2">Web3 Frontend Developer</h3>
-                <p className="text-sm text-foreground-secondary mb-3">
-                  Build decentralized dashboards using Next.js and Thirdweb.
-                </p>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-foreground-secondary">Budget: 500 USDT</span>
-                  <button className="px-4 py-2 bg-gradient-primary text-sm font-medium rounded-full hover:scale-105 transition-all">
-                    Apply
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </motion.main>
+    <main className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold mb-2">Find Work</h1>
+        <p className="text-foreground-secondary">
+          Browse open projects and start earning by working with verified clients.
+        </p>
       </div>
 
-      {/* ✅ Floating AI Assistant */}
-      <AIAssistantChat
-        isOpen={aiChatOpen}
-        onToggle={() => setAiChatOpen(!aiChatOpen)}
-      />
-    </div>
+      {jobs.length === 0 ? (
+        <div className="text-center py-12 text-foreground-secondary">
+          <Briefcase className="w-12 h-12 mx-auto mb-4 opacity-50" />
+          <p className="text-lg">No open jobs available at the moment.</p>
+          <p className="text-sm mt-2">Check back later for new opportunities!</p>
+        </div>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {jobs.map((job, i) => (
+            <motion.div
+              key={job.jobId}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: i * 0.05 }}
+              className="glass-effect rounded-xl p-6 border border-border hover:shadow-lg hover:border-primary/50 transition-all"
+            >
+              <div className="flex items-start justify-between mb-3">
+                <h3 className="text-lg font-semibold text-foreground flex-1">{job.title}</h3>
+              </div>
+
+              <p className="text-sm text-foreground-secondary mb-4 line-clamp-3">
+                {job.description || "No description available"}
+              </p>
+
+              {/* Tags */}
+              {job.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {job.tags.slice(0, 3).map((tag, idx) => (
+                    <span
+                      key={idx}
+                      className="px-2 py-1 rounded-full bg-primary/10 text-primary text-xs border border-primary/20"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Job Details */}
+              <div className="flex flex-wrap gap-4 text-sm mb-4">
+                <div className="flex items-center gap-2 text-foreground-secondary">
+                  <DollarSign className="w-4 h-4" />
+                  <span>{(Number(job.budgetUSDC) / 1e6).toFixed(2)} USDT</span>
+                </div>
+                {job.expiresAt > 0n && (
+                  <div className="flex items-center gap-2 text-foreground-secondary">
+                    <Clock className="w-4 h-4" />
+                    <span>
+                      {Math.ceil((Number(job.expiresAt) - Date.now() / 1000) / (24 * 60 * 60))} days left
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Client Info */}
+              <div className="text-xs text-foreground-secondary mb-4">
+                Client: {job.client.slice(0, 6)}...{job.client.slice(-4)}
+              </div>
+
+              {/* Action Button */}
+              <button className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition font-medium">
+                View Details
+              </button>
+            </motion.div>
+          ))}
+        </div>
+      )}
+    </main>
   );
 }

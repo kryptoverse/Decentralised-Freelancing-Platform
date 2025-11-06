@@ -20,6 +20,13 @@ export default function FounderLayout({
     "freelancer" | "client" | "founder" | "investor"
   >("founder");
 
+  // ✅ Store current role in sessionStorage for public profile pages
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("currentUserRole", "founder");
+    }
+  }, []);
+
   // ✅ Detect active tab by path
   useEffect(() => {
     if (pathname.includes("/projects")) setActiveTab("projects");

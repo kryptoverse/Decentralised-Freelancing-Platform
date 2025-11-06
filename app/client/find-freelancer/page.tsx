@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { getContract, readContract } from "thirdweb";
 import { useActiveAccount } from "thirdweb/react";
@@ -11,6 +12,7 @@ import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 
 export default function FindFreelancerPage() {
   const account = useActiveAccount();
+  const router = useRouter();
 
   const [freelancers, setFreelancers] = useState<
     {
@@ -263,9 +265,9 @@ export default function FindFreelancerPage() {
                 </span>
 
                 <button
-                  onClick={() =>
-                    alert(`Viewing profile for ${f.name || f.address}`)
-                  }
+                  onClick={() => {
+                    router.push(`/freelancer/${f.address}`);
+                  }}
                   className="px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-sm hover:opacity-90 transition"
                 >
                   View Profile

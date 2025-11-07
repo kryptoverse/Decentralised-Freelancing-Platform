@@ -11,7 +11,7 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "FYP",
   description:
-    "",
+    "Final Year Project",
 };
 
 export default function RootLayout({

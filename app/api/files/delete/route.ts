@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { pinata } from "@/utils/config";
 
 export async function POST(request: Request) {
   try {
@@ -8,7 +7,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "cid is required" }, { status: 400 });
     }
 
-    await pinata.unpin(cid);
+    const pinataJwt = process.env.PINATA_JWT;
+    if (!pinataJwt) {
+      return NextResponse.json({ error: "PINATA_JWT not configured" }, { status: 500 });
+    }
+
+    const response = await fetch(`https://api.pinata.cloud/pinning/unpin/${cid}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${pinataJwt}`,
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Failed to unpin: ${error}`);
+    }
+
     return NextResponse.json({ success: true });
   } catch (e: any) {
     console.error("Unpin failed:", e);

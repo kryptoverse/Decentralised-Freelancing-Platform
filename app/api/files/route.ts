@@ -26,15 +26,23 @@ export async function POST(request: NextRequest) {
 
       if (previousCid) {
         try {
-          await pinata.unpin(previousCid);
+          const pinataJwt = process.env.PINATA_JWT;
+          if (pinataJwt) {
+            await fetch(`https://api.pinata.cloud/pinning/unpin/${previousCid}`, {
+              method: "DELETE",
+              headers: {
+                Authorization: `Bearer ${pinataJwt}`,
+              },
+            });
+          }
         } catch (e) {
           console.warn("Unpin previousCid failed (continuing):", e);
         }
       }
 
       // ✅ Pinata SDK expects name in options object
-      const uploadOptions = { name };
-      const { cid } = await pinata.upload.public.json(data, uploadOptions);
+      const uploadOptions = name ? { name } : undefined;
+      const { cid } = await pinata.upload.public.json(data, uploadOptions as any);
       const url = await pinata.gateways.public.convert(cid);
       return NextResponse.json({ cid, url }, { status: 200 });
     }
@@ -65,7 +73,15 @@ export async function POST(request: NextRequest) {
 
     if (previousCid) {
       try {
-        await pinata.unpin(previousCid);
+        const pinataJwt = process.env.PINATA_JWT;
+        if (pinataJwt) {
+          await fetch(`https://api.pinata.cloud/pinning/unpin/${previousCid}`, {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${pinataJwt}`,
+            },
+          });
+        }
       } catch (e) {
         console.warn("Unpin previousCid failed (continuing):", e);
       }

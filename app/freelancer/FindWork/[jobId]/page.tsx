@@ -105,40 +105,39 @@ export default function JobDetailsPage() {
   // 🔵 ADDED: Load freelancer profile once user connects wallet
   // -----------------------------------------------------------
   useEffect(() => {
+  if (!account) return;
+
+  async function loadProfileStatus() {
+    // TS SAFE NARROWING
     if (!account) return;
+    const userAddress = account.address as `0x${string}`;
 
-    async function loadProfileStatus() {
-      try {
-        const factory = getContract({
-          client,
-          chain: CHAIN,
-          address: DEPLOYED_CONTRACTS.addresses.FreelancerFactory,
-        });
+    try {
+      const factory = getContract({
+        client,
+        chain: CHAIN,
+        address: DEPLOYED_CONTRACTS.addresses.FreelancerFactory,
+      });
 
-        const profileAddr = await readContract({
-          contract: factory,
-          method:
-            "function freelancerProfile(address) view returns (address)",
-          params: [account.address],
-        });
+      const profileAddr = await readContract({
+        contract: factory,
+        method: "function freelancerProfile(address) view returns (address)",
+        params: [userAddress],
+      });
 
-        if (
-          profileAddr &&
-          profileAddr !==
-            "0x0000000000000000000000000000000000000000"
-        ) {
-          setHasFreelancerProfile(true);
-        } else {
-          setHasFreelancerProfile(false);
-        }
-      } catch (e) {
-        console.error("Profile check failed:", e);
-        setHasFreelancerProfile(false);
-      }
+      const ZERO =
+        "0x0000000000000000000000000000000000000000";
+
+      setHasFreelancerProfile(profileAddr !== ZERO);
+    } catch (e) {
+      console.error("Profile check failed:", e);
+      setHasFreelancerProfile(false);
     }
+  }
 
-    loadProfileStatus();
-  }, [account]);
+  loadProfileStatus();
+}, [account]);
+
 
   /* ------------------------------------------------
      LOAD JOB DATA (ORIGINAL, JUST TWEAKED FOR TS)

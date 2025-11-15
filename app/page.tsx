@@ -33,7 +33,7 @@ export default function Home() {
   const handleLogin = () => {
     setIsLoggedIn(true);
     setShowLoginModal(false);
-    setUserRole(null); // 👈 Default: no role after login
+    setUserRole(null);
   };
 
   const handleLogout = () => {
@@ -46,7 +46,7 @@ export default function Home() {
     role: "freelancer" | "client" | "founder" | "investor"
   ) => setUserRole(role);
 
-  // ✅ Switch to dashboard when logged in
+  // Redirect to dashboard after login
   if (isLoggedIn) {
     return (
       <Dashboard
@@ -57,11 +57,31 @@ export default function Home() {
     );
   }
 
-  // ✅ Landing page
+  // ----------------------------
+  // ⭐ FIXED NAVBAR HERE
+  // ----------------------------
+
   return (
     <>
-      <main className="relative bg-background text-foreground overflow-hidden">
-        {/* 🌟 Hero */}
+      {/* FIXED NAVBAR INLINE — NO EXTRA COMPONENT */}
+      <nav className="fixed top-0 left-0 w-full z-50 bg-background/70 backdrop-blur-lg border-b border-border px-6 py-4 flex items-center justify-between">
+        {/* Logo / Branding */}
+        <div className="text-xl font-bold">FYP</div>
+
+        {/* Login Button */}
+        <button
+          onClick={handleOpenLogin}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition"
+        >
+          <User className="w-4 h-4" />
+          Login
+        </button>
+      </nav>
+
+      {/* 👇 Add pt-24 so content doesn't go UNDER nav */}
+      <main className="pt-24 relative bg-background text-foreground overflow-hidden">
+
+        {/* 🌟 Hero Section */}
         <HeroSection onGetStarted={handleOpenLogin} />
 
         {/* 🌍 How It Works */}
@@ -218,7 +238,7 @@ export default function Home() {
         <FooterSection />
       </main>
 
-      {/* ✅ Login Modal */}
+      {/* LOGIN MODAL */}
       {showLoginModal && (
         <LoginModal
           onLogin={handleLogin}

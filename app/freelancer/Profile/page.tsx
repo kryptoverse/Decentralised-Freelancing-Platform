@@ -22,14 +22,19 @@ interface FreelancerProfile {
 export default function FreelancerProfilePage() {
   const account = useActiveAccount();
   const router = useRouter();
+
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<FreelancerProfile | null>(null);
   const [metadata, setMetadata] = useState<any>(null);
   const [mode, setMode] = useState<"view" | "form">("view");
 
-  // 🧭 Load freelancer profile data
+  // ---------------------------
+  // LOAD PROFILE
+  // ---------------------------
   useEffect(() => {
-    if (!account?.address) return;
+    const address = account?.address;
+
+    if (!address) return;
 
     async function fetchProfile() {
       try {
@@ -41,19 +46,19 @@ export default function FreelancerProfilePage() {
           address: DEPLOYED_CONTRACTS.addresses.FreelancerFactory,
         });
 
-        if (!account?.address) return;
+        // 🔥 FIX — prevent TS undefined error
+        const safeAddress = address ?? "0x0000000000000000000000000000000000000000";
 
-const profileAddr = await readContract({
-  contract: factory,
-  method: "function freelancerProfile(address) view returns (address)",
-  params: [account.address],
-});
+        const profileAddr = await readContract({
+          contract: factory,
+          method: "function freelancerProfile(address) view returns (address)",
+          params: [safeAddress],
+        });
 
         if (
           !profileAddr ||
           profileAddr === "0x0000000000000000000000000000000000000000"
         ) {
-          // No profile yet → Create mode
           setProfile(null);
           setMode("form");
           return;
@@ -80,13 +85,19 @@ const profileAddr = await readContract({
           }),
         ]);
 
-        setProfile({ name, bio, profileURI, profileAddress: profileAddr });
+        setProfile({
+          name,
+          bio,
+          profileURI,
+          profileAddress: profileAddr,
+        });
 
-        // Load metadata from IPFS if exists
+        // --- Fetch IPFS metadata ---
         if (profileURI && profileURI.trim() !== "") {
           const uri = profileURI.startsWith("ipfs://")
             ? profileURI.replace("ipfs://", "https://ipfs.io/ipfs/")
             : profileURI;
+
           const res = await fetch(uri);
           const data = await res.json();
           setMetadata(data);
@@ -105,10 +116,12 @@ const profileAddr = await readContract({
     fetchProfile();
   }, [account?.address]);
 
-  // 🧱 Require wallet
+  // ---------------------------
+  // CHECK WALLET
+  // ---------------------------
   if (!account?.address) {
     return (
-      <section className="p-8">
+      <section className="p-4 md:p-6 lg:p-8 w-full">
         <p className="text-lg font-semibold">
           Please connect your wallet to continue.
         </p>
@@ -116,23 +129,45 @@ const profileAddr = await readContract({
     );
   }
 
-  // 🌀 Loading state
   if (loading) return <ProfileLoader />;
 
-  // 🆕 Create or Edit Form
+  // ---------------------------
+  // FORM MODE
+  // ---------------------------
   if (!profile || mode === "form") {
     return (
-      <section className="space-y-6 max-w-3xl">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <h1 className="text-3xl font-bold">
+      <section
+        className="
+          space-y-6 
+          max-w-3xl 
+          w-full 
+          p-4 md:p-6 lg:p-8 
+          mx-auto 
+          overflow-x-hidden
+        "
+      >
+        <div
+          className="
+            flex flex-col sm:flex-row 
+            sm:items-center justify-between 
+            gap-4 w-full overflow-x-hidden
+          "
+        >
+          <h1 className="text-3xl font-bold break-words">
             {profile ? "Edit Your Freelancer Profile" : "Create Your Freelancer Profile"}
           </h1>
-          {profile && account?.address && (
+
+          {profile && (
             <button
-              onClick={() => {
-                router.push(`/freelancer/${account.address}`);
-              }}
-              className="px-4 py-2 rounded-xl bg-surface border border-border text-foreground hover:bg-surface-secondary transition flex items-center gap-2"
+              onClick={() => router.push(`/freelancer/${account.address}`)}
+              className="
+                px-4 py-2 rounded-xl 
+                bg-surface border border-border text-foreground 
+                hover:bg-surface-secondary 
+                transition 
+                flex items-center gap-2 
+                w-full sm:w-auto
+              "
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -163,17 +198,40 @@ const profileAddr = await readContract({
     );
   }
 
-  // ✅ Profile exists → Show display view
+  // ---------------------------
+  // VIEW MODE
+  // ---------------------------
   return (
-    <section className="space-y-6 max-w-3xl">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-3xl font-bold">My Profile</h1>
-        <div className="flex items-center gap-3">
+    <section
+      className="
+        space-y-6 
+        max-w-3xl 
+        w-full 
+        p-4 md:p-6 lg:p-8 
+        mx-auto 
+        overflow-x-hidden
+      "
+    >
+      <div
+        className="
+          flex flex-col sm:flex-row 
+          sm:items-center justify-between 
+          gap-4 
+          w-full
+        "
+      >
+        <h1 className="text-3xl font-bold break-words">My Profile</h1>
+
+        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
           <button
-            onClick={() => {
-              router.push(`/freelancer/${account.address}`);
-            }}
-            className="px-4 py-2 rounded-xl bg-surface border border-border text-foreground hover:bg-surface-secondary transition flex items-center gap-2"
+            onClick={() => router.push(`/freelancer/${account.address}`)}
+            className="
+              px-4 py-2 rounded-xl 
+              bg-surface border border-border text-foreground 
+              hover:bg-surface-secondary 
+              transition flex items-center gap-2 
+              w-full sm:w-auto
+            "
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -192,9 +250,16 @@ const profileAddr = await readContract({
             </svg>
             Show Public View
           </button>
+
           <button
             onClick={() => setMode("form")}
-            className="px-4 py-2 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition"
+            className="
+              px-4 py-2 rounded-xl 
+              bg-primary text-primary-foreground 
+              hover:opacity-90 
+              transition 
+              w-full sm:w-auto
+            "
           >
             Edit Profile
           </button>

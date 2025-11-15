@@ -4,11 +4,12 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { getContract, readContract } from "thirdweb";
 import { useActiveAccount } from "thirdweb/react";
+import { useRouter } from "next/navigation";
 import { client } from "@/lib/thirdweb-client";
 import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { ipfsToHttp } from "@/utils/ipfs";
-import { Briefcase, Clock, DollarSign, Tag, Loader2 } from "lucide-react";
+import { Briefcase, Clock, DollarSign, Loader2 } from "lucide-react";
 
 interface Job {
   jobId: number;
@@ -24,6 +25,8 @@ interface Job {
 
 export default function FindWorkPage() {
   const account = useActiveAccount();
+  const router = useRouter();
+
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -72,7 +75,8 @@ export default function FindWorkPage() {
           try {
             const jobData = await readContract({
               contract: jobBoard,
-              method: "function getJob(uint256) view returns (address,string,string,uint256,uint8,address,address,uint64,uint64,uint64,bytes32[],uint256)",
+              method:
+                "function getJob(uint256) view returns (address,string,string,uint256,uint8,address,address,uint64,uint64,uint64,bytes32[],uint256)",
               params: [jobId],
             });
 
@@ -89,14 +93,31 @@ export default function FindWorkPage() {
               expiresAt,
               tags,
               postingBond,
-            ] = jobData;
+            ] = jobData as [
+              string,
+              string,
+              string,
+              bigint,
+              number,
+              string,
+              string,
+              bigint,
+              bigint,
+              bigint,
+              `0x${string}`[],
+              bigint
+            ];
 
             // Only show Open jobs (status = 1)
             if (Number(status) !== 1) return null;
 
             // Fetch description from IPFS
             let description = "";
-            if (descriptionURI && typeof descriptionURI === "string" && descriptionURI.trim() !== "") {
+            if (
+              descriptionURI &&
+              typeof descriptionURI === "string" &&
+              descriptionURI.trim() !== ""
+            ) {
               try {
                 const res = await fetch(ipfsToHttp(descriptionURI));
                 if (res.ok) {
@@ -110,19 +131,20 @@ export default function FindWorkPage() {
             }
 
             // Convert tags from bytes32 to strings
-            const tagStrings = (tags as `0x${string}`[]).map((tag) => {
-              try {
-                // Remove 0x prefix and convert from hex
-                const hex = tag.slice(2);
-                const bytes = new Uint8Array(
-                  hex.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16))
-                );
-                const text = new TextDecoder().decode(bytes);
-                return text.replace(/\0/g, "").trim(); // Remove null bytes
-              } catch {
-                return "";
-              }
-            }).filter((tag) => tag.length > 0);
+            const tagStrings = (tags as `0x${string}`[])
+              .map((tag) => {
+                try {
+                  const hex = tag.slice(2);
+                  const bytes = new Uint8Array(
+                    hex.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16))
+                  );
+                  const text = new TextDecoder().decode(bytes);
+                  return text.replace(/\0/g, "").trim();
+                } catch {
+                  return "";
+                }
+              })
+              .filter((tag) => tag.length > 0);
 
             return {
               jobId: Number(jobId),
@@ -196,63 +218,89 @@ export default function FindWorkPage() {
         </div>
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {jobs.map((job, i) => (
-            <motion.div
-              key={job.jobId}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: i * 0.05 }}
-              className="glass-effect rounded-xl p-6 border border-border hover:shadow-lg hover:border-primary/50 transition-all"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <h3 className="text-lg font-semibold text-foreground flex-1">{job.title}</h3>
-              </div>
+          {jobs.map((job, i) => {
+            const expiresInDays =
+              job.expiresAt > 0n
+                ? Math.max(
+                    0,
+                    Math.ceil(
+                      (Number(job.expiresAt) - Date.now() / 1000) /
+                        (24 * 60 * 60)
+                    )
+                  )
+                : null;
 
-              <p className="text-sm text-foreground-secondary mb-4 line-clamp-3">
-                {job.description || "No description available"}
-              </p>
-
-              {/* Tags */}
-              {job.tags.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {job.tags.slice(0, 3).map((tag, idx) => (
-                    <span
-                      key={idx}
-                      className="px-2 py-1 rounded-full bg-primary/10 text-primary text-xs border border-primary/20"
-                    >
-                      {tag}
-                    </span>
-                  ))}
+            return (
+              <motion.div
+                key={job.jobId}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: i * 0.05 }}
+                className="glass-effect rounded-xl p-6 border border-border hover:shadow-lg hover:border-primary/50 transition-all"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <h3 className="text-lg font-semibold text-foreground flex-1">
+                    {job.title}
+                  </h3>
                 </div>
-              )}
 
-              {/* Job Details */}
-              <div className="flex flex-wrap gap-4 text-sm mb-4">
-                <div className="flex items-center gap-2 text-foreground-secondary">
-                  <DollarSign className="w-4 h-4" />
-                  <span>{(Number(job.budgetUSDC) / 1e6).toFixed(2)} USDT</span>
-                </div>
-                {job.expiresAt > 0n && (
-                  <div className="flex items-center gap-2 text-foreground-secondary">
-                    <Clock className="w-4 h-4" />
-                    <span>
-                      {Math.ceil((Number(job.expiresAt) - Date.now() / 1000) / (24 * 60 * 60))} days left
-                    </span>
+                <p className="text-sm text-foreground-secondary mb-4 line-clamp-3">
+                  {job.description || "No description available"}
+                </p>
+
+                {/* Tags */}
+                {job.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {job.tags.slice(0, 3).map((tag, idx) => (
+                      <span
+                        key={idx}
+                        className="px-2 py-1 rounded-full bg-primary/10 text-primary text-xs border border-primary/20"
+                      >
+                        {tag}
+                      </span>
+                    ))}
                   </div>
                 )}
-              </div>
 
-              {/* Client Info */}
-              <div className="text-xs text-foreground-secondary mb-4">
-                Client: {job.client.slice(0, 6)}...{job.client.slice(-4)}
-              </div>
+                {/* Job Details */}
+                <div className="flex flex-wrap gap-4 text-sm mb-4">
+                  <div className="flex items-center gap-2 text-foreground-secondary">
+                    <DollarSign className="w-4 h-4" />
+                    <span>
+                      {(Number(job.budgetUSDC) / 1e6).toFixed(2)} USDT
+                    </span>
+                  </div>
+                  {expiresInDays !== null && (
+                    <div className="flex items-center gap-2 text-foreground-secondary">
+                      <Clock className="w-4 h-4" />
+                      <span>
+                        {expiresInDays > 0
+                          ? `${expiresInDays} days left`
+                          : "Expired soon"}
+                      </span>
+                    </div>
+                  )}
+                </div>
 
-              {/* Action Button */}
-              <button className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition font-medium">
-                View Details
-              </button>
-            </motion.div>
-          ))}
+                {/* Client Info */}
+                <div className="text-xs text-foreground-secondary mb-4">
+                  Client: {job.client.slice(0, 6)}...
+                  {job.client.slice(-4)}
+                </div>
+
+                {/* Action Button */}
+                <button
+                  onClick={() =>
+                    router.push(`/freelancer/FindWork/${job.jobId}`)
+
+                  }
+                  className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition font-medium"
+                >
+                  View Details
+                </button>
+              </motion.div>
+            );
+          })}
         </div>
       )}
     </main>

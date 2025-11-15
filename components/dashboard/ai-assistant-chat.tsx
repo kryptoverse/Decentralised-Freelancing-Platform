@@ -4,11 +4,6 @@ import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Send, Sparkles, X } from "lucide-react"
 
-/**
- * Floating AI Assistant Chat Component
- * Accessible from all pages via floating button in bottom-right corner
- * Includes chat interface with message bubbles and typing animation
- */
 interface AIAssistantChatProps {
   isOpen: boolean
   onToggle: () => void
@@ -26,7 +21,6 @@ export function AIAssistantChat({ isOpen, onToggle }: AIAssistantChatProps) {
   const [input, setInput] = useState("")
   const [isTyping, setIsTyping] = useState(false)
 
-  // Mock suggestions
   const suggestions = [
     "Write a job proposal",
     "Analyze startup metrics",
@@ -34,22 +28,13 @@ export function AIAssistantChat({ isOpen, onToggle }: AIAssistantChatProps) {
     "Review contract terms",
   ]
 
-  // Handle message send
   const handleSendMessage = (text: string = input) => {
     if (!text.trim()) return
-
-    // Add user message
-    const userMessage = {
-      id: messages.length + 1,
-      text: text,
-      sender: "user",
-      timestamp: new Date(),
-    }
+    const userMessage = { id: messages.length + 1, text, sender: "user", timestamp: new Date() }
     setMessages([...messages, userMessage])
     setInput("")
     setIsTyping(true)
 
-    // Simulate AI response
     setTimeout(() => {
       const aiMessage = {
         id: messages.length + 2,
@@ -66,7 +51,7 @@ export function AIAssistantChat({ isOpen, onToggle }: AIAssistantChatProps) {
     <>
       <motion.button
         onClick={onToggle}
-        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-gradient-primary dark:text-white text-gray-900 shadow-lg hover:shadow-xl hover:shadow-primary/40 flex items-center justify-center z-40 transition-all duration-300 ease-out border-2 border-primary/50"
+        className="fixed bottom-4 right-4 md:bottom-6 md:right-6 w-14 h-14 rounded-full bg-gradient-primary dark:text-white text-gray-900 shadow-lg hover:shadow-xl flex items-center justify-center z-40 transition-all duration-300 ease-out border-2 border-primary/50"
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
         title="Open AI Assistant"
@@ -74,7 +59,6 @@ export function AIAssistantChat({ isOpen, onToggle }: AIAssistantChatProps) {
         <Sparkles className="w-6 h-6" />
       </motion.button>
 
-      {/* Chat Modal */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -82,9 +66,8 @@ export function AIAssistantChat({ isOpen, onToggle }: AIAssistantChatProps) {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ duration: 0.2 }}
-            className="fixed bottom-24 right-6 w-96 h-[500px] rounded-2xl glass-effect-dark border border-border shadow-2xl flex flex-col z-40"
+            className="fixed bottom-20 right-4 md:right-6 md:bottom-24 w-full max-w-[95vw] md:w-96 h-[500px] rounded-2xl glass-effect-dark border border-border shadow-2xl flex flex-col z-40"
           >
-            {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-border">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-secondary" />
@@ -98,7 +81,6 @@ export function AIAssistantChat({ isOpen, onToggle }: AIAssistantChatProps) {
               </button>
             </div>
 
-            {/* Chat Container */}
             <div className="flex-1 overflow-y-auto space-y-4 p-4">
               <AnimatePresence>
                 {messages.map((message) => (
@@ -116,13 +98,12 @@ export function AIAssistantChat({ isOpen, onToggle }: AIAssistantChatProps) {
                           : "glass-effect text-foreground rounded-bl-none"
                       }`}
                     >
-                      <p className="text-sm">{message.text}</p>
+                      <p className="text-sm break-words">{message.text}</p>
                     </div>
                   </motion.div>
                 ))}
               </AnimatePresence>
 
-              {/* Typing Indicator */}
               {isTyping && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-2">
                   <div className="glass-effect px-4 py-3 rounded-2xl rounded-bl-none">
@@ -131,7 +112,7 @@ export function AIAssistantChat({ isOpen, onToggle }: AIAssistantChatProps) {
                         <motion.div
                           key={i}
                           animate={{ y: [0, -8, 0] }}
-                          transition={{ duration: 0.6, delay: i * 0.1, repeat: Number.POSITIVE_INFINITY }}
+                          transition={{ duration: 0.6, delay: i * 0.1, repeat: Infinity }}
                           className="w-2 h-2 rounded-full bg-primary"
                         />
                       ))}
@@ -140,7 +121,6 @@ export function AIAssistantChat({ isOpen, onToggle }: AIAssistantChatProps) {
                 </motion.div>
               )}
 
-              {/* Suggestions (shown when no messages) */}
               {messages.length === 1 && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -161,15 +141,14 @@ export function AIAssistantChat({ isOpen, onToggle }: AIAssistantChatProps) {
               )}
             </div>
 
-            {/* Input Area */}
-            <div className="flex gap-2 p-4 border-t border-border">
+            <div className="flex gap-2 p-4 border-t border-border flex-wrap md:flex-nowrap">
               <input
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
                 placeholder="Ask me..."
-                className="flex-1 px-3 py-2 rounded-full glass-effect bg-surface border border-border text-foreground placeholder-foreground-secondary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all duration-300 ease-out text-sm"
+                className="flex-1 px-3 py-2 rounded-full glass-effect bg-surface border border-border text-foreground placeholder-foreground-secondary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all duration-300 ease-out text-sm min-w-[120px]"
               />
               <button
                 onClick={() => handleSendMessage()}

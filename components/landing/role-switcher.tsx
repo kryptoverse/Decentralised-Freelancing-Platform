@@ -29,10 +29,10 @@ export function RoleSwitcher({ selectedRole, onRoleSelect, onGetStarted }: RoleS
   const displayRole = selectedRole ? roles.find((r) => r.id === selectedRole)?.label : "Select Role"
 
   return (
-    <div className="relative">
+    <div className="relative w-full sm:w-auto text-center sm:text-left">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-4 py-2 rounded-full glass-effect hover:bg-surface-secondary transition-all duration-300 ease-out text-foreground font-medium"
+        className="flex items-center justify-center sm:justify-start gap-2 px-4 py-2 rounded-full glass-effect hover:bg-surface-secondary transition-all duration-300 ease-out text-foreground font-medium w-full sm:w-auto"
       >
         {displayRole}
         <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isOpen ? "rotate-180" : ""}`} />
@@ -44,7 +44,7 @@ export function RoleSwitcher({ selectedRole, onRoleSelect, onGetStarted }: RoleS
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="absolute right-0 mt-2 w-56 rounded-2xl overflow-hidden shadow-xl bg-surface border border-border z-50"
+            className="absolute right-0 mt-2 w-full sm:w-56 rounded-2xl overflow-hidden shadow-xl bg-surface border border-border z-50"
           >
             {roles.map((role) => (
               <button

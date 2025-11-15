@@ -27,23 +27,27 @@ export default function FindFreelancerPage() {
       level: number;
     }[]
   >([]);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // ================================
+  // LOAD FREELANCERS
+  // ================================
   useEffect(() => {
-    const fetchFreelancers = async () => {
+    async function fetchFreelancers() {
       try {
         setLoading(true);
         setError(null);
 
-        // ✅ 1️⃣ Get FreelancerFactory contract
+        // 1️⃣ Get factory
         const factory = getContract({
           client,
           chain: CHAIN,
           address: DEPLOYED_CONTRACTS.addresses.FreelancerFactory,
         });
 
-        // ✅ 2️⃣ Fetch all freelancer wallet addresses
+        // 2️⃣ Fetch all freelancer wallets
         const freelancerWallets = await readContract({
           contract: factory,
           method: "function getAllFreelancers() view returns (address[])",
@@ -54,23 +58,22 @@ export default function FindFreelancerPage() {
           return;
         }
 
-        console.log("✅ Found freelancers:", freelancerWallets);
-
-        // ✅ 3️⃣ Fetch each freelancer’s profile data
+        // 3️⃣ Fetch each freelancer details
         const results = await Promise.all(
           freelancerWallets.map(async (wallet: string) => {
             try {
+              if (!wallet || !wallet.startsWith("0x")) return null;
+
               const profileAddr = await readContract({
                 contract: factory,
                 method: "function freelancerProfile(address) view returns (address)",
-                params: [wallet],
+                params: [wallet as `0x${string}`],
               });
 
               if (
                 !profileAddr ||
                 profileAddr === "0x0000000000000000000000000000000000000000"
               ) {
-                console.warn(`⚠️ No profile for ${wallet}`);
                 return null;
               }
 
@@ -80,7 +83,6 @@ export default function FindFreelancerPage() {
                 address: profileAddr as `0x${string}`,
               });
 
-              // ✅ 4️⃣ Read profile fields
               const [
                 name,
                 bio,
@@ -120,7 +122,7 @@ export default function FindFreelancerPage() {
                 }),
               ]);
 
-              // ✅ Derived rating
+              // Derived Rating
               const rating =
                 Number(completedJobs) > 0
                   ? Math.min(
@@ -141,7 +143,7 @@ export default function FindFreelancerPage() {
                 level: Number(level),
               };
             } catch (err) {
-              console.warn(`⚠️ Failed to load freelancer ${wallet}:`, err);
+              console.warn("Failed to load freelancer:", wallet, err);
               return null;
             }
           })
@@ -149,17 +151,19 @@ export default function FindFreelancerPage() {
 
         setFreelancers(results.filter(Boolean) as any[]);
       } catch (err: any) {
-        console.error("❌ Failed to load freelancers:", err);
-        setError(err?.message || "Failed to fetch freelancers");
+        console.error("Fetch error:", err);
+        setError(err?.message || "Failed to load freelancers");
       } finally {
         setLoading(false);
       }
-    };
+    }
 
     fetchFreelancers();
   }, []);
 
-  // ====== UI STATES ======
+  // ================================
+  // UI STATES
+  // ================================
 
   if (!account) {
     return (
@@ -186,8 +190,9 @@ export default function FindFreelancerPage() {
     );
   }
 
-  // ====== MAIN CONTENT ======
-
+  // ================================
+  // MAIN CONTENT
+  // ================================
   return (
     <section className="p-8 space-y-8">
       <h1 className="text-3xl font-bold">Available Freelancers</h1>
@@ -206,7 +211,7 @@ export default function FindFreelancerPage() {
               transition={{ duration: 0.3, delay: i * 0.05 }}
               className="rounded-2xl glass-effect border border-border p-6 shadow-md hover:shadow-lg transition group"
             >
-              {/* ✅ Header with avatar & name */}
+              {/* Avatar + Name */}
               <div className="flex items-center gap-4 mb-4">
                 <div className="w-14 h-14 rounded-full bg-gradient-primary flex items-center justify-center text-sm font-semibold text-white">
                   {f.name?.[0]?.toUpperCase() || "F"}
@@ -221,12 +226,12 @@ export default function FindFreelancerPage() {
                 </div>
               </div>
 
-              {/* ✅ Bio */}
+              {/* Bio */}
               <p className="text-sm text-foreground-secondary line-clamp-3 mb-3">
                 {f.bio || "No bio available."}
               </p>
 
-              {/* ✅ Optional metadata link */}
+              {/* Profile URI */}
               {f.profileURI && (
                 <p className="text-xs text-muted-foreground truncate mb-3">
                   <span className="font-medium">Profile Data:</span>{" "}
@@ -245,14 +250,14 @@ export default function FindFreelancerPage() {
                 </p>
               )}
 
-              {/* ✅ Stats */}
+              {/* Stats */}
               <div className="text-xs flex justify-between mb-3 text-muted-foreground">
                 <span>{f.completedJobs} jobs</span>
                 <span>{f.rating}% rating</span>
                 <span>Lvl {f.level}</span>
               </div>
 
-              {/* ✅ Footer actions */}
+              {/* Footer */}
               <div className="flex items-center justify-between mt-4">
                 <span
                   className={`text-xs px-2 py-1 rounded-full ${
@@ -265,9 +270,7 @@ export default function FindFreelancerPage() {
                 </span>
 
                 <button
-                  onClick={() => {
-                    router.push(`/freelancer/${f.address}`);
-                  }}
+                  onClick={() => router.push(`/freelancer/${f.address}`)}
                   className="px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-sm hover:opacity-90 transition"
                 >
                   View Profile

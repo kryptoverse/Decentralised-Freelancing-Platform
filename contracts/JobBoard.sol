@@ -1,17 +1,40 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-/// @title JobBoard (On-chain Job Listing Registry, v2)
-/// @notice Minimal, production-ready on-chain job board that pairs with one or more EscrowFactories.
-///         Clients post jobs; whitelisted factories mark them hired/completed; everything else is read-only.
-/// @dev Gas-light, emits rich events for indexing/UI. Includes expiry, reopen, tags, anti-spam, pausable.
+/**
+ * @title JobBoard v3 — On-chain Job Board with Applications
+ *
+ * NEW FEATURES:
+ * ---------------
+ * ✔ Freelancer Applications (applyToJob)
+ * ✔ Applicant pagination (getApplicants)
+ * ✔ Applicants tracking per job
+ * ✔ Jobs applied by freelancer (getJobsAppliedBy)
+ * ✔ withdrawApplication
+ * ✔ Optional: requireApplicationToHire
+ * ✔ Optional: freelancerFactory verification
+ *
+ * ZERO BREAKING CHANGES:
+ * ---------------
+ * - postJob() unchanged
+ * - updateJob() unchanged
+ * - cancelJob(), reopen() unchanged
+ * - EscrowFactory integration unchanged
+ * - markAsHired() still works the same UNLESS requireApplicationToHire = true
+ *
+ */
 
 interface IERC20 {
     function transfer(address to, uint256 value) external returns (bool);
     function transferFrom(address from, address to, uint256 value) external returns (bool);
 }
 
+interface IFreelancerFactory {
+    function freelancerProfile(address freelancer) external view returns (address);
+}
+
 contract JobBoard {
+
     /*//////////////////////////////////////////////////////////////
                                 ERRORS
     //////////////////////////////////////////////////////////////*/
@@ -30,6 +53,11 @@ contract JobBoard {
     error WrongBond();
     error USDCNotSet();
     error Reentrancy();
+
+    // NEW APPLICATION ERRORS
+    error AlreadyApplied();
+    error ApplicationNotFound();
+    error NotFreelancer();
 
     /*//////////////////////////////////////////////////////////////
                                 EVENTS
@@ -75,6 +103,12 @@ contract JobBoard {
     event JobExpiredClosed(uint256 indexed jobId, uint64 expiresAt);
     event JobReopened(uint256 indexed jobId, uint64 newExpiresAt);
 
+    // NEW EVENTS
+    event FreelancerFactorySet(address indexed factory);
+    event RequireApplicationToHireSet(bool required);
+    event JobApplied(uint256 indexed jobId, address indexed freelancer, uint64 appliedAt);
+    event JobApplicationWithdrawn(uint256 indexed jobId, address indexed freelancer);
+
     /*//////////////////////////////////////////////////////////////
                                 STATE
     //////////////////////////////////////////////////////////////*/
@@ -118,6 +152,27 @@ contract JobBoard {
     uint256[] private openJobIds;
     mapping(uint256 => uint256) private openIndex;
     uint256 private locked = 1;
+
+    /*//////////////////////////////////////////////////////////////
+                        APPLICATION SYSTEM STORAGE
+    //////////////////////////////////////////////////////////////*/
+    
+    IFreelancerFactory public freelancerFactory;
+    bool public requireApplicationToHire;
+
+    struct Applicant {
+        address freelancer;
+        uint64 appliedAt;
+    }
+
+    // jobId => list of applicants
+    mapping(uint256 => Applicant[]) private applicantsOf;
+
+    // jobId => freelancer => index+1 (0 = none)
+    mapping(uint256 => mapping(address => uint256)) private applicantIndex;
+
+    // freelancer => jobIds applied to
+    mapping(address => uint256[]) private jobsAppliedBy;
 
     /*//////////////////////////////////////////////////////////////
                                 MODIFIERS
@@ -209,8 +264,23 @@ contract JobBoard {
     }
 
     /*//////////////////////////////////////////////////////////////
+                        APPLICATION SYSTEM ADMIN
+    //////////////////////////////////////////////////////////////*/
+
+    function setFreelancerFactory(address factory_) external onlyOwner {
+        freelancerFactory = IFreelancerFactory(factory_);
+        emit FreelancerFactorySet(factory_);
+    }
+
+    function setRequireApplicationToHire(bool required) external onlyOwner {
+        requireApplicationToHire = required;
+        emit RequireApplicationToHireSet(required);
+    }
+
+    /*//////////////////////////////////////////////////////////////
                                 CLIENT ACTIONS
     //////////////////////////////////////////////////////////////*/
+
     function postJob(
         string calldata title,
         string calldata descriptionURI,
@@ -218,6 +288,7 @@ contract JobBoard {
         bytes32[] calldata tags,
         uint64 expiresAt
     ) external whenNotPaused nonReentrant returns (uint256 jobId) {
+
         if (antiSpamMode == AntiSpamMode.OnlyKYC && !isKYC[msg.sender]) revert KYCGated();
 
         uint256 bond = 0;
@@ -282,7 +353,12 @@ contract JobBoard {
         emit JobUpdated(jobId, title, descriptionURI, budgetUSDC, j.tags, expiresAt);
     }
 
-    function cancelJob(uint256 jobId) external whenNotPaused onlyClient(jobId) nonReentrant {
+    function cancelJob(uint256 jobId) 
+        external 
+        whenNotPaused 
+        onlyClient(jobId) 
+        nonReentrant 
+    {
         Job storage j = jobs[jobId];
         if (j.status != JobStatus.Open) revert NotOpen();
         j.status = JobStatus.Cancelled;
@@ -292,7 +368,11 @@ contract JobBoard {
         emit JobCancelled(jobId, j.client);
     }
 
-    function reopen(uint256 jobId, uint64 newExpiresAt) external whenNotPaused onlyClient(jobId) {
+    function reopen(uint256 jobId, uint64 newExpiresAt) 
+        external 
+        whenNotPaused 
+        onlyClient(jobId) 
+    {
         Job storage j = jobs[jobId];
         if (j.status != JobStatus.Cancelled && j.status != JobStatus.Expired) revert NotReopenable();
         if (newExpiresAt != 0 && newExpiresAt <= block.timestamp) revert InvalidStatus();
@@ -304,32 +384,96 @@ contract JobBoard {
     }
 
     /*//////////////////////////////////////////////////////////////
-                                FACTORY HOOKS
+                    FREELANCER APPLICATION ACTIONS
     //////////////////////////////////////////////////////////////*/
+
+    function applyToJob(uint256 jobId) 
+        external 
+        whenNotPaused 
+        nonReentrant 
+    {
+        Job storage j = jobs[jobId];
+        if (j.client == address(0)) revert JobNotFound();
+        if (j.status != JobStatus.Open) revert NotOpen();
+        if (j.expiresAt != 0 && j.expiresAt <= block.timestamp) revert NotExpired();
+
+        if (address(freelancerFactory) != address(0)) {
+            address profile = freelancerFactory.freelancerProfile(msg.sender);
+            if (profile == address(0)) revert NotFreelancer();
+        }
+
+        if (applicantIndex[jobId][msg.sender] != 0) revert AlreadyApplied();
+
+        uint64 nowTs = uint64(block.timestamp);
+
+        uint256 idx = applicantsOf[jobId].length;
+        applicantsOf[jobId].push(Applicant(msg.sender, nowTs));
+        applicantIndex[jobId][msg.sender] = idx + 1;
+        jobsAppliedBy[msg.sender].push(jobId);
+
+        emit JobApplied(jobId, msg.sender, nowTs);
+    }
+
+    function withdrawApplication(uint256 jobId) 
+        external 
+        whenNotPaused 
+        nonReentrant 
+    {
+        uint256 idxPlusOne = applicantIndex[jobId][msg.sender];
+        if (idxPlusOne == 0) revert ApplicationNotFound();
+
+        uint256 idx = idxPlusOne - 1;
+
+        Applicant storage a = applicantsOf[jobId][idx];
+        a.freelancer = address(0);
+        a.appliedAt = 0;
+
+        applicantIndex[jobId][msg.sender] = 0;
+
+        emit JobApplicationWithdrawn(jobId, msg.sender);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            FACTORY HOOKS (UNCHANGED)
+    //////////////////////////////////////////////////////////////*/
+
     function markAsHired(
         uint256 jobId,
         address freelancer,
         address escrow
     ) external whenNotPaused onlyAllowedFactory nonReentrant {
+
         if (freelancer == address(0) || escrow == address(0)) revert ZeroAddress();
         Job storage j = jobs[jobId];
         if (j.client == address(0)) revert JobNotFound();
         if (j.status != JobStatus.Open) revert AlreadyHiredOrClosed();
+
+        if (requireApplicationToHire) {
+            if (applicantIndex[jobId][freelancer] == 0) revert ApplicationNotFound();
+        }
+
         j.hiredFreelancer = freelancer;
         j.escrow = escrow;
         j.status = JobStatus.Hired;
         j.updatedAt = uint64(block.timestamp);
         _openRemove(jobId);
         _refundBondIfAny(j);
+
         emit JobHired(jobId, j.client, freelancer, escrow);
     }
 
-    function markAsCompleted(uint256 jobId) external whenNotPaused onlyAllowedFactory {
+    function markAsCompleted(uint256 jobId) 
+        external 
+        whenNotPaused 
+        onlyAllowedFactory 
+    {
         Job storage j = jobs[jobId];
         if (j.client == address(0)) revert JobNotFound();
         if (j.status != JobStatus.Hired) revert InvalidStatus();
+
         j.status = JobStatus.Completed;
         j.updatedAt = uint64(block.timestamp);
+
         emit JobCompleted(jobId, j.client, j.hiredFreelancer, j.escrow);
     }
 
@@ -338,15 +482,52 @@ contract JobBoard {
         if (j.client == address(0)) revert JobNotFound();
         if (j.status != JobStatus.Open) revert NotOpen();
         if (j.expiresAt == 0 || block.timestamp < j.expiresAt) revert NotExpired();
+
         j.status = JobStatus.Expired;
         j.updatedAt = uint64(block.timestamp);
+
         _openRemove(jobId);
+
         emit JobExpiredClosed(jobId, j.expiresAt);
     }
 
     /*//////////////////////////////////////////////////////////////
                                 VIEWS
     //////////////////////////////////////////////////////////////*/
+
+function getApplicants(
+    uint256 jobId,
+    uint256 offset,
+    uint256 limit
+) external view returns (address[] memory freelancers, uint64[] memory appliedAt) {
+    Applicant[] storage list = applicantsOf[jobId];
+    uint256 len = list.length;
+
+    if (offset >= len) {
+        return (new address[](0), new uint64[](0));
+    }
+    uint256 end = offset + limit;
+    if (end > len) end = len;
+    uint256 n = end - offset;
+
+    freelancers = new address[](n);
+    appliedAt = new uint64[](n);
+
+    for (uint256 i = 0; i < n; i++) {
+        Applicant storage a = list[offset + i];
+        freelancers[i] = a.freelancer;
+        appliedAt[i] = a.appliedAt;
+    }
+}
+
+    function getApplicantCount(uint256 jobId) external view returns (uint256) {
+        return applicantsOf[jobId].length;
+    }
+
+    function getJobsAppliedBy(address freelancer) external view returns (uint256[] memory) {
+        return jobsAppliedBy[freelancer];
+    }
+
     function getJob(uint256 jobId)
         external
         view
@@ -387,53 +568,45 @@ contract JobBoard {
         return jobsOf[clientAddr];
     }
 
-function jobsByClientPaginated(
-    address clientAddr,
-    uint256 offset,
-    uint256 limit
-) external view returns (uint256[] memory out) {
-    uint256 len = jobsOf[clientAddr].length;
+    function jobsByClientPaginated(
+        address clientAddr,
+        uint256 offset,
+        uint256 limit
+    ) external view returns (uint256[] memory out) {
+        uint256 len = jobsOf[clientAddr].length;
 
-    if (offset >= len) {
-        uint256[] memory empty;
-        return empty;
+        if (offset >= len) return new uint256[](0);
+
+        uint256 end = offset + limit;
+        if (end > len) end = len;
+
+        uint256 n = end - offset;
+        out = new uint256[](n);
+
+        for (uint256 i = 0; i < n; i++) {
+            out[i] = jobsOf[clientAddr][offset + i];
+        }
     }
 
-    uint256 end = offset + limit;
-    if (end > len) end = len;
+    function openJobs(uint256 offset, uint256 limit)
+        external
+        view
+        returns (uint256[] memory out)
+    {
+        uint256 len = openJobIds.length;
 
-    uint256 n = end - offset;
-    out = new uint256[](n);
-    for (uint256 i = 0; i < n; i++) {
-        out[i] = jobsOf[clientAddr][offset + i];
+        if (offset >= len) return new uint256[](0);
+
+        uint256 end = offset + limit;
+        if (end > len) end = len;
+
+        uint256 n = end - offset;
+        out = new uint256[](n);
+
+        for (uint256 i = 0; i < n; i++) {
+            out[i] = openJobIds[offset + i];
+        }
     }
-}
-
-
-
-
-function openJobs(uint256 offset, uint256 limit)
-    external
-    view
-    returns (uint256[] memory out)
-{
-    uint256 len = openJobIds.length;
-
-    if (offset >= len) {
-        uint256[] memory empty;
-        return empty;
-    }
-
-    uint256 end = offset + limit;
-    if (end > len) end = len;
-
-    uint256 n = end - offset;
-    out = new uint256[](n);
-    for (uint256 i = 0; i < n; i++) {
-        out[i] = openJobIds[offset + i];
-    }
-}
-
 
     function totalOpenJobs() external view returns (uint256) {
         return openJobIds.length;
@@ -446,13 +619,15 @@ function openJobs(uint256 offset, uint256 limit)
     /*//////////////////////////////////////////////////////////////
                         OWNER: TREASURY SWEEPS
     //////////////////////////////////////////////////////////////*/
+
     function sweepERC20(address token, uint256 amount) external onlyOwner {
         IERC20(token).transfer(owner, amount);
     }
 
     /*//////////////////////////////////////////////////////////////
-                            INTERNAL: OPEN SET
+                        INTERNAL: OPEN SET
     //////////////////////////////////////////////////////////////*/
+
     function _openAdd(uint256 jobId) internal {
         if (openIndex[jobId] != 0) return;
         openJobIds.push(jobId);
@@ -460,14 +635,17 @@ function openJobs(uint256 offset, uint256 limit)
     }
 
     function _openRemove(uint256 jobId) internal {
-        uint256 idxPlus1 = openIndex[jobId];
-        if (idxPlus1 == 0) return;
-        uint256 idx = idxPlus1 - 1;
+        uint256 idxPlusOne = openIndex[jobId];
+        if (idxPlusOne == 0) return;
+
+        uint256 idx = idxPlusOne - 1;
         uint256 lastId = openJobIds[openJobIds.length - 1];
+
         if (idx != openJobIds.length - 1) {
             openJobIds[idx] = lastId;
             openIndex[lastId] = idx + 1;
         }
+
         openJobIds.pop();
         openIndex[jobId] = 0;
     }
@@ -475,6 +653,7 @@ function openJobs(uint256 offset, uint256 limit)
     function _refundBondIfAny(Job storage j) internal {
         uint256 bond = j.postingBond;
         if (bond == 0) return;
+
         j.postingBond = 0;
         usdc.transfer(j.client, bond);
     }

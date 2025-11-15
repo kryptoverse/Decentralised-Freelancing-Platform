@@ -20,6 +20,10 @@ export function Dashboard({ userRole, onLogout, onRoleChange }: DashboardProps) 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [aiChatOpen, setAiChatOpen] = useState(false);
 
+  // On mobile (below md), the sidebar overlays, so content should not have a left margin.
+  // On desktop, we add a left margin equal to the sidebar width (collapsed vs expanded).
+  const sidebarWidthClass = sidebarCollapsed ? "md:ml-20" : "md:ml-64";
+
   // Universal "role picker" experience before they're inside a role app
   // You can later remove this once you always redirect into /freelancer or /client
   const renderContent = () => {
@@ -46,10 +50,7 @@ export function Dashboard({ userRole, onLogout, onRoleChange }: DashboardProps) 
 
       {/* Main area */}
       <div
-        className="flex-1 flex flex-col overflow-hidden transition-all duration-300"
-        style={{
-          marginLeft: sidebarCollapsed ? "5rem" : "16rem",
-        }}
+        className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ml-0 ${sidebarWidthClass}`}
       >
         <TopNavbar
           userRole={userRole}

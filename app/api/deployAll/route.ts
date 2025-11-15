@@ -1,102 +1,113 @@
 // app/api/deployAll/route.ts
-export const runtime = "nodejs"; // ✅ ensures Node runtime on Vercel
+export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import type { Abi } from "viem";
+
 import {
   createThirdwebClient,
   getContract,
   prepareContractCall,
   sendTransaction,
 } from "thirdweb";
+
 import { deployContract } from "thirdweb/deploys";
 import { polygonAmoy } from "thirdweb/chains";
 import { privateKeyToAccount } from "thirdweb/wallets";
 
 export async function POST() {
   try {
-    // ✅ Initialize Thirdweb client with your secret key
+    // ============================================================
+    //  INIT
+    // ============================================================
     const client = createThirdwebClient({
       secretKey: process.env.NEXT_PUBLIC_THIRDWEB_SECRET_KEY!,
     });
 
-    // ✅ Create an account from your Metamask private key
     const account = privateKeyToAccount({
       client,
       privateKey: process.env.METAMASK_PRIVATE_KEY as `0x${string}`,
     });
 
     const deployerAddress = account.address;
+    const chain = polygonAmoy;
+
     console.log("👤 Deployer Wallet:", deployerAddress);
 
-    const chain = polygonAmoy;
     const logs: string[] = [];
     const log = (msg: string) => {
       console.log(msg);
       logs.push(msg);
     };
 
-    // ---------- 1️⃣ Deploy MockUSDT ----------
-    const usdtArtifact = JSON.parse(
-      fs.readFileSync(
-        path.join(process.cwd(), "artifacts/contracts/TestUSDT.sol/MockUSDT.json"),
-        "utf8"
-      )
-    );
+    const loadArtifact = (file: string) =>
+      JSON.parse(
+        fs.readFileSync(
+          path.join(process.cwd(), `artifacts/contracts/${file}.json`),
+          "utf8"
+        )
+      );
+
+    // ============================================================
+    // 1️⃣ Deploy MockUSDT
+    // ============================================================
     log("🚀 Deploying MockUSDT...");
+    const usdtA = loadArtifact("TestUSDT.sol/MockUSDT");
     const usdtAddr = await deployContract({
       client,
       chain,
       account,
-      abi: usdtArtifact.abi as Abi,
-      bytecode: usdtArtifact.bytecode as `0x${string}`,
+      abi: usdtA.abi as Abi,
+      bytecode: usdtA.bytecode as `0x${string}`,
     });
     log(`✅ MockUSDT deployed at: ${usdtAddr}`);
 
-    // ---------- 2️⃣ Deploy FreelancerFactory ----------
-    const freelancerFactoryArtifact = JSON.parse(
-      fs.readFileSync(
-        path.join(
-          process.cwd(),
-          "artifacts/contracts/FreelancerFactory.sol/FreelancerFactory.json"
-        ),
-        "utf8"
-      )
-    );
+    // ============================================================
+    // 2️⃣ Deploy FreelancerFactory
+    // ============================================================
     log("\n🚀 Deploying FreelancerFactory...");
+    const ffA = loadArtifact("FreelancerFactory.sol/FreelancerFactory");
     const freelancerFactoryAddr = await deployContract({
       client,
       chain,
       account,
-      abi: freelancerFactoryArtifact.abi as Abi,
-      bytecode: freelancerFactoryArtifact.bytecode as `0x${string}`,
+      abi: ffA.abi as Abi,
+      bytecode: ffA.bytecode as `0x${string}`,
     });
     log(`✅ FreelancerFactory deployed at: ${freelancerFactoryAddr}`);
 
-    // ---------- 3️⃣ Deploy EscrowFactory ----------
-    const escrowFactoryArtifact = JSON.parse(
-      fs.readFileSync(
-        path.join(
-          process.cwd(),
-          "artifacts/contracts/EscrowFactory.sol/EscrowFactory.json"
-        ),
-        "utf8"
-      )
-    );
+    // ============================================================
+    // 3️⃣ Deploy ClientFactory (NEW)
+    // ============================================================
+    log("\n🚀 Deploying ClientFactory...");
+    const cfA = loadArtifact("ClientFactory.sol/ClientFactory");
+    const clientFactoryAddr = await deployContract({
+      client,
+      chain,
+      account,
+      abi: cfA.abi as Abi,
+      bytecode: cfA.bytecode as `0x${string}`,
+    });
+    log(`✅ ClientFactory deployed at: ${clientFactoryAddr}`);
+
+    // ============================================================
+    // 4️⃣ Deploy EscrowFactory
+    // ============================================================
+    log("\n🚀 Deploying EscrowFactory...");
+    const efA = loadArtifact("EscrowFactory.sol/EscrowFactory");
 
     const platformWallet = deployerAddress;
     const resolver = deployerAddress;
     const platformFeeBps = 200;
 
-    log("\n🚀 Deploying EscrowFactory...");
     const escrowFactoryAddr = await deployContract({
       client,
       chain,
       account,
-      abi: escrowFactoryArtifact.abi as Abi,
-      bytecode: escrowFactoryArtifact.bytecode as `0x${string}`,
+      abi: efA.abi as Abi,
+      bytecode: efA.bytecode as `0x${string}`,
       constructorParams: {
         _freelancerFactory: freelancerFactoryAddr,
         _usdt: usdtAddr,
@@ -107,67 +118,90 @@ export async function POST() {
     });
     log(`✅ EscrowFactory deployed at: ${escrowFactoryAddr}`);
 
-    // ---------- 4️⃣ Deploy JobBoard ----------
-    const jobBoardArtifact = JSON.parse(
-      fs.readFileSync(
-        path.join(process.cwd(), "artifacts/contracts/JobBoard.sol/JobBoard.json"),
-        "utf8"
-      )
-    );
+    // ============================================================
+    // 5️⃣ Deploy JobBoard
+    // ============================================================
     log("\n🚀 Deploying JobBoard...");
+    const jbA = loadArtifact("JobBoard.sol/JobBoard");
+
     const jobBoardAddr = await deployContract({
       client,
       chain,
       account,
-      abi: jobBoardArtifact.abi as Abi,
-      bytecode: jobBoardArtifact.bytecode as `0x${string}`,
+      abi: jbA.abi as Abi,
+      bytecode: jbA.bytecode as `0x${string}`,
       constructorParams: { _owner: deployerAddress },
     });
     log(`✅ JobBoard deployed at: ${jobBoardAddr}`);
 
-    // ---------- 5️⃣ Post-deployment wiring ----------
+    // ============================================================
+    // 6️⃣ Setup contract objects
+    // ============================================================
     const freelancerFactory = getContract({
       client,
       chain,
       address: freelancerFactoryAddr,
     });
+
     const jobBoard = getContract({
       client,
       chain,
       address: jobBoardAddr,
     });
 
-    async function callTx(contract: any, method: string, params: any[]) {
-      const tx = await prepareContractCall({ contract, method, params });
-      await sendTransaction({ account, transaction: tx });
-    }
+    const callTx = async (contract: any, method: string, params: any[]) => {
+      const prepared = await prepareContractCall({
+        contract,
+        method,
+        params,
+      });
+      await sendTransaction({ account, transaction: prepared });
+    };
 
+    // ============================================================
+    // 🔗 Wiring
+    // ============================================================
+
+    // 1. FreelancerFactory → EscrowFactory
     log("\n🔗 Authorizing EscrowFactory in FreelancerFactory...");
-    await callTx(freelancerFactory, "function setEscrowDeployer(address,bool)", [
-      escrowFactoryAddr,
-      true,
-    ]);
-    log("✅ EscrowFactory authorized in FreelancerFactory");
+    await callTx(
+      freelancerFactory,
+      "function setEscrowDeployer(address,bool)",
+      [escrowFactoryAddr, true]
+    );
+    log("✅ FreelancerFactory wired.");
 
+    // 2. JobBoard → allow EscrowFactory
     log("🔗 Allowing EscrowFactory in JobBoard...");
-    await callTx(jobBoard, "function setAllowedFactory(address,bool)", [
-      escrowFactoryAddr,
-      true,
-    ]);
-    log("✅ EscrowFactory allowed in JobBoard");
+    await callTx(
+      jobBoard,
+      "function setAllowedFactory(address,bool)",
+      [escrowFactoryAddr, true]
+    );
+    log("✅ EscrowFactory allowed in JobBoard.");
 
-    log("🔗 Setting USDT in JobBoard...");
+    // 3. JobBoard → set USDT token
+    log("🔗 Setting USDT on JobBoard...");
     await callTx(jobBoard, "function setUSDC(address)", [usdtAddr]);
     log("✅ USDT set on JobBoard");
 
+    // 4. Disable hiring application requirement
+    log("🔗 Disabling requireApplicationToHire...");
+    await callTx(jobBoard, "function setRequireApplicationToHire(bool)", [
+      false,
+    ]);
+    log("✅ Hiring restriction disabled");
+
+    // ============================================================
+    // DONE
+    // ============================================================
     log("\n============================================");
     log("🎯 Deployment Complete!");
     log(`MockUSDT:           ${usdtAddr}`);
     log(`FreelancerFactory:  ${freelancerFactoryAddr}`);
+    log(`ClientFactory:      ${clientFactoryAddr}`);
     log(`EscrowFactory:      ${escrowFactoryAddr}`);
     log(`JobBoard:           ${jobBoardAddr}`);
-    log(`Owner/Treasury:     ${platformWallet}`);
-    log(`Resolver:           ${resolver}`);
     log("============================================\n");
 
     return NextResponse.json({
@@ -177,12 +211,16 @@ export async function POST() {
       deployed: {
         MockUSDT: usdtAddr,
         FreelancerFactory: freelancerFactoryAddr,
+        ClientFactory: clientFactoryAddr,
         EscrowFactory: escrowFactoryAddr,
         JobBoard: jobBoardAddr,
       },
     });
-  } catch (err: any) {
-    console.error("❌ Deployment failed:", err);
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  } catch (error: any) {
+    console.error("❌ Deployment failed:", error);
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
   }
 }

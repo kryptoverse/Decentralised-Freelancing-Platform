@@ -14,54 +14,45 @@ export default function FreelancerLayout({
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isOpen, setIsOpen] = useState(true);
-  
-  // ✅ Check if this is a public profile route (/freelancer/[address])
+
+  // Check if public profile page
   const isPublicProfile = /^\/freelancer\/0x[a-fA-F0-9]{40}$/i.test(pathname);
-  
+
   const [userRole, setUserRole] = useState<
     "freelancer" | "client" | "founder" | "investor"
   >("freelancer");
 
-  // ✅ Store current role in sessionStorage for public profile pages
+  // Store current role in sessionStorage for public pages
   useEffect(() => {
     if (typeof window === "undefined") return;
-    
-    // If viewing a public profile, preserve the user's actual role from sessionStorage
+
     if (isPublicProfile) {
-      const storedRole = sessionStorage.getItem("currentUserRole") as 
-        | "freelancer" 
-        | "client" 
-        | "founder" 
-        | "investor" 
+      const storedRole = sessionStorage.getItem("currentUserRole") as
+        | "freelancer"
+        | "client"
+        | "founder"
+        | "investor"
         | null;
-      
+
       if (storedRole) {
         setUserRole(storedRole);
       } else {
-        // Fallback: detect from referrer
         const referrer = document.referrer;
-        if (referrer.includes("/client/")) {
-          setUserRole("client");
-        } else if (referrer.includes("/founder/")) {
-          setUserRole("founder");
-        } else if (referrer.includes("/investor/")) {
-          setUserRole("investor");
-        }
-        // Default stays "freelancer" if can't determine
+        if (referrer.includes("/client/")) setUserRole("client");
+        else if (referrer.includes("/founder/")) setUserRole("founder");
+        else if (referrer.includes("/investor/")) setUserRole("investor");
       }
     } else {
-      // Normal freelancer route - set and store freelancer role
       setUserRole("freelancer");
       sessionStorage.setItem("currentUserRole", "freelancer");
     }
   }, [isPublicProfile]);
 
-  // automatically detect current tab (skip for public profiles)
+  // Detect active dashboard tab
   const [activeTab, setActiveTab] = useState("home");
   useEffect(() => {
-    // Don't set active tab for public profile routes
     if (isPublicProfile) return;
-    
+
     if (pathname.includes("/profile")) setActiveTab("profile");
     else if (pathname.includes("/settings")) setActiveTab("settings");
     else if (pathname.includes("/orders")) setActiveTab("orders");
@@ -77,8 +68,9 @@ export default function FreelancerLayout({
 
   return (
     <WalletSessionGuard>
-      <div className="flex h-screen">
-        {/* Sidebar */}
+      <div className="flex h-screen w-full overflow-hidden">
+
+        {/* ----------- SIDEBAR (Always Mounted → Fix Mobile Burger!) ----------- */}
         <Sidebar
           userRole={userRole}
           activeTab={activeTab}
@@ -89,12 +81,17 @@ export default function FreelancerLayout({
           onCollapse={() => setIsCollapsed(!isCollapsed)}
         />
 
-        {/* Main Content */}
+        {/* ----------- MAIN CONTENT ----------- */}
         <div
-          className={`flex-1 flex flex-col transition-all duration-300 ${
-            isCollapsed ? "ml-[5rem]" : "ml-[16rem]"
-          }`}
+          className={`
+            flex-1 flex flex-col 
+            w-full h-full 
+            transition-all duration-300
+            overflow-hidden
+            ${isCollapsed ? "sm:ml-[5rem]" : "sm:ml-[16rem]"}
+          `}
         >
+          {/* Top Navbar */}
           <TopNavbar
             userRole={userRole}
             onLogout={handleLogout}
@@ -102,7 +99,16 @@ export default function FreelancerLayout({
           />
 
           {/* Page Content */}
-          <main className="flex-1 p-8 overflow-y-auto space-y-8">
+          <main
+            className="
+              flex-1 
+              p-4 md:p-6 lg:p-8
+              overflow-y-auto 
+              w-full max-w-full
+              overflow-x-hidden
+              space-y-8
+            "
+          >
             {children}
           </main>
         </div>

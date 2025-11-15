@@ -86,7 +86,7 @@ export const ROLE_TABS: Record<
       id: "profile",
       label: "Profile",
       icon: UserIcon,
-      path: "/client/Profile", // add this route when ready
+      path: "/client/profile", // add this route when ready
       match: "startsWith",
     },
     {

@@ -229,7 +229,12 @@ export function FreelancerProfileForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="p-6 rounded-2xl glass-effect border border-border shadow-md space-y-6 max-w-3xl mx-auto"
+      className="
+        w-full max-w-3xl mx-auto
+        p-4 md:p-6
+        rounded-2xl glass-effect border border-border shadow-md 
+        space-y-6
+      "
     >
       <h2 className="text-2xl font-bold text-primary">
         {profileAddress ? "Edit Profile" : "Create Freelancer Profile"}
@@ -278,7 +283,7 @@ export function FreelancerProfileForm({
       </div>
 
       {/* Profile Media */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:gap-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:gap-6 w-full">
         <div className="flex-1">
           <label className="block text-sm mb-1 font-medium">Profile Image</label>
           {form.profileImage && (

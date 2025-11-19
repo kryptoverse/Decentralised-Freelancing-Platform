@@ -76,9 +76,7 @@ export default function JobDetailsPage() {
   const [bidAmount, setBidAmount] = useState("");
   const [deliveryDays, setDeliveryDays] = useState("");
 
-  // -----------------------------------------------
-  // 🔵 ADDED: FREELANCER PROFILE STATUS STATE
-  // -----------------------------------------------
+  // FREELANCER PROFILE STATUS
   const [hasFreelancerProfile, setHasFreelancerProfile] = useState<
     boolean | null
   >(null);
@@ -102,45 +100,42 @@ export default function JobDetailsPage() {
   }, [params.jobId]);
 
   // -----------------------------------------------------------
-  // 🔵 ADDED: Load freelancer profile once user connects wallet
+  // Load freelancer profile once user connects wallet
   // -----------------------------------------------------------
   useEffect(() => {
-  if (!account) return;
-
-  async function loadProfileStatus() {
-    // TS SAFE NARROWING
     if (!account) return;
-    const userAddress = account.address as `0x${string}`;
 
-    try {
-      const factory = getContract({
-        client,
-        chain: CHAIN,
-        address: DEPLOYED_CONTRACTS.addresses.FreelancerFactory,
-      });
+    async function loadProfileStatus() {
+      if (!account) return;
+      const userAddress = account.address as `0x${string}`;
 
-      const profileAddr = await readContract({
-        contract: factory,
-        method: "function freelancerProfile(address) view returns (address)",
-        params: [userAddress],
-      });
+      try {
+        const factory = getContract({
+          client,
+          chain: CHAIN,
+          address: DEPLOYED_CONTRACTS.addresses.FreelancerFactory,
+        });
 
-      const ZERO =
-        "0x0000000000000000000000000000000000000000";
+        const profileAddr = await readContract({
+          contract: factory,
+          method: "function freelancerProfile(address) view returns (address)",
+          params: [userAddress],
+        });
 
-      setHasFreelancerProfile(profileAddr !== ZERO);
-    } catch (e) {
-      console.error("Profile check failed:", e);
-      setHasFreelancerProfile(false);
+        const ZERO = "0x0000000000000000000000000000000000000000";
+
+        setHasFreelancerProfile(profileAddr !== ZERO);
+      } catch (e) {
+        console.error("Profile check failed:", e);
+        setHasFreelancerProfile(false);
+      }
     }
-  }
 
-  loadProfileStatus();
-}, [account]);
-
+    loadProfileStatus();
+  }, [account]);
 
   /* ------------------------------------------------
-     LOAD JOB DATA (ORIGINAL, JUST TWEAKED FOR TS)
+     LOAD JOB DATA + APPLICANTS
   ------------------------------------------------ */
   useEffect(() => {
     if (!account || numericJobId === null) return;
@@ -156,6 +151,7 @@ export default function JobDetailsPage() {
           address: DEPLOYED_CONTRACTS.addresses.JobBoard,
         });
 
+        // ---- JOB DETAILS ----
         const jobData = await readContract({
           contract: jobBoard,
           method:
@@ -163,7 +159,6 @@ export default function JobDetailsPage() {
           params: [numericJobId],
         });
 
-        // Tuple fix for TS
         const [
           clientAddr,
           title,
@@ -242,49 +237,56 @@ export default function JobDetailsPage() {
           postingBond,
         });
 
-        // Applicants count
-        const count = await readContract({
+        // ---- APPLICANTS (fixed) ----
+        const rawCount = await readContract({
           contract: jobBoard,
-          method:
-            "function getApplicantCount(uint256) view returns (uint256)",
+          method: "function getApplicantCount(uint256) view returns (uint256)",
           params: [numericJobId],
         });
 
-        const countNum = Number(count);
-        setApplicantCount(countNum);
+        const rawCountNum = Number(rawCount);
 
-        // Load first 5 applicants
-        if (countNum > 0) {
+        if (rawCountNum === 0) {
+          setApplicantCount(0);
+          setApplicants([]);
+        } else {
           const [freelancers, appliedAt] = (await readContract({
             contract: jobBoard,
             method:
               "function getApplicants(uint256,uint256,uint256) view returns (address[],uint64[])",
-            params: [numericJobId, 0n, BigInt(Math.min(5, countNum))],
+            params: [numericJobId, 0n, BigInt(rawCountNum)],
           })) as [string[], bigint[]];
 
-          const appl: Applicant[] = freelancers.map((f, idx) => ({
-            freelancer: f,
-            appliedAt: appliedAt[idx],
-          }));
+          const ZERO = "0x0000000000000000000000000000000000000000";
 
-          setApplicants(appl);
-        } else {
-          setApplicants([]);
+          const filtered: Applicant[] = freelancers
+            .map((f, idx) => ({
+              freelancer: f,
+              appliedAt: appliedAt[idx],
+            }))
+            .filter((a) => a.freelancer !== ZERO);
+
+          setApplicantCount(filtered.length);
+          setApplicants(filtered.slice(0, 5));
         }
 
-        // Check if already applied
-        const jobsApplied = (await readContract({
-          contract: jobBoard,
-          method:
-            "function getJobsAppliedBy(address) view returns (uint256[])",
-          params: [account.address],
-        })) as bigint[];
-
-        const applied =
-          jobsApplied.some((id) => Number(id) === Number(numericJobId));
+        // ---- HAS APPLIED (fixed to use getApplicantDetails) ----
+        let applied = false;
+        try {
+          await readContract({
+            contract: jobBoard,
+            method:
+              "function getApplicantDetails(uint256,address) view returns (address,uint64,string,uint256,uint64)",
+            params: [numericJobId, account.address],
+          });
+          applied = true;
+        } catch {
+          applied = false;
+        }
 
         setHasApplied(applied);
       } catch (err: any) {
+        console.error(err);
         setError(err.message || "Failed to load job");
       } finally {
         setLoading(false);
@@ -303,17 +305,12 @@ export default function JobDetailsPage() {
   const daysLeft =
     job && job.expiresAt > 0n
       ? Math.ceil(
-          (Number(job.expiresAt) - Date.now() / 1000) /
-            (60 * 60 * 24)
+          (Number(job.expiresAt) - Date.now() / 1000) / (60 * 60 * 24)
         )
       : null;
 
   const canApply =
-    !!account &&
-    !!job &&
-    job.status === 1 &&
-    !isExpired &&
-    !hasApplied;
+    !!account && !!job && job.status === 1 && !isExpired && !hasApplied;
 
   const canWithdraw =
     !!account && !!job && job.status === 1 && hasApplied;
@@ -324,7 +321,6 @@ export default function JobDetailsPage() {
   const handleApplyWithProposal = async () => {
     if (!account || !job || numericJobId === null) return;
 
-    // ❌ block if freelancer profile missing
     if (!hasFreelancerProfile) {
       setError(
         "You must create a freelancer profile before submitting proposal."
@@ -381,7 +377,7 @@ export default function JobDetailsPage() {
   };
 
   /* ------------------------------------------------
-     WITHDRAW (UNCHANGED)
+     WITHDRAW
   ------------------------------------------------ */
   const handleWithdraw = async () => {
     if (!account || !job || numericJobId === null) return;
@@ -415,7 +411,7 @@ export default function JobDetailsPage() {
   };
 
   /* ------------------------------------------------
-     ORIGINAL UI (PRESERVED)
+     UI
   ------------------------------------------------ */
 
   if (!account)
@@ -510,7 +506,7 @@ export default function JobDetailsPage() {
           </p>
         </motion.div>
 
-        {/* APPLY PANEL */}
+        {/* APPLY + APPLICANTS PANEL */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -530,7 +526,7 @@ export default function JobDetailsPage() {
               </div>
             )}
 
-            {/* ❌ Freelancer has NO profile */}
+            {/* Freelancer has NO profile */}
             {canApply && hasFreelancerProfile === false && (
               <button
                 onClick={() => router.push("/freelancer/Profile")}
@@ -573,9 +569,7 @@ export default function JobDetailsPage() {
             </p>
 
             {applicants.length === 0 ? (
-              <p className="text-xs text-gray-500">
-                No applicants yet.
-              </p>
+              <p className="text-xs text-gray-500">No applicants yet.</p>
             ) : (
               <ul className="space-y-2 text-xs">
                 {applicants.map((a, idx) => (

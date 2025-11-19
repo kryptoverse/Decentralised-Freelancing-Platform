@@ -20,3 +20,18 @@ export const inAppSmartWallet = inAppWallet({
     },
   },
 });
+
+// 🚀 NEW: NON-SPONSORED SMART WALLET (for money flows like hiring)
+export const inAppSmartWalletNoGas = inAppWallet({
+  auth: {
+    options: ["google", "email"],
+  },
+  executionMode: {
+    mode: "EIP4337",
+    smartAccount: {
+      chain: polygonAmoy,
+      sponsorGas: false,   // ❌ no gas sponsorship
+    },
+  },
+});
+

@@ -34,6 +34,37 @@ export default function AdminPage() {
     }
   };
 
+  // ⭐ NEW: Deploy only TestUSDT on Polygon Amoy
+  const handleDeployUSDTOnly = async () => {
+    try {
+      console.log("🚀 Starting TestUSDT-only deployment...");
+      setDeploying(true);
+      setLogs(["🚀 Deploying TestUSDT on Polygon Amoy..."]);
+      setDeployed({});
+      setWalletUsed("");
+
+      const res = await fetch("/api/deployUSDT", { method: "POST" });
+      const data = await res.json();
+
+      console.log("📦 TestUSDT Deployment response:", data);
+
+      if (data.success) {
+        setWalletUsed(data.walletAddress);
+        setLogs(data.logs);
+        setDeployed({
+          TestUSDT: data.usdtAddress,
+        });
+      } else {
+        setLogs((prev) => [...prev, "❌ Error: " + data.error]);
+      }
+    } catch (err: any) {
+      console.error("❌ TestUSDT deployment failed:", err);
+      setLogs((prev) => [...prev, "❌ Error: " + err.message]);
+    } finally {
+      setDeploying(false);
+    }
+  };
+
   const copyToClipboard = (text: string) => navigator.clipboard.writeText(text);
 
   return (
@@ -49,6 +80,7 @@ export default function AdminPage() {
           <Rocket className="w-5 h-5 text-primary" /> Deploy & Configure Stack
         </h2>
 
+        {/* Existing "Deploy All" button */}
         <button
           disabled={deploying}
           onClick={handleDeployAll}
@@ -63,9 +95,26 @@ export default function AdminPage() {
           )}
         </button>
 
+        {/* ⭐ NEW BUTTON — Deploy ONLY MockUSDT */}
+        <button
+          disabled={deploying}
+          onClick={handleDeployUSDTOnly}
+          className="px-5 py-3 bg-green-600 text-white rounded-lg hover:opacity-90 flex items-center gap-2 mt-3"
+        >
+          {deploying ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" /> Deploying TestUSDT...
+            </>
+          ) : (
+            "Deploy TestUSDT Only (Polygon Amoy)"
+          )}
+        </button>
+
         <div className="mt-3 text-xs text-muted-foreground flex items-center gap-2">
           🧾 Using Server Wallet:
-          <span className="font-mono text-primary">{walletUsed || "Waiting..."}</span>
+          <span className="font-mono text-primary">
+            {walletUsed || "Waiting..."}
+          </span>
           {walletUsed && (
             <Copy
               className="w-3 h-3 cursor-pointer text-primary hover:text-primary/70"
@@ -74,10 +123,11 @@ export default function AdminPage() {
           )}
         </div>
 
+        {/* Console Log Box */}
         <div className="mt-6 max-h-[400px] overflow-y-auto text-sm font-mono bg-black/40 p-4 rounded-lg border border-border">
           {logs.length === 0 ? (
             <p className="text-muted-foreground">
-              Click “Deploy & Configure All” to start deployment...
+              Click a deployment button to start...
             </p>
           ) : (
             logs.map((l, i) => <p key={i}>{l}</p>)
@@ -86,7 +136,10 @@ export default function AdminPage() {
 
         {Object.keys(deployed).length > 0 && (
           <div className="mt-4">
-            <h3 className="font-semibold text-lg mb-2 text-primary">🧾 Deployed Addresses</h3>
+            <h3 className="font-semibold text-lg mb-2 text-primary">
+              🧾 Deployed Addresses
+            </h3>
+
             <ul className="text-sm space-y-1">
               {Object.entries(deployed).map(([name, addr]) => (
                 <li key={name}>

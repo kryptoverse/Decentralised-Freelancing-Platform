@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useActiveAccount } from "thirdweb/react";
-import { Wallet, Users, FileText, Plus, Briefcase } from "lucide-react";
+import { Wallet, FileText, Plus, Briefcase, Copy, CheckCheck } from "lucide-react";
 import { getWalletBalance } from "thirdweb/wallets";
 import { polygonAmoy } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb-client";
@@ -13,16 +13,36 @@ import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { getContract, readContract } from "thirdweb";
 import { CHAIN } from "@/lib/chains";
 
+/* --------------------------------------------------
+    HELPER: Create slug like "2-unreal-engine-dev"
+-------------------------------------------------- */
+function slugify(title: string) {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 export default function ClientHome() {
   const router = useRouter();
   const account = useActiveAccount();
 
-  const safeAddress =
-    typeof account?.address === "string"
-      ? (account.address as `0x${string}`)
-      : ("0x0000000000000000000000000000000000000000" as `0x${string}`);
+  // Smart Wallet (4337)
+  const ZERO = "0x0000000000000000000000000000000000000000";
 
-  const [balance, setBalance] = useState<{ displayValue: string; symbol: string } | null>(null);
+  const smartAddress: `0x${string}` =
+    (account?.address as `0x${string}`) || ZERO;
+
+  const eoaAddress: `0x${string}` =
+    ((account as any)?.walletAddress as `0x${string}`) || ZERO;
+
+  const [copied, setCopied] = useState(false);
+
+  const [balance, setBalance] = useState<{ displayValue: string; symbol: string } | null>(
+    null
+  );
+  const [usdtBalance, setUsdtBalance] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [showPostJob, setShowPostJob] = useState(false);
 
@@ -53,12 +73,12 @@ export default function ClientHome() {
         const profileAddr = await readContract({
           contract: factory,
           method: "function clientProfiles(address) view returns (address)",
-          params: [safeAddress],
+          params: [smartAddress],
         });
 
         if (
           !profileAddr ||
-          profileAddr === "0x0000000000000000000000000000000000000000"
+          profileAddr === ZERO
         ) {
           setProfile(null);
           return;
@@ -71,15 +91,27 @@ export default function ClientHome() {
         });
 
         const [name, bio, posted, completed] = await Promise.all([
-          readContract({ contract: p, method: "function name() view returns (string)" }),
-          readContract({ contract: p, method: "function bio() view returns (string)" }),
-          readContract({ contract: p, method: "function totalJobsPosted() view returns (uint256)" }),
-          readContract({ contract: p, method: "function totalJobsCompleted() view returns (uint256)" }),
+          readContract({
+            contract: p,
+            method: "function name() view returns (string)",
+          }),
+          readContract({
+            contract: p,
+            method: "function bio() view returns (string)",
+          }),
+          readContract({
+            contract: p,
+            method: "function totalJobsPosted() view returns (uint256)",
+          }),
+          readContract({
+            contract: p,
+            method: "function totalJobsCompleted() view returns (uint256)",
+          }),
         ]);
 
         setProfile({
-          name,
-          bio,
+          name: name as string,
+          bio: bio as string,
           totalJobsPosted: Number(posted),
           totalJobsCompleted: Number(completed),
         });
@@ -89,7 +121,7 @@ export default function ClientHome() {
     }
 
     fetchProfile();
-  }, [account]);
+  }, [account, smartAddress]);
 
   /* ------------------------------------
       LOAD JOBS POSTED BY CLIENT
@@ -105,11 +137,10 @@ export default function ClientHome() {
           address: DEPLOYED_CONTRACTS.addresses.JobBoard,
         });
 
-        // IMPORTANT: Correct function name is jobsByClient(address)
         const jobIds = (await readContract({
           contract: jobBoard,
           method: "function jobsByClient(address) view returns (uint256[])",
-          params: [safeAddress],
+          params: [smartAddress],
         })) as bigint[];
 
         if (!jobIds || jobIds.length === 0) {
@@ -126,11 +157,22 @@ export default function ClientHome() {
               params: [id],
             })) as any;
 
-            const applicantCount = await readContract({
+            const rawCount = await readContract({
               contract: jobBoard,
               method: "function getApplicantCount(uint256) view returns (uint256)",
               params: [id],
             });
+
+            const [freelancers] = (await readContract({
+              contract: jobBoard,
+              method:
+                "function getApplicants(uint256,uint256,uint256) view returns (address[],uint64[])",
+              params: [id, 0n, BigInt(rawCount as bigint)],
+            })) as [string[], bigint[]];
+
+            const realCount = freelancers.filter(
+              (a) => a !== ZERO
+            ).length;
 
             return {
               id: Number(id),
@@ -138,7 +180,7 @@ export default function ClientHome() {
               status: Number(res[4]),
               budgetUSDC: Number(res[3]),
               expiresAt: Number(res[9]),
-              applicants: Number(applicantCount),
+              applicants: realCount,
             };
           })
         );
@@ -150,13 +192,13 @@ export default function ClientHome() {
     }
 
     loadJobs();
-  }, [account]);
+  }, [account, smartAddress]);
 
   /* ------------------------------------
-      WALLET BALANCE 
+      NATIVE WALLET BALANCE (MATIC)
   ------------------------------------ */
   useEffect(() => {
-    if (safeAddress.startsWith("0x0000")) return;
+    if (smartAddress.startsWith("0x0000")) return;
 
     async function fetchBalance() {
       try {
@@ -165,7 +207,7 @@ export default function ClientHome() {
         const result = await getWalletBalance({
           client,
           chain: polygonAmoy,
-          address: safeAddress,
+          address: smartAddress,
         });
 
         setBalance({ displayValue: result.displayValue, symbol: result.symbol });
@@ -177,10 +219,57 @@ export default function ClientHome() {
     }
 
     fetchBalance();
-  }, [safeAddress]);
+  }, [smartAddress]);
 
   /* ------------------------------------
-      FILTER JOBS BY STATUS TABS
+      MOCK USDT BALANCE (ERC20)
+  ------------------------------------ */
+  useEffect(() => {
+    if (smartAddress.startsWith("0x0000")) return;
+
+    async function fetchUSDTBalance() {
+      try {
+        const usdt = getContract({
+          client,
+          chain: CHAIN,
+          address: DEPLOYED_CONTRACTS.addresses.MockUSDT,
+        });
+
+        const raw = await readContract({
+          contract: usdt,
+          method: "function balanceOf(address) view returns (uint256)",
+          params: [smartAddress],
+        });
+
+        const decimals = await readContract({
+          contract: usdt,
+          method: "function decimals() view returns (uint8)",
+        });
+
+        const formatted =
+          Number(raw as bigint) / 10 ** Number(decimals);
+
+        setUsdtBalance(formatted.toFixed(2));
+      } catch (err) {
+        console.error("❌ USDT balance error:", err);
+        setUsdtBalance(null);
+      }
+    }
+
+    fetchUSDTBalance();
+  }, [smartAddress]);
+
+  /* ------------------------------------
+      ADDRESS COPY
+  ------------------------------------ */
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(smartAddress);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  /* ------------------------------------
+      FILTER JOBS BY STATUS
   ------------------------------------ */
   const filtered = jobs.filter((job) => {
     switch (selectedTab) {
@@ -197,8 +286,9 @@ export default function ClientHome() {
     }
   });
 
-  // ========= RENDER =========
-
+  /* ------------------------------------
+      RENDER
+  ------------------------------------ */
   if (!account)
     return <div className="p-8">Please connect your wallet to continue.</div>;
 
@@ -206,13 +296,37 @@ export default function ClientHome() {
     <>
       <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto space-y-12">
 
+        {/* WALLET DISPLAY BOX */}
+        <div className="p-4 rounded-xl glass-effect border max-w-xl">
+          <h2 className="font-bold text-lg mb-2 flex items-center gap-2">
+            <Wallet className="w-5 h-5 text-primary" />
+            Smart Account Address
+          </h2>
+
+          <div className="flex items-center justify-between bg-surface-secondary p-3 rounded-lg border">
+            <code className="text-sm break-all">
+              {smartAddress}
+            </code>
+
+            <button
+              onClick={handleCopy}
+              className="p-2 rounded-md hover:bg-surface transition"
+            >
+              {copied ? (
+                <CheckCheck className="w-5 h-5 text-green-400" />
+              ) : (
+                <Copy className="w-5 h-5 text-primary" />
+              )}
+            </button>
+          </div>
+        </div>
+
         {/* HEADER */}
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="w-full sm:w-auto">
             <h1 className="text-3xl font-bold break-words">
               {profile ? `Welcome, ${profile.name} 👋` : "Welcome, Client 👋"}
             </h1>
-
             <p className="text-muted-foreground mt-1 max-w-md break-words">
               {profile?.bio || "Complete your profile to unlock all features."}
             </p>
@@ -228,7 +342,7 @@ export default function ClientHome() {
         </div>
 
         {/* STATS */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
           {[
             {
               icon: Briefcase,
@@ -242,10 +356,20 @@ export default function ClientHome() {
             },
             {
               icon: Wallet,
-              label: "Wallet Balance",
+              label: "MATIC Balance",
               value: balance
                 ? `${balance.displayValue} ${balance.symbol}`
-                : "Fetching...",
+                : loading
+                ? "Fetching..."
+                : "0",
+            },
+            {
+              icon: Wallet,
+              label: "USDT Balance",
+              value:
+                usdtBalance !== null
+                  ? `${usdtBalance} USDT`
+                  : "Fetching...",
             },
           ].map((stat, i) => (
             <motion.div
@@ -264,7 +388,7 @@ export default function ClientHome() {
           ))}
         </div>
 
-        {/* JOBS POSTED SECTION */}
+        {/* JOB LIST */}
         <section className="space-y-6">
           <h2 className="text-2xl font-bold">Your Jobs</h2>
 
@@ -279,7 +403,7 @@ export default function ClientHome() {
               <button
                 key={t.id}
                 onClick={() => setSelectedTab(t.id)}
-                className={`pb-2 text-sm font-medium whitespace-nowrap ${
+                className={`pb-2 text-sm font-medium ${
                   selectedTab === t.id
                     ? "text-primary border-b-2 border-primary"
                     : "text-muted-foreground hover:text-foreground"
@@ -290,7 +414,7 @@ export default function ClientHome() {
             ))}
           </div>
 
-          {/* Job List */}
+          {/* Job Grid */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
             {filtered.length === 0 && (
               <p className="text-muted-foreground text-sm">No jobs found.</p>
@@ -317,7 +441,10 @@ export default function ClientHome() {
                 </div>
 
                 <button
-                  onClick={() => router.push(`/client/jobs/${job.id}`)}
+                  onClick={() => {
+                    const slug = slugify(job.title);
+                    router.push(`/client/jobs/${job.id}-${slug}`);
+                  }}
                   className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 w-full sm:w-auto"
                 >
                   View Analytics

@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.28;
 
 import "./FreelancerFactory.sol";
 import "./FreelancerProfile.sol";
 import "./JobEscrow.sol";
+import "./JobBoard.sol"; // ✅ NEW
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -14,7 +15,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 /// @dev Flow:
 /// 1) Client approves USDT to this factory
 /// 2) Client calls createAndFundEscrow(...)
-/// 3) Factory deploys JobEscrow, transfers USDT to it, links escrow via FreelancerFactory, then boots the job in profile
+/// 3) (NEW OPTION) Client can call createAndFundEscrowForJob(jobId, ...) so JobBoard is marked as Hired
 contract EscrowFactory is Ownable {
     using SafeERC20 for IERC20;
 
@@ -45,6 +46,7 @@ contract EscrowFactory is Ownable {
     //////////////////////////////////////////////////////////////*/
     IERC20 public immutable usdt;
     FreelancerFactory public immutable freelancerFactory;
+    JobBoard public immutable jobBoard; // ✅ NEW
 
     // Fee on payouts (not on refunds), in basis points (max 10000)
     uint16  public platformFeeBps;         // e.g., 200 = 2%
@@ -53,29 +55,32 @@ contract EscrowFactory is Ownable {
     // Dispute resolver (EOA/multisig/module)
     address public resolver;
 
-constructor(
-    address _freelancerFactory,
-    address _usdt,
-    address _platformWallet,
-    uint16  _platformFeeBps,
-    address _resolver
-) {
-    _transferOwnership(msg.sender);
+    constructor(
+        address _freelancerFactory,
+        address _usdt,
+        address _platformWallet,
+        uint16  _platformFeeBps,
+        address _resolver,
+        address _jobBoard           // ✅ NEW PARAM
+    ) {
+        _transferOwnership(msg.sender);
 
-    if (
-        _freelancerFactory == address(0) ||
-        _usdt == address(0) ||
-        _platformWallet == address(0) ||
-        _resolver == address(0)
-    ) revert ZeroAddress();
-    if (_platformFeeBps > 10_000) revert BpsTooHigh();
+        if (
+            _freelancerFactory == address(0) ||
+            _usdt == address(0) ||
+            _platformWallet == address(0) ||
+            _resolver == address(0) ||
+            _jobBoard == address(0)        // ✅ NEW CHECK
+        ) revert ZeroAddress();
+        if (_platformFeeBps > 10_000) revert BpsTooHigh();
 
-    freelancerFactory = FreelancerFactory(_freelancerFactory);
-    usdt = IERC20(_usdt);
-    platformWallet = _platformWallet;
-    platformFeeBps = _platformFeeBps;
-    resolver = _resolver;
-}
+        freelancerFactory = FreelancerFactory(_freelancerFactory);
+        usdt = IERC20(_usdt);
+        platformWallet = _platformWallet;
+        platformFeeBps = _platformFeeBps;
+        resolver = _resolver;
+        jobBoard = JobBoard(_jobBoard);    // ✅ STORE JOBBOARD
+    }
 
 
     /*//////////////////////////////////////////////////////////////
@@ -112,7 +117,7 @@ constructor(
         uint64  deliveryDueTs,
         uint64  reviewWindowSecs,
         uint8   autoApproveDefaultRating
-    ) external returns (address escrowAddr) {
+    ) public returns (address escrowAddr) { // ✅ was external
         if (freelancer == address(0)) revert ZeroAddress();
         if (amountUSDT == 0) revert AmountZero();
 
@@ -122,7 +127,7 @@ constructor(
 
         // Deploy JobEscrow
         JobEscrow escrow = new JobEscrow(
-            msg.sender,                 // client
+            msg.sender,                 // client (EOA / smart account)
             freelancer,                 // freelancer
             address(usdt),              // USDT token
             amountUSDT,
@@ -161,6 +166,35 @@ constructor(
             deliveryDue,
             reviewDue
         );
+
+        return escrowAddr;
+    }
+
+    /// @notice NEW helper: same as createAndFundEscrow, but also marks the JobBoard job as Hired.
+    /// @dev This does NOT change the old function; it's an extra entrypoint for flows that know jobId.
+    function createAndFundEscrowForJob(
+        uint256 jobId,
+        address freelancer,
+        uint256 amountUSDT,
+        string calldata metadataURI,
+        uint64  cancelWindowSecs,
+        uint64  deliveryDueTs,
+        uint64  reviewWindowSecs,
+        uint8   autoApproveDefaultRating
+    ) external returns (address escrowAddr) {
+        // ✅ INTERNAL CALL – preserves original msg.sender (the client smart wallet)
+        escrowAddr = createAndFundEscrow(
+            freelancer,
+            amountUSDT,
+            metadataURI,
+            cancelWindowSecs,
+            deliveryDueTs,
+            reviewWindowSecs,
+            autoApproveDefaultRating
+        );
+
+        // ✅ After escrow deployed & funded, mark the job as hired on JobBoard
+        jobBoard.markAsHired(jobId, freelancer, escrowAddr);
 
         return escrowAddr;
     }

@@ -51,18 +51,12 @@ export async function POST() {
       );
 
     // ============================================================
-    // 1️⃣ Deploy MockUSDT
+    // 1️⃣ USE EXTERNAL USDT (no mock deployment)
     // ============================================================
-    log("🚀 Deploying MockUSDT...");
-    const usdtA = loadArtifact("TestUSDT.sol/MockUSDT");
-    const usdtAddr = await deployContract({
-      client,
-      chain,
-      account,
-      abi: usdtA.abi as Abi,
-      bytecode: usdtA.bytecode as `0x${string}`,
-    });
-    log(`✅ MockUSDT deployed at: ${usdtAddr}`);
+    const usdtAddr = process.env.USDT_ADDRESS!;
+    if (!usdtAddr) throw new Error("USDT_ADDRESS is missing in .env");
+
+    log(`💰 Using external USDT token: ${usdtAddr}`);
 
     // ============================================================
     // 2️⃣ Deploy FreelancerFactory
@@ -79,7 +73,7 @@ export async function POST() {
     log(`✅ FreelancerFactory deployed at: ${freelancerFactoryAddr}`);
 
     // ============================================================
-    // 3️⃣ Deploy ClientFactory (NEW)
+    // 3️⃣ Deploy ClientFactory
     // ============================================================
     log("\n🚀 Deploying ClientFactory...");
     const cfA = loadArtifact("ClientFactory.sol/ClientFactory");
@@ -93,7 +87,22 @@ export async function POST() {
     log(`✅ ClientFactory deployed at: ${clientFactoryAddr}`);
 
     // ============================================================
-    // 4️⃣ Deploy EscrowFactory
+    // 4️⃣ Deploy JobBoard
+    // ============================================================
+    log("\n🚀 Deploying JobBoard...");
+    const jbA = loadArtifact("JobBoard.sol/JobBoard");
+    const jobBoardAddr = await deployContract({
+      client,
+      chain,
+      account,
+      abi: jbA.abi as Abi,
+      bytecode: jbA.bytecode as `0x${string}`,
+      constructorParams: { _owner: deployerAddress },
+    });
+    log(`✅ JobBoard deployed at: ${jobBoardAddr}`);
+
+    // ============================================================
+    // 5️⃣ Deploy EscrowFactory (6 params!)
     // ============================================================
     log("\n🚀 Deploying EscrowFactory...");
     const efA = loadArtifact("EscrowFactory.sol/EscrowFactory");
@@ -110,32 +119,17 @@ export async function POST() {
       bytecode: efA.bytecode as `0x${string}`,
       constructorParams: {
         _freelancerFactory: freelancerFactoryAddr,
-        _usdt: usdtAddr,
+        _usdt: usdtAddr,                 // external USDT
         _platformWallet: platformWallet,
         _platformFeeBps: platformFeeBps,
         _resolver: resolver,
+        _jobBoard: jobBoardAddr,         // REQUIRED NEW PARAM
       },
     });
     log(`✅ EscrowFactory deployed at: ${escrowFactoryAddr}`);
 
     // ============================================================
-    // 5️⃣ Deploy JobBoard
-    // ============================================================
-    log("\n🚀 Deploying JobBoard...");
-    const jbA = loadArtifact("JobBoard.sol/JobBoard");
-
-    const jobBoardAddr = await deployContract({
-      client,
-      chain,
-      account,
-      abi: jbA.abi as Abi,
-      bytecode: jbA.bytecode as `0x${string}`,
-      constructorParams: { _owner: deployerAddress },
-    });
-    log(`✅ JobBoard deployed at: ${jobBoardAddr}`);
-
-    // ============================================================
-    // 6️⃣ Setup contract objects
+    // 6️⃣ Contract Objects
     // ============================================================
     const freelancerFactory = getContract({
       client,
@@ -159,19 +153,19 @@ export async function POST() {
     };
 
     // ============================================================
-    // 🔗 Wiring
+    // 🔗 Wiring Smart Contracts
     // ============================================================
 
-    // 1. FreelancerFactory → EscrowFactory
+    // 1. Authorize EscrowFactory inside FreelancerFactory
     log("\n🔗 Authorizing EscrowFactory in FreelancerFactory...");
     await callTx(
       freelancerFactory,
       "function setEscrowDeployer(address,bool)",
       [escrowFactoryAddr, true]
     );
-    log("✅ FreelancerFactory wired.");
+    log("✅ EscrowFactory authorized in FreelancerFactory.");
 
-    // 2. JobBoard → allow EscrowFactory
+    // 2. JobBoard → allow EscrowFactory to call markAsHired()
     log("🔗 Allowing EscrowFactory in JobBoard...");
     await callTx(
       jobBoard,
@@ -180,28 +174,28 @@ export async function POST() {
     );
     log("✅ EscrowFactory allowed in JobBoard.");
 
-    // 3. JobBoard → set USDT token
-    log("🔗 Setting USDT on JobBoard...");
+    // 3. JobBoard → set external USDT token
+    log("🔗 Setting USDT in JobBoard...");
     await callTx(jobBoard, "function setUSDC(address)", [usdtAddr]);
-    log("✅ USDT set on JobBoard");
+    log("✅ USDT set in JobBoard.");
 
-    // 4. Disable hiring application requirement
+    // 4. Optionally remove application requirement
     log("🔗 Disabling requireApplicationToHire...");
     await callTx(jobBoard, "function setRequireApplicationToHire(bool)", [
       false,
     ]);
-    log("✅ Hiring restriction disabled");
+    log("✅ requireApplicationToHire disabled.");
 
     // ============================================================
     // DONE
     // ============================================================
     log("\n============================================");
     log("🎯 Deployment Complete!");
-    log(`MockUSDT:           ${usdtAddr}`);
+    log(`USDT:               ${usdtAddr}`);
     log(`FreelancerFactory:  ${freelancerFactoryAddr}`);
     log(`ClientFactory:      ${clientFactoryAddr}`);
-    log(`EscrowFactory:      ${escrowFactoryAddr}`);
     log(`JobBoard:           ${jobBoardAddr}`);
+    log(`EscrowFactory:      ${escrowFactoryAddr}`);
     log("============================================\n");
 
     return NextResponse.json({
@@ -209,11 +203,11 @@ export async function POST() {
       walletAddress: deployerAddress,
       logs,
       deployed: {
-        MockUSDT: usdtAddr,
+        USDT: usdtAddr,
         FreelancerFactory: freelancerFactoryAddr,
         ClientFactory: clientFactoryAddr,
-        EscrowFactory: escrowFactoryAddr,
         JobBoard: jobBoardAddr,
+        EscrowFactory: escrowFactoryAddr,
       },
     });
   } catch (error: any) {

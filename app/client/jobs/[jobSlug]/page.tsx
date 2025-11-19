@@ -21,8 +21,8 @@ import {
   readContract,
   prepareContractCall,
   sendTransaction,
-  getBalance,
 } from "thirdweb";
+import { getWalletBalance } from "thirdweb/wallets";
 import {
   useActiveAccount,
   useConnectionManager,
@@ -438,10 +438,10 @@ export default function JobAnalyticsPage() {
 
       // 1) Check native token balance (MATIC) for gas fees
       try {
-        const nativeBalance = await getBalance({
-          address: walletAddress,
-          chain: CHAIN,
+        const nativeBalance = await getWalletBalance({
           client,
+          chain: CHAIN,
+          address: walletAddress,
         });
 
         // Minimum 0.01 MATIC recommended for transactions

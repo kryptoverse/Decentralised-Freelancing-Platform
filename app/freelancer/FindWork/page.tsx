@@ -30,9 +30,51 @@ export default function FindWorkPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isKYCVerified, setIsKYCVerified] = useState<boolean | null>(null);
+  const [showKYCModal, setShowKYCModal] = useState(false);
 
   useEffect(() => {
     if (!account) return;
+
+    // Check KYC status
+    const checkKYC = async () => {
+      try {
+        const factory = getContract({
+          client,
+          chain: CHAIN,
+          address: DEPLOYED_CONTRACTS.addresses.FreelancerFactory,
+        });
+
+        const profileAddr = await readContract({
+          contract: factory,
+          method: "function freelancerProfile(address) view returns (address)",
+          params: [account.address],
+        });
+
+        const ZERO = "0x0000000000000000000000000000000000000000";
+        if (profileAddr !== ZERO) {
+          const profile = getContract({
+            client,
+            chain: CHAIN,
+            address: profileAddr as `0x${string}`,
+          });
+
+          const kycStatus = await readContract({
+            contract: profile,
+            method: "function isKYCVerified() view returns (bool)",
+          });
+
+          setIsKYCVerified(kycStatus as boolean);
+        } else {
+          setIsKYCVerified(false);
+        }
+      } catch (e) {
+        console.error("KYC check failed:", e);
+        setIsKYCVerified(false);
+      }
+    };
+
+    checkKYC();
 
     const fetchJobs = async () => {
       try {
@@ -290,17 +332,41 @@ export default function FindWorkPage() {
 
                 {/* Action Button */}
                 <button
-                  onClick={() =>
-                    router.push(`/freelancer/FindWork/${job.jobId}`)
-
-                  }
+                  onClick={() => {
+                    if (isKYCVerified === false) {
+                      setShowKYCModal(true);
+                    } else {
+                      router.push(`/freelancer/FindWork/${job.jobId}`);
+                    }
+                  }}
                   className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition font-medium"
                 >
                   View Details
                 </button>
               </motion.div>
             );
-          })}
+          }          )}
+        </div>
+      )}
+
+      {/* KYC VERIFICATION MODAL */}
+      {showKYCModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-background border p-6 rounded-xl w-full max-w-md space-y-4">
+            <h2 className="text-xl font-semibold">KYC Verification Required</h2>
+            <p className="text-gray-300">
+              You need to complete KYC verification before you can view and apply for jobs. 
+              Please contact the administrator to get your KYC status verified.
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setShowKYCModal(false)}
+                className="px-4 py-2 bg-primary text-white rounded-lg"
+              >
+                Understood
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </main>

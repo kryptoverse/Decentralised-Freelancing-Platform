@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useActiveAccount } from "thirdweb/react";
-import { Wallet, FileText, Plus, Briefcase, Copy, CheckCheck } from "lucide-react";
+import { Wallet, FileText, Plus, Briefcase } from "lucide-react";
 import { getWalletBalance } from "thirdweb/wallets";
 import { polygonAmoy } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb-client";
@@ -12,6 +12,9 @@ import { PostJobForm } from "@/components/client/post-job-form";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { getContract, readContract } from "thirdweb";
 import { CHAIN } from "@/lib/chains";
+import { useClientEvents } from "@/contexts/ClientEventsContext";
+import { WorkDeliveredToast } from "@/components/notifications/WorkDeliveredToast";
+import { batchReadSameContract } from "@/lib/batch-reads";
 
 /* --------------------------------------------------
     HELPER: Create slug like "2-unreal-engine-dev"
@@ -33,10 +36,6 @@ export default function ClientHome() {
   const smartAddress: `0x${string}` =
     (account?.address as `0x${string}`) || ZERO;
 
-  const eoaAddress: `0x${string}` =
-    ((account as any)?.walletAddress as `0x${string}`) || ZERO;
-
-  const [copied, setCopied] = useState(false);
 
   const [balance, setBalance] = useState<{ displayValue: string; symbol: string } | null>(
     null
@@ -55,6 +54,13 @@ export default function ClientHome() {
 
   const [jobs, setJobs] = useState<any[]>([]);
   const [selectedTab, setSelectedTab] = useState("open");
+
+  // Work delivery notification
+  const [showWorkToast, setShowWorkToast] = useState(false);
+  const [workDeliveryInfo, setWorkDeliveryInfo] = useState<{ jobId: string; jobTitle: string } | null>(null);
+
+  // Get events from context
+  const { latestJobPosted, latestWorkDelivered } = useClientEvents();
 
   /* ------------------------------------
       LOAD CLIENT PROFILE
@@ -126,73 +132,169 @@ export default function ClientHome() {
   /* ------------------------------------
       LOAD JOBS POSTED BY CLIENT
   ------------------------------------ */
-  useEffect(() => {
+  // Extract loadJobs function for reuse
+  const loadJobs = async () => {
     if (!account) return;
 
-    async function loadJobs() {
-      try {
-        const jobBoard = getContract({
-          client,
-          chain: CHAIN,
-          address: DEPLOYED_CONTRACTS.addresses.JobBoard,
-        });
+    try {
+      const jobBoard = getContract({
+        client,
+        chain: CHAIN,
+        address: DEPLOYED_CONTRACTS.addresses.JobBoard,
+      });
 
-        const jobIds = (await readContract({
-          contract: jobBoard,
-          method: "function jobsByClient(address) view returns (uint256[])",
-          params: [smartAddress],
-        })) as bigint[];
+      const jobIds = (await readContract({
+        contract: jobBoard,
+        method: "function jobsByClient(address) view returns (uint256[])",
+        params: [smartAddress],
+      })) as bigint[];
 
-        if (!jobIds || jobIds.length === 0) {
-          setJobs([]);
-          return;
-        }
-
-        const fullJobs = await Promise.all(
-          jobIds.map(async (id: bigint) => {
-            const res = (await readContract({
-              contract: jobBoard,
-              method:
-                "function getJob(uint256) view returns (address,string,string,uint256,uint8,address,address,uint64,uint64,uint64,bytes32[],uint256)",
-              params: [id],
-            })) as any;
-
-            const rawCount = await readContract({
-              contract: jobBoard,
-              method: "function getApplicantCount(uint256) view returns (uint256)",
-              params: [id],
-            });
-
-            const [freelancers] = (await readContract({
-              contract: jobBoard,
-              method:
-                "function getApplicants(uint256,uint256,uint256) view returns (address[],uint64[])",
-              params: [id, 0n, BigInt(rawCount as bigint)],
-            })) as [string[], bigint[]];
-
-            const realCount = freelancers.filter(
-              (a) => a !== ZERO
-            ).length;
-
-            return {
-              id: Number(id),
-              title: res[1],
-              status: Number(res[4]),
-              budgetUSDC: Number(res[3]),
-              expiresAt: Number(res[9]),
-              applicants: realCount,
-            };
-          })
-        );
-
-        setJobs(fullJobs);
-      } catch (e) {
-        console.error("❌ Error loading jobs:", e);
+      if (!jobIds || jobIds.length === 0) {
+        setJobs([]);
+        return;
       }
-    }
 
+      const fullJobs = await Promise.all(
+        jobIds.map(async (id: bigint) => {
+          const res = (await readContract({
+            contract: jobBoard,
+            method:
+              "function getJob(uint256) view returns (address,string,string,uint256,uint8,address,address,uint64,uint64,uint64,bytes32[],uint256)",
+            params: [id],
+          })) as any;
+
+          const rawCount = await readContract({
+            contract: jobBoard,
+            method: "function getApplicantCount(uint256) view returns (uint256)",
+            params: [id],
+          });
+
+          const [freelancers] = (await readContract({
+            contract: jobBoard,
+            method:
+              "function getApplicants(uint256,uint256,uint256) view returns (address[],uint64[])",
+            params: [id, 0n, BigInt(rawCount as bigint)],
+          })) as [string[], bigint[]];
+
+          const realCount = freelancers.filter(
+            (a) => a !== ZERO
+          ).length;
+
+          return {
+            id: Number(id),
+            title: res[1],
+            status: Number(res[4]),
+            budgetUSDC: Number(res[3]),
+            expiresAt: Number(res[9]),
+            applicants: realCount,
+          };
+        })
+      );
+
+      setJobs(fullJobs);
+    } catch (e) {
+      console.error("❌ Error loading jobs:", e);
+    }
+  };
+
+  useEffect(() => {
     loadJobs();
   }, [account, smartAddress]);
+
+  /* ------------------------------------
+      INCREMENTAL JOB FETCH (for new jobs)
+  ------------------------------------ */
+  const fetchSingleJob = async (jobId: bigint) => {
+    try {
+      const jobBoard = getContract({
+        client,
+        chain: CHAIN,
+        address: DEPLOYED_CONTRACTS.addresses.JobBoard,
+      });
+
+      const res = await readContract({
+        contract: jobBoard,
+        method:
+          "function getJob(uint256) view returns (address,string,string,uint256,uint8,address,address,uint64,uint64,uint64,bytes32[],uint256)",
+        params: [jobId],
+      });
+
+      const rawCount = await readContract({
+        contract: jobBoard,
+        method: "function getApplicantCount(uint256) view returns (uint256)",
+        params: [jobId],
+      });
+
+      const [freelancers] = await readContract({
+        contract: jobBoard,
+        method:
+          "function getApplicants(uint256,uint256,uint256) view returns (address[],uint64[])",
+        params: [jobId, 0n, BigInt(rawCount as bigint)],
+      }) as [string[], bigint[]];
+
+      const realCount = freelancers.filter(
+        (a) => a !== ZERO
+      ).length;
+
+      const newJob = {
+        id: Number(jobId),
+        title: (res as any)[1],
+        status: Number((res as any)[4]),
+        budgetUSDC: Number((res as any)[3]),
+        expiresAt: Number((res as any)[9]),
+        applicants: realCount,
+      };
+
+      // Add to jobs array if not already present
+      setJobs(prev => {
+        const exists = prev.some(j => j.id === newJob.id);
+        if (exists) return prev;
+        return [newJob, ...prev];
+      });
+
+      console.log("✅ Added new job to list incrementally:", newJob);
+    } catch (e) {
+      console.error("❌ Error fetching single job:", e);
+    }
+  };
+
+  /* ------------------------------------
+      REAL-TIME EVENT: Job Posted
+  ------------------------------------ */
+  useEffect(() => {
+    if (!latestJobPosted || !account) return;
+
+    // Check if this is MY job (I posted it)
+    if (latestJobPosted.client.toLowerCase() === smartAddress.toLowerCase()) {
+      console.log("📝 Dashboard: New job posted, adding incrementally...");
+      fetchSingleJob(BigInt(latestJobPosted.jobId));
+    }
+  }, [latestJobPosted, account, smartAddress]);
+
+  /* ------------------------------------
+      WORK DELIVERY NOTIFICATION
+  ------------------------------------ */
+  useEffect(() => {
+    if (!latestWorkDelivered) return;
+
+    // Find the job from our jobs list that matches
+    const matchedJob = jobs.find(j => {
+      // Since we don't have escrow-to-jobId mapping easily here,
+      // we'll need to enhance this. For now, show generic notification
+      return true; // TODO: Match by escrow address
+    });
+
+    if (matchedJob) {
+      setWorkDeliveryInfo({
+        jobId: matchedJob.id.toString(),
+        jobTitle: matchedJob.title,
+      });
+      setShowWorkToast(true);
+
+      // Auto-hide after 10 seconds
+      setTimeout(() => setShowWorkToast(false), 10000);
+    }
+  }, [latestWorkDelivered, jobs]);
 
   /* ------------------------------------
       NATIVE WALLET BALANCE (MATIC)
@@ -210,7 +312,11 @@ export default function ClientHome() {
           address: smartAddress,
         });
 
-        setBalance({ displayValue: result.displayValue, symbol: result.symbol });
+        // Format to 3 decimal places
+        const numericValue = parseFloat(result.displayValue);
+        const formattedValue = numericValue.toFixed(3);
+
+        setBalance({ displayValue: formattedValue, symbol: result.symbol });
       } catch (err) {
         console.error("❌ balance error:", err);
       } finally {
@@ -249,7 +355,7 @@ export default function ClientHome() {
         const formatted =
           Number(raw as bigint) / 10 ** Number(decimals);
 
-        setUsdtBalance(formatted.toFixed(2));
+        setUsdtBalance(formatted.toFixed(3));
       } catch (err) {
         console.error("❌ USDT balance error:", err);
         setUsdtBalance(null);
@@ -258,15 +364,6 @@ export default function ClientHome() {
 
     fetchUSDTBalance();
   }, [smartAddress]);
-
-  /* ------------------------------------
-      ADDRESS COPY
-  ------------------------------------ */
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(smartAddress);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
 
   /* ------------------------------------
       FILTER JOBS BY STATUS
@@ -296,31 +393,6 @@ export default function ClientHome() {
     <>
       <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto space-y-12">
 
-        {/* WALLET DISPLAY BOX */}
-        <div className="p-4 rounded-xl glass-effect border max-w-xl">
-          <h2 className="font-bold text-lg mb-2 flex items-center gap-2">
-            <Wallet className="w-5 h-5 text-primary" />
-            Smart Account Address
-          </h2>
-
-          <div className="flex items-center justify-between bg-surface-secondary p-3 rounded-lg border">
-            <code className="text-sm break-all">
-              {smartAddress}
-            </code>
-
-            <button
-              onClick={handleCopy}
-              className="p-2 rounded-md hover:bg-surface transition"
-            >
-              {copied ? (
-                <CheckCheck className="w-5 h-5 text-green-400" />
-              ) : (
-                <Copy className="w-5 h-5 text-primary" />
-              )}
-            </button>
-          </div>
-        </div>
-
         {/* HEADER */}
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="w-full sm:w-auto">
@@ -333,7 +405,42 @@ export default function ClientHome() {
           </div>
 
           <button
-            onClick={() => setShowPostJob(true)}
+            onClick={async () => {
+              // Check profile before opening modal
+              if (!smartAddress || smartAddress.startsWith("0x0000")) return;
+
+              try {
+                const factory = getContract({
+                  client,
+                  chain: CHAIN,
+                  address: DEPLOYED_CONTRACTS.addresses.ClientFactory,
+                });
+
+                const profileAddr = await readContract({
+                  contract: factory,
+                  method: "function clientProfiles(address) view returns (address)",
+                  params: [smartAddress],
+                });
+
+                const ZERO = "0x0000000000000000000000000000000000000000";
+                if (!profileAddr || profileAddr === ZERO) {
+                  // Show profile required modal
+                  const shouldCreate = window.confirm(
+                    "You need to create a client profile before posting jobs. Would you like to create one now?"
+                  );
+                  if (shouldCreate) {
+                    router.push("/client/profile/create");
+                  }
+                  return;
+                }
+
+                setShowPostJob(true);
+              } catch (err) {
+                console.error("Error checking profile:", err);
+                // Still allow opening modal, but form will check again
+                setShowPostJob(true);
+              }
+            }}
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground hover:opacity-90 w-full sm:w-auto"
           >
             <Plus className="w-4 h-4" />
@@ -360,8 +467,8 @@ export default function ClientHome() {
               value: balance
                 ? `${balance.displayValue} ${balance.symbol}`
                 : loading
-                ? "Fetching..."
-                : "0",
+                  ? "Fetching..."
+                  : "0",
             },
             {
               icon: Wallet,
@@ -403,11 +510,10 @@ export default function ClientHome() {
               <button
                 key={t.id}
                 onClick={() => setSelectedTab(t.id)}
-                className={`pb-2 text-sm font-medium ${
-                  selectedTab === t.id
-                    ? "text-primary border-b-2 border-primary"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
+                className={`pb-2 text-sm font-medium ${selectedTab === t.id
+                  ? "text-primary border-b-2 border-primary"
+                  : "text-muted-foreground hover:text-foreground"
+                  }`}
               >
                 {t.label}
               </button>
@@ -465,6 +571,16 @@ export default function ClientHome() {
             />
           </div>
         </div>
+      )}
+
+      {/* WORK DELIVERED NOTIFICATION */}
+      {workDeliveryInfo && (
+        <WorkDeliveredToast
+          jobId={workDeliveryInfo.jobId}
+          jobTitle={workDeliveryInfo.jobTitle}
+          visible={showWorkToast}
+          onDismiss={() => setShowWorkToast(false)}
+        />
       )}
     </>
   );

@@ -6,12 +6,13 @@ import {
   prepareContractCall,
   sendTransaction,
 } from "thirdweb";
-import { useActiveAccount } from "thirdweb/react";
+import { useActiveAccount, useActiveWallet, useDisconnect } from "thirdweb/react";
 import { client } from "@/lib/thirdweb-client";
 import { CHAIN } from "@/lib/chains";
 import { useIPFSUpload } from "@/hooks/useIPFSUpload";
 import { ipfsToHttp } from "@/utils/ipfs";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
+import { AlertCircle } from "lucide-react";
 
 interface Metadata {
   name: string;
@@ -37,7 +38,16 @@ export function FreelancerProfileForm({
   existingMetadata,
   onSaved,
 }: FreelancerProfileFormProps) {
-  const account = useActiveAccount();
+  const activeAccount = useActiveAccount();
+  const activeWallet = useActiveWallet();
+  const { disconnect } = useDisconnect();
+  
+  // Check if MetaMask is connected - profile creation requires smart wallet for gas sponsorship
+  const isMetaMask = activeWallet?.id === "io.metamask";
+  
+  // Use active account only if it's NOT MetaMask (i.e., it's the smart wallet)
+  const account = isMetaMask ? null : activeAccount;
+  
   const { uploadFile, uploadMetadata, uploading, progress } = useIPFSUpload();
 
   const [msg, setMsg] = useState("");
@@ -225,6 +235,34 @@ export function FreelancerProfileForm({
       setLoading(false);
     }
   };
+
+  // Show MetaMask warning if MetaMask is connected
+  if (isMetaMask) {
+    return (
+      <div className="w-full max-w-3xl mx-auto p-4 md:p-6 rounded-2xl glass-effect border border-border shadow-md">
+        <div className="bg-yellow-500/20 border border-yellow-500/50 rounded-xl p-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-6 h-6 text-yellow-400" />
+            <h2 className="text-xl font-bold">MetaMask Detected</h2>
+          </div>
+          <p className="text-foreground-secondary">
+            Profile creation requires the gas-sponsored smart wallet. Please disconnect MetaMask and sign in with Google or Email to use the smart wallet.
+          </p>
+          <p className="text-sm text-foreground-secondary">
+            The smart wallet provides gas sponsorship, so you won't need to pay for transaction fees.
+          </p>
+          {activeWallet && (
+            <button
+              onClick={() => disconnect(activeWallet)}
+              className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition"
+            >
+              Disconnect MetaMask
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <form

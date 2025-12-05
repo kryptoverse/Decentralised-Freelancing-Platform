@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   Send,
   Loader2,
+  User,
 } from "lucide-react";
 
 import {
@@ -165,6 +166,7 @@ export default function FreelancerJobDetailPage() {
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [description, setDescription] = useState("");
   const [escrowData, setEscrowData] = useState<EscrowData | null>(null);
+  const [clientName, setClientName] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
   const [deliverModal, setDeliverModal] = useState(false);
@@ -246,6 +248,38 @@ export default function FreelancerJobDetailPage() {
           }
         }
 
+        /* ----------------------- CLIENT NAME ----------------------- */
+        try {
+          const clientFactory = getContract({
+            client,
+            chain: CHAIN,
+            address: DEPLOYED_CONTRACTS.addresses.ClientFactory as `0x${string}`,
+          });
+
+          const clientProfileAddr = await readContract({
+            contract: clientFactory,
+            method: "function getProfile(address) view returns (address)",
+            params: [clientAddr as `0x${string}`],
+          });
+
+          if (clientProfileAddr && clientProfileAddr !== "0x0000000000000000000000000000000000000000") {
+            const clientProfile = getContract({
+              client,
+              chain: CHAIN,
+              address: clientProfileAddr as `0x${string}`,
+            });
+
+            const name = await readContract({
+              contract: clientProfile,
+              method: "function name() view returns (string)",
+            });
+
+            setClientName(name as string);
+          }
+        } catch (err) {
+          console.error("Failed to fetch client name:", err);
+        }
+
         /* ----------------------- PROPOSAL ----------------------- */
         try {
           const rawP = await readContract({
@@ -261,7 +295,7 @@ export default function FreelancerJobDetailPage() {
           try {
             const j = await (await fetch(ipfsToHttp(propUri))).json();
             txt = j.proposal ?? propUri;
-          } catch {}
+          } catch { }
 
           setProposal({
             appliedAt,
@@ -269,7 +303,7 @@ export default function FreelancerJobDetailPage() {
             bidAmount: bidAmt,
             deliveryDays,
           });
-        } catch {}
+        } catch { }
 
         /* ----------------------- ESCROW ----------------------- */
         if (escrow && escrow !== "0x0000000000000000000000000000000000000000") {
@@ -422,7 +456,15 @@ export default function FreelancerJobDetailPage() {
       await sendTransaction({ account: walletAccount, transaction: tx });
 
       setDeliverModal(false);
-      router.refresh();
+
+      // Optimistic UI update instead of router.refresh()
+      setEscrowData(prev => prev ? {
+        ...prev,
+        delivered: true,
+        reviewDue: BigInt(Math.floor(Date.now() / 1000) + (prev.reviewDue ? 7 * 24 * 60 * 60 : 0)),
+      } : null);
+
+      console.log("✅ Work delivered! UI updated optimistically.");
     } catch (err) {
       console.error("submitDelivery error:", err);
       alert(getFriendlyError(err));
@@ -492,7 +534,7 @@ export default function FreelancerJobDetailPage() {
   return (
     <>
       <main className="max-w-4xl mx-auto p-4 space-y-8">
-        
+
         {/* BACK BUTTON */}
         <button
           className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
@@ -513,6 +555,13 @@ export default function FreelancerJobDetailPage() {
           </div>
 
           <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+            {clientName && (
+              <span className="flex items-center gap-1">
+                <User className="w-4 h-4" />
+                Client: <span className="font-medium text-foreground">{clientName}</span>
+              </span>
+            )}
+
             <span className="flex items-center gap-1">
               <DollarSign className="w-4 h-4" />
               {(Number(job.budgetUSDC) / 1e6).toFixed(2)} USDT
@@ -586,14 +635,14 @@ export default function FreelancerJobDetailPage() {
             {/* CANCEL STATUS */}
             {escrowData.cancelRequestedBy !==
               "0x0000000000000000000000000000000000000000" && (
-              <div className="p-4 rounded-xl border bg-amber-500/10 text-amber-400 flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4" />
-                {escrowData.cancelRequestedBy.toLowerCase() ===
-                walletAccount.address.toLowerCase()
-                  ? "You requested cancellation. Waiting for client."
-                  : "Client requested cancellation. You must accept or reject."}
-              </div>
-            )}
+                <div className="p-4 rounded-xl border bg-amber-500/10 text-amber-400 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" />
+                  {escrowData.cancelRequestedBy.toLowerCase() ===
+                    walletAccount.address.toLowerCase()
+                    ? "You requested cancellation. Waiting for client."
+                    : "Client requested cancellation. You must accept or reject."}
+                </div>
+              )}
 
             {/* ACTION BUTTONS */}
             <div className="flex flex-col sm:flex-row gap-3">
@@ -610,15 +659,15 @@ export default function FreelancerJobDetailPage() {
                   {escrowData.delivered
                     ? "Already delivered"
                     : escrowData.terminal
-                    ? "Escrow closed"
-                    : "Delivery window has passed"}
+                      ? "Escrow closed"
+                      : "Delivery window has passed"}
                 </div>
               )}
 
               {/* REQUEST CANCEL */}
               {!escrowData.terminal &&
                 escrowData.cancelRequestedBy ===
-                  "0x0000000000000000000000000000000000000000" && (
+                "0x0000000000000000000000000000000000000000" && (
                   <button
                     onClick={() => setCancelModal(true)}
                     className="flex-1 px-4 py-3 rounded-xl bg-surface-secondary border"
@@ -631,9 +680,9 @@ export default function FreelancerJobDetailPage() {
               {!escrowData.terminal &&
                 escrowData.cancelRequestedBy &&
                 escrowData.cancelRequestedBy.toLowerCase() !==
-                  walletAccount.address.toLowerCase() &&
+                walletAccount.address.toLowerCase() &&
                 escrowData.cancelRequestedBy !==
-                  "0x0000000000000000000000000000000000000000" && (
+                "0x0000000000000000000000000000000000000000" && (
                   <button
                     onClick={acceptCancel}
                     className="flex-1 px-4 py-3 rounded-xl bg-amber-600 text-white"
@@ -808,7 +857,7 @@ function CancelModal({
           <h2 className="text-xl font-semibold">Request Cancellation</h2>
 
           <p className="text-sm text-muted-foreground">
-            You are requesting a cancellation.  
+            You are requesting a cancellation.
             The client must accept it before the job is fully cancelled.
           </p>
 

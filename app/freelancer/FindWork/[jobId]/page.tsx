@@ -23,6 +23,7 @@ import {
   DollarSign,
   Loader2,
   Users,
+  User,
   Tag,
   AlertCircle,
   CheckCircle2,
@@ -80,11 +81,14 @@ export default function JobDetailsPage() {
   const [hasFreelancerProfile, setHasFreelancerProfile] = useState<
     boolean | null
   >(null);
+  const [isKYCVerified, setIsKYCVerified] = useState<boolean | null>(null);
+  const [showKYCModal, setShowKYCModal] = useState(false);
 
   const [job, setJob] = useState<JobDetails | null>(null);
   const [applicants, setApplicants] = useState<Applicant[]>([]);
   const [applicantCount, setApplicantCount] = useState<number | null>(null);
   const [hasApplied, setHasApplied] = useState(false);
+  const [clientName, setClientName] = useState<string>("");
 
   const [loading, setLoading] = useState(true);
   const [txLoading, setTxLoading] = useState(false);
@@ -125,9 +129,33 @@ export default function JobDetailsPage() {
         const ZERO = "0x0000000000000000000000000000000000000000";
 
         setHasFreelancerProfile(profileAddr !== ZERO);
+
+        // Check KYC status if profile exists
+        if (profileAddr !== ZERO) {
+          try {
+            const profile = getContract({
+              client,
+              chain: CHAIN,
+              address: profileAddr as `0x${string}`,
+            });
+
+            const kycStatus = await readContract({
+              contract: profile,
+              method: "function isKYCVerified() view returns (bool)",
+            });
+
+            setIsKYCVerified(kycStatus as boolean);
+          } catch (e) {
+            console.error("KYC check failed:", e);
+            setIsKYCVerified(false);
+          }
+        } else {
+          setIsKYCVerified(false);
+        }
       } catch (e) {
         console.error("Profile check failed:", e);
         setHasFreelancerProfile(false);
+        setIsKYCVerified(false);
       }
     }
 
@@ -237,6 +265,38 @@ export default function JobDetailsPage() {
           postingBond,
         });
 
+        // ---- CLIENT NAME ----
+        try {
+          const clientFactory = getContract({
+            client,
+            chain: CHAIN,
+            address: DEPLOYED_CONTRACTS.addresses.ClientFactory as `0x${string}`,
+          });
+
+          const clientProfileAddr = await readContract({
+            contract: clientFactory,
+            method: "function getProfile(address) view returns (address)",
+            params: [clientAddr as `0x${string}`],
+          });
+
+          if (clientProfileAddr && clientProfileAddr !== "0x0000000000000000000000000000000000000000") {
+            const clientProfile = getContract({
+              client,
+              chain: CHAIN,
+              address: clientProfileAddr as `0x${string}`,
+            });
+
+            const name = await readContract({
+              contract: clientProfile,
+              method: "function name() view returns (string)",
+            });
+
+            setClientName(name as string);
+          }
+        } catch (err) {
+          console.error("Failed to fetch client name:", err);
+        }
+
         // ---- APPLICANTS (fixed) ----
         const rawCount = await readContract({
           contract: jobBoard,
@@ -305,15 +365,12 @@ export default function JobDetailsPage() {
   const daysLeft =
     job && job.expiresAt > 0n
       ? Math.ceil(
-          (Number(job.expiresAt) - Date.now() / 1000) / (60 * 60 * 24)
-        )
+        (Number(job.expiresAt) - Date.now() / 1000) / (60 * 60 * 24)
+      )
       : null;
 
   const canApply =
-    !!account && !!job && job.status === 1 && !isExpired && !hasApplied;
-
-  const canWithdraw =
-    !!account && !!job && job.status === 1 && hasApplied;
+    !!account && !!job && job.status === 1 && !isExpired && !hasApplied && isKYCVerified === true;
 
   /* ---------------------------------------------------------------
      APPLY WITH PROPOSAL (IPFS Upload + call overloaded applyToJob)
@@ -376,39 +433,7 @@ export default function JobDetailsPage() {
     }
   };
 
-  /* ------------------------------------------------
-     WITHDRAW
-  ------------------------------------------------ */
-  const handleWithdraw = async () => {
-    if (!account || !job || numericJobId === null) return;
 
-    try {
-      setTxLoading(true);
-      setError(null);
-      setTxMsg("");
-
-      const jobBoard = getContract({
-        client,
-        chain: CHAIN,
-        address: DEPLOYED_CONTRACTS.addresses.JobBoard,
-      });
-
-      const tx = await prepareContractCall({
-        contract: jobBoard,
-        method: "function withdrawApplication(uint256)",
-        params: [numericJobId],
-      });
-
-      await sendTransaction({ account, transaction: tx });
-
-      setHasApplied(false);
-      setTxMsg("Application withdrawn.");
-    } catch {
-      setError("Withdraw failed.");
-    } finally {
-      setTxLoading(false);
-    }
-  };
 
   /* ------------------------------------------------
      UI
@@ -450,10 +475,12 @@ export default function JobDetailsPage() {
         <h1 className="text-2xl md:text-3xl font-bold">{job.title}</h1>
 
         <div className="text-sm text-gray-400 flex flex-wrap gap-4">
-          <span>
-            Client: {job.client.slice(0, 6)}...
-            {job.client.slice(-4)}
-          </span>
+          {clientName && (
+            <span className="flex items-center gap-1">
+              <User className="w-4 h-4" />
+              Client: <span className="font-medium text-white">{clientName}</span>
+            </span>
+          )}
           <span>
             Posted:{" "}
             {new Date(Number(job.createdAt) * 1000).toLocaleString()}
@@ -527,7 +554,7 @@ export default function JobDetailsPage() {
             )}
 
             {/* Freelancer has NO profile */}
-            {canApply && hasFreelancerProfile === false && (
+            {hasFreelancerProfile === false && (
               <button
                 onClick={() => router.push("/freelancer/Profile")}
                 className="w-full py-2 rounded-lg bg-primary text-white"
@@ -536,8 +563,24 @@ export default function JobDetailsPage() {
               </button>
             )}
 
+            {/* KYC Not Verified */}
+            {hasFreelancerProfile === true && isKYCVerified === false && (
+              <div className="space-y-3">
+                <div className="p-3 bg-yellow-500/10 border border-yellow-400/20 rounded-lg text-sm text-yellow-400 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>KYC verification required to apply for jobs</span>
+                </div>
+                <button
+                  onClick={() => setShowKYCModal(true)}
+                  className="w-full py-2 rounded-lg bg-yellow-600 text-white"
+                >
+                  Verify KYC Status
+                </button>
+              </div>
+            )}
+
             {/* CAN APPLY */}
-            {canApply && hasFreelancerProfile && (
+            {canApply && hasFreelancerProfile && isKYCVerified === true && (
               <button
                 onClick={() => setShowProposalModal(true)}
                 disabled={txLoading}
@@ -547,15 +590,19 @@ export default function JobDetailsPage() {
               </button>
             )}
 
-            {/* CAN WITHDRAW */}
-            {canWithdraw && (
-              <button
-                onClick={handleWithdraw}
-                disabled={txLoading}
-                className="w-full py-2 rounded-lg border text-white border-gray-600"
-              >
-                Withdraw Application
-              </button>
+            {/* ALREADY APPLIED */}
+            {hasApplied && (
+              <div className="p-4 bg-green-500/10 border border-green-400/20 rounded-lg">
+                <div className="flex items-center gap-2 text-green-400">
+                  <CheckCircle2 className="w-5 h-5" />
+                  <div>
+                    <p className="font-semibold">Application Submitted</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      You have already applied to this job. The client will review your proposal.
+                    </p>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
 
@@ -593,6 +640,27 @@ export default function JobDetailsPage() {
           </div>
         </motion.div>
       </section>
+
+      {/* KYC VERIFICATION MODAL */}
+      {showKYCModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-background border p-6 rounded-xl w-full max-w-md space-y-4">
+            <h2 className="text-xl font-semibold">KYC Verification Required</h2>
+            <p className="text-gray-300">
+              You need to complete KYC verification before you can apply for jobs.
+              Please contact the administrator to get your KYC status verified.
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setShowKYCModal(false)}
+                className="px-4 py-2 bg-primary text-white rounded-lg"
+              >
+                Understood
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* PROPOSAL MODAL */}
       {showProposalModal && (

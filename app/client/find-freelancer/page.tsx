@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { getContract, readContract } from "thirdweb";
 import { useActiveAccount } from "thirdweb/react";
+import { AlertCircle, User } from "lucide-react";
 
 import { client } from "@/lib/thirdweb-client";
 import { CHAIN } from "@/lib/chains";
@@ -30,11 +31,61 @@ export default function FindFreelancerPage() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasProfile, setHasProfile] = useState<boolean | null>(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+
+  // ================================
+  // CHECK CLIENT PROFILE
+  // ================================
+  useEffect(() => {
+    if (!account) {
+      setHasProfile(false);
+      return;
+    }
+
+    async function checkProfile() {
+      if (!account) return;
+      
+      try {
+        const factory = getContract({
+          client,
+          chain: CHAIN,
+          address: DEPLOYED_CONTRACTS.addresses.ClientFactory,
+        });
+
+        const profileAddr = await readContract({
+          contract: factory,
+          method: "function clientProfiles(address) view returns (address)",
+          params: [account.address],
+        });
+
+        const ZERO = "0x0000000000000000000000000000000000000000";
+        const hasProfileValue = profileAddr !== ZERO && profileAddr !== null;
+        setHasProfile(hasProfileValue);
+        
+        if (!hasProfileValue) {
+          setShowProfileModal(true);
+        }
+      } catch (err) {
+        console.error("Error checking profile:", err);
+        setHasProfile(false);
+        setShowProfileModal(true);
+      }
+    }
+
+    checkProfile();
+  }, [account]);
 
   // ================================
   // LOAD FREELANCERS
   // ================================
   useEffect(() => {
+    if (hasProfile === false) {
+      // Don't load freelancers if no profile
+      setLoading(false);
+      return;
+    }
+
     async function fetchFreelancers() {
       try {
         setLoading(true);
@@ -158,8 +209,10 @@ export default function FindFreelancerPage() {
       }
     }
 
-    fetchFreelancers();
-  }, []);
+    if (hasProfile === true) {
+      fetchFreelancers();
+    }
+  }, [hasProfile]);
 
   // ================================
   // UI STATES
@@ -169,6 +222,41 @@ export default function FindFreelancerPage() {
     return (
       <section className="p-8 text-lg font-medium">
         Please connect your wallet to browse freelancers.
+      </section>
+    );
+  }
+
+  if (hasProfile === false && showProfileModal) {
+    return (
+      <section className="p-8">
+        <div className="max-w-md mx-auto bg-surface rounded-2xl p-6 border border-border">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-yellow-500/20 rounded-lg">
+              <AlertCircle className="w-6 h-6 text-yellow-400" />
+            </div>
+            <h2 className="text-xl font-bold">Profile Required</h2>
+          </div>
+          
+          <p className="text-muted-foreground mb-6">
+            You need to create a client profile before you can browse freelancers. This helps establish your identity and build trust.
+          </p>
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowProfileModal(false)}
+              className="flex-1 px-4 py-2 rounded-lg border border-border hover:bg-surface-secondary transition"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => router.push("/client/profile/create")}
+              className="flex-1 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition flex items-center justify-center gap-2"
+            >
+              <User className="w-4 h-4" />
+              Create Profile
+            </button>
+          </div>
+        </div>
       </section>
     );
   }

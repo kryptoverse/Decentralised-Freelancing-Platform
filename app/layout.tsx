@@ -4,7 +4,9 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 
 import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "sonner";
 import { ThirdwebProvider } from "thirdweb/react";
+import { ClientEventsProvider } from "@/contexts/ClientEventsContext";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -23,9 +25,12 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
         <ThirdwebProvider>
-          <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-            {children}
-          </ThemeProvider>
+          <ClientEventsProvider>
+            <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+              {children}
+              <Toaster />
+            </ThemeProvider>
+          </ClientEventsProvider>
         </ThirdwebProvider>
       </body>
     </html>

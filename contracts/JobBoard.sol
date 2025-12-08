@@ -14,11 +14,6 @@ interface IFreelancerFactory {
     function freelancerProfile(address freelancer) external view returns (address);
 }
 
-// NEW: minimal interface to read KYC status from FreelancerProfile
-interface IFreelancerProfile {
-    function isKYCVerified() external view returns (bool);
-}
-
 contract JobBoard {
 
     /*//////////////////////////////////////////////////////////////
@@ -407,9 +402,6 @@ contract JobBoard {
         if (address(freelancerFactory) != address(0)) {
             address profile = freelancerFactory.freelancerProfile(msg.sender);
             if (profile == address(0)) revert NotFreelancer();
-
-            // NEW: enforce freelancer KYC via profile
-            if (!IFreelancerProfile(profile).isKYCVerified()) revert KYCGated();
         }
 
         if (applicantIndex[jobId][msg.sender] != 0) revert AlreadyApplied();

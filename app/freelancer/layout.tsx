@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { TopNavbar } from "@/components/dashboard/top-navbar";
 import { WalletSessionGuard } from "@/components/auth/WalletSessionGuard";
-import { FreelancerHiredNotification } from "@/components/freelancer/FreelancerHiredNotification";
 
 export default function FreelancerLayout({
   children,
@@ -69,9 +68,6 @@ export default function FreelancerLayout({
 
   return (
     <WalletSessionGuard>
-      {/* Global Notification Listeners */}
-      <FreelancerHiredNotification />
-
       <div className="flex h-screen w-full overflow-hidden">
 
         {/* ----------- SIDEBAR (Always Mounted → Fix Mobile Burger!) ----------- */}

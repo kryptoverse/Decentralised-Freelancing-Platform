@@ -9,7 +9,9 @@ import {
   useActiveWallet, // ✅ added
   useDisconnect,
 } from "thirdweb/react";
-import { client, inAppSmartWallet } from "@/lib/thirdweb";
+import { inAppWallet } from "thirdweb/wallets";
+import { polygonAmoy } from "thirdweb/chains";
+import { client } from "@/lib/thirdweb-client";
 
 interface WalletConnectProps {
   selectedRole: string | null;
@@ -25,7 +27,18 @@ export function WalletConnect({ selectedRole, onConnect }: WalletConnectProps) {
     if (account?.address) onConnect();
   }, [account, onConnect]);
 
-  const wallets = [inAppSmartWallet];
+  const wallets = [
+    inAppWallet({
+      auth: { options: ["google", "email"] },
+      executionMode: {
+        mode: "EIP4337",
+        smartAccount: {
+          chain: polygonAmoy,
+          sponsorGas: true,
+        },
+      },
+    }),
+  ];
 
   return (
     <motion.div

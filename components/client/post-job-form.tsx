@@ -1,15 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { getContract, prepareContractCall, sendTransaction, readContract } from "thirdweb";
+import { getContract, prepareContractCall, sendTransaction } from "thirdweb";
 import { useActiveAccount } from "thirdweb/react";
-import { useRouter } from "next/navigation";
 import { client } from "@/lib/thirdweb-client";
 import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { useIPFSUpload } from "@/hooks/useIPFSUpload";
-import { AlertCircle, User } from "lucide-react";
 
 interface PostJobFormProps {
   onJobPosted?: (jobId: number) => void;
@@ -18,13 +16,9 @@ interface PostJobFormProps {
 
 export function PostJobForm({ onJobPosted, onCancel }: PostJobFormProps) {
   const account = useActiveAccount();
-  const router = useRouter();
   const { uploadMetadata, uploading, progress } = useIPFSUpload();
 
   const [loading, setLoading] = useState(false);
-  const [checkingProfile, setCheckingProfile] = useState(true);
-  const [hasProfile, setHasProfile] = useState<boolean | null>(null);
-  const [showProfileModal, setShowProfileModal] = useState(false);
   const [msg, setMsg] = useState("");
   const [form, setForm] = useState({
     title: "",
@@ -33,49 +27,6 @@ export function PostJobForm({ onJobPosted, onCancel }: PostJobFormProps) {
     tags: "",
     expiresInDays: "",
   });
-
-  // Check if client has a profile
-  useEffect(() => {
-    if (!account) {
-      setCheckingProfile(false);
-      setHasProfile(false);
-      return;
-    }
-
-    async function checkProfile() {
-      try {
-        setCheckingProfile(true);
-        const factory = getContract({
-          client,
-          chain: CHAIN,
-          address: DEPLOYED_CONTRACTS.addresses.ClientFactory,
-        });
-
-        if (!account) return;
-        
-        const profileAddr = await readContract({
-          contract: factory,
-          method: "function clientProfiles(address) view returns (address)",
-          params: [account.address],
-        });
-
-        const ZERO = "0x0000000000000000000000000000000000000000";
-        const hasProfileValue = profileAddr !== ZERO && profileAddr !== null;
-        setHasProfile(hasProfileValue);
-        
-        // Don't show modal on initial load, only when user tries to submit
-        // setShowProfileModal will be triggered in handleSubmit if needed
-      } catch (err) {
-        console.error("Error checking profile:", err);
-        setHasProfile(false);
-        setShowProfileModal(true);
-      } finally {
-        setCheckingProfile(false);
-      }
-    }
-
-    checkProfile();
-  }, [account]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -86,42 +37,6 @@ export function PostJobForm({ onJobPosted, onCancel }: PostJobFormProps) {
     if (!account) {
       setMsg("⚠️ Please connect your wallet first.");
       return;
-    }
-
-    // Check profile before submitting
-    if (hasProfile === false || hasProfile === null) {
-      // Re-check profile if null
-      if (hasProfile === null) {
-        try {
-          const factory = getContract({
-            client,
-            chain: CHAIN,
-            address: DEPLOYED_CONTRACTS.addresses.ClientFactory,
-          });
-
-          const profileAddr = await readContract({
-            contract: factory,
-            method: "function clientProfiles(address) view returns (address)",
-            params: [account.address],
-          });
-
-          const ZERO = "0x0000000000000000000000000000000000000000";
-          const hasProfileValue = profileAddr !== ZERO && profileAddr !== null;
-          setHasProfile(hasProfileValue);
-          
-          if (!hasProfileValue) {
-            setShowProfileModal(true);
-            return;
-          }
-        } catch (err) {
-          console.error("Error checking profile:", err);
-          setShowProfileModal(true);
-          return;
-        }
-      } else {
-        setShowProfileModal(true);
-        return;
-      }
     }
 
     try {
@@ -213,27 +128,13 @@ export function PostJobForm({ onJobPosted, onCancel }: PostJobFormProps) {
     }
   };
 
-  if (checkingProfile) {
-    return (
-      <div className="max-w-2xl mx-auto p-6 rounded-2xl glass-effect border border-border">
-        <div className="flex items-center justify-center py-8">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Checking profile...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <>
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="max-w-2xl mx-auto"
-      >
-        <form onSubmit={handleSubmit} className="space-y-6 p-6 rounded-2xl glass-effect border border-border">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="max-w-2xl mx-auto"
+    >
+      <form onSubmit={handleSubmit} className="space-y-6 p-6 rounded-2xl glass-effect border border-border">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-bold text-primary">Post a New Job</h2>
           {onCancel && (
@@ -341,52 +242,6 @@ export function PostJobForm({ onJobPosted, onCancel }: PostJobFormProps) {
         )}
       </form>
     </motion.div>
-
-    {/* Profile Required Modal */}
-    {showProfileModal && (
-      <div className="fixed inset-0 bg-black/50 z-[10000] flex items-center justify-center p-4">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="bg-surface rounded-2xl p-6 max-w-md w-full border border-border"
-        >
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-yellow-500/20 rounded-lg">
-              <AlertCircle className="w-6 h-6 text-yellow-400" />
-            </div>
-            <h2 className="text-xl font-bold">Profile Required</h2>
-          </div>
-          
-          <p className="text-muted-foreground mb-6">
-            You need to create a client profile before you can post jobs. This helps establish your identity and build trust with freelancers.
-          </p>
-
-          <div className="flex gap-3">
-            <button
-              onClick={() => {
-                setShowProfileModal(false);
-                onCancel?.();
-              }}
-              className="flex-1 px-4 py-2 rounded-lg border border-border hover:bg-surface-secondary transition"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => {
-                router.push("/client/profile/create");
-                setShowProfileModal(false);
-                onCancel?.();
-              }}
-              className="flex-1 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition flex items-center justify-center gap-2"
-            >
-              <User className="w-4 h-4" />
-              Create Profile
-            </button>
-          </div>
-        </motion.div>
-      </div>
-    )}
-    </>
   );
 }
 

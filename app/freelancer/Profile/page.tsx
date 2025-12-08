@@ -12,7 +12,7 @@ import { ipfsToHttp } from "@/utils/ipfs";
 import { ProfileLoader } from "@/components/freelancer/profile/ProfileLoader";
 import { FreelancerProfileForm } from "@/components/freelancer/profile/ProfileForm";
 
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, DollarSign, Briefcase, TrendingUp, Star } from "lucide-react";
 
 // 👇 This matches the Metadata interface inside ProfileForm.tsx
 interface ProfileMetadata {
@@ -35,6 +35,14 @@ interface LoadedProfile {
   profileAddress: string;
 }
 
+interface FreelancerStats {
+  totalEarnings: number;
+  completedJobs: number;
+  rating: number;
+  level: number;
+  stars: number;
+}
+
 export default function FreelancerProfilePage() {
   const account = useActiveAccount();
   const router = useRouter();
@@ -43,6 +51,14 @@ export default function FreelancerProfilePage() {
   const [profile, setProfile] = useState<LoadedProfile | null>(null);
   const [metadata, setMetadata] = useState<ProfileMetadata | null>(null);
   const [mode, setMode] = useState<"view" | "edit">("view");
+
+  const [stats, setStats] = useState<FreelancerStats>({
+    totalEarnings: 0,
+    completedJobs: 0,
+    rating: 0,
+    level: 0,
+    stars: 1,
+  });
 
   const [copiedWallet, setCopiedWallet] = useState(false);
   const [copiedPublicLink, setCopiedPublicLink] = useState(false);
@@ -87,7 +103,7 @@ export default function FreelancerProfilePage() {
           address: profileAddr as `0x${string}`,
         });
 
-        const [name, bio, profileURI] = await Promise.all([
+        const [name, bio, profileURI, completedJobsRaw, ratingRaw, totalPointsRaw, levelRaw] = await Promise.all([
           readContract({
             contract: profileContract,
             method: "function name() view returns (string)",
@@ -100,7 +116,52 @@ export default function FreelancerProfilePage() {
             contract: profileContract,
             method: "function profileURI() view returns (string)",
           }),
+          readContract({
+            contract: profileContract,
+            method: "function completedJobs() view returns (uint256)",
+          }).catch(() => 0n),
+          readContract({
+            contract: profileContract,
+            method: "function rating() view returns (uint256)",
+          }).catch(() => 0n),
+          readContract({
+            contract: profileContract,
+            method: "function totalPoints() view returns (uint256)",
+          }).catch(() => 0n),
+          readContract({
+            contract: profileContract,
+            method: "function level() view returns (uint8)",
+          }).catch(() => 0),
         ]);
+
+        // Calculate stats
+        const completedJobs = Number(completedJobsRaw || 0);
+        const totalPoints = Number(totalPointsRaw || 0);
+        let level = Number(levelRaw || 0);
+
+        // Fallback level calculation
+        if (level === 0) {
+          if (completedJobs >= 25 && totalPoints >= 120) level = 5;
+          else if (completedJobs >= 20 && totalPoints >= 95) level = 4;
+          else if (completedJobs >= 15 && totalPoints >= 70) level = 3;
+          else if (completedJobs >= 10 && totalPoints >= 45) level = 2;
+          else if (completedJobs >= 5 && totalPoints >= 20) level = 1;
+        }
+
+        const stars = Math.max(1, level);
+
+        let rating = Number(ratingRaw || 0);
+        if (rating === 0 && completedJobs > 0 && totalPoints > 0) {
+          rating = Math.round((totalPoints / (completedJobs * 5)) * 100);
+        }
+
+        setStats({
+          totalEarnings: 0, // Will be calculated from jobs if needed
+          completedJobs,
+          rating,
+          level,
+          stars,
+        });
 
         setProfile({
           name,
@@ -412,6 +473,45 @@ export default function FreelancerProfilePage() {
               Copy contract
             </button>
           )}
+        </div>
+      </div>
+
+      {/* STATS SECTION */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="p-5 rounded-xl glass-effect border border-border shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm text-foreground-secondary">Total Earnings</p>
+            <DollarSign className="w-5 h-5 text-primary" />
+          </div>
+          <p className="text-2xl font-bold">{stats.totalEarnings.toFixed(2)} USDT</p>
+        </div>
+
+        <div className="p-5 rounded-xl glass-effect border border-border shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm text-foreground-secondary">Completed Jobs</p>
+            <Briefcase className="w-5 h-5 text-primary" />
+          </div>
+          <p className="text-2xl font-bold">{stats.completedJobs}</p>
+        </div>
+
+        <div className="p-5 rounded-xl glass-effect border border-border shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm text-foreground-secondary">Success Rate</p>
+            <TrendingUp className="w-5 h-5 text-primary" />
+          </div>
+          <p className="text-2xl font-bold">{stats.rating > 0 ? `${stats.rating}%` : "N/A"}</p>
+        </div>
+
+        <div className="p-5 rounded-xl glass-effect border border-border shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm text-foreground-secondary">Level</p>
+            <div className="flex">
+              {Array.from({ length: stats.stars }).map((_, i) => (
+                <Star key={i} className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+              ))}
+            </div>
+          </div>
+          <p className="text-2xl font-bold">Level {stats.level}</p>
         </div>
       </div>
 

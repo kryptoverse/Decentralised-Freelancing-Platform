@@ -13,7 +13,7 @@ import {
   AlertTriangle,
   Send,
   Loader2,
-  User,
+  ShieldAlert,
 } from "lucide-react";
 
 import {
@@ -166,8 +166,9 @@ export default function FreelancerJobDetailPage() {
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [description, setDescription] = useState("");
   const [escrowData, setEscrowData] = useState<EscrowData | null>(null);
-  const [clientName, setClientName] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [isKYCVerified, setIsKYCVerified] = useState<boolean | null>(null);
+  const [showKYCModal, setShowKYCModal] = useState(false);
 
   const [deliverModal, setDeliverModal] = useState(false);
   const [cancelModal, setCancelModal] = useState(false);
@@ -193,6 +194,55 @@ export default function FreelancerJobDetailPage() {
 
     async function load() {
       try {
+        // First check KYC status
+        const factory = getContract({
+          client,
+          chain: CHAIN,
+          address: DEPLOYED_CONTRACTS.addresses.FreelancerFactory as `0x${string}`,
+        });
+
+        const profileAddr = await readContract({
+          contract: factory,
+          method: "function freelancerProfile(address) view returns (address)",
+          params: [walletAccount.address as `0x${string}`],
+        });
+
+        const ZERO = "0x0000000000000000000000000000000000000000";
+
+        if (profileAddr !== ZERO) {
+          const profileContract = getContract({
+            client,
+            chain: CHAIN,
+            address: profileAddr as `0x${string}`,
+          });
+
+          try {
+            const kycStatus = await readContract({
+              contract: profileContract,
+              method: "function isKYCVerified() view returns (bool)",
+            });
+            setIsKYCVerified(Boolean(kycStatus));
+
+            // If KYC is not verified, show modal and stop loading
+            if (!kycStatus) {
+              setShowKYCModal(true);
+              setLoading(false);
+              return;
+            }
+          } catch (e) {
+            console.error("KYC check failed:", e);
+            setIsKYCVerified(false);
+            setShowKYCModal(true);
+            setLoading(false);
+            return;
+          }
+        } else {
+          setIsKYCVerified(false);
+          setShowKYCModal(true);
+          setLoading(false);
+          return;
+        }
+
         const jobBoard = getContract({
           client,
           chain: CHAIN,
@@ -246,38 +296,6 @@ export default function FreelancerJobDetailPage() {
           } catch {
             setDescription(descUri);
           }
-        }
-
-        /* ----------------------- CLIENT NAME ----------------------- */
-        try {
-          const clientFactory = getContract({
-            client,
-            chain: CHAIN,
-            address: DEPLOYED_CONTRACTS.addresses.ClientFactory as `0x${string}`,
-          });
-
-          const clientProfileAddr = await readContract({
-            contract: clientFactory,
-            method: "function getProfile(address) view returns (address)",
-            params: [clientAddr as `0x${string}`],
-          });
-
-          if (clientProfileAddr && clientProfileAddr !== "0x0000000000000000000000000000000000000000") {
-            const clientProfile = getContract({
-              client,
-              chain: CHAIN,
-              address: clientProfileAddr as `0x${string}`,
-            });
-
-            const name = await readContract({
-              contract: clientProfile,
-              method: "function name() view returns (string)",
-            });
-
-            setClientName(name as string);
-          }
-        } catch (err) {
-          console.error("Failed to fetch client name:", err);
         }
 
         /* ----------------------- PROPOSAL ----------------------- */
@@ -456,15 +474,7 @@ export default function FreelancerJobDetailPage() {
       await sendTransaction({ account: walletAccount, transaction: tx });
 
       setDeliverModal(false);
-
-      // Optimistic UI update instead of router.refresh()
-      setEscrowData(prev => prev ? {
-        ...prev,
-        delivered: true,
-        reviewDue: BigInt(Math.floor(Date.now() / 1000) + (prev.reviewDue ? 7 * 24 * 60 * 60 : 0)),
-      } : null);
-
-      console.log("✅ Work delivered! UI updated optimistically.");
+      router.refresh();
     } catch (err) {
       console.error("submitDelivery error:", err);
       alert(getFriendlyError(err));
@@ -555,13 +565,6 @@ export default function FreelancerJobDetailPage() {
           </div>
 
           <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-            {clientName && (
-              <span className="flex items-center gap-1">
-                <User className="w-4 h-4" />
-                Client: <span className="font-medium text-foreground">{clientName}</span>
-              </span>
-            )}
-
             <span className="flex items-center gap-1">
               <DollarSign className="w-4 h-4" />
               {(Number(job.budgetUSDC) / 1e6).toFixed(2)} USDT
@@ -664,8 +667,8 @@ export default function FreelancerJobDetailPage() {
                 </div>
               )}
 
-              {/* REQUEST CANCEL */}
-              {!escrowData.terminal &&
+              {/* REQUEST CANCEL - Commented out for future implementation */}
+              {/* {!escrowData.terminal &&
                 escrowData.cancelRequestedBy ===
                 "0x0000000000000000000000000000000000000000" && (
                   <button
@@ -674,10 +677,10 @@ export default function FreelancerJobDetailPage() {
                   >
                     Request Cancel
                   </button>
-                )}
+                )} */}
 
-              {/* ACCEPT CANCEL */}
-              {!escrowData.terminal &&
+              {/* ACCEPT CANCEL - Commented out for future implementation */}
+              {/* {!escrowData.terminal &&
                 escrowData.cancelRequestedBy &&
                 escrowData.cancelRequestedBy.toLowerCase() !==
                 walletAccount.address.toLowerCase() &&
@@ -689,17 +692,17 @@ export default function FreelancerJobDetailPage() {
                   >
                     Accept Cancel
                   </button>
-                )}
+                )} */}
 
-              {/* DISPUTE */}
-              {!escrowData.terminal && (
+              {/* DISPUTE - Commented out for future implementation */}
+              {/* {!escrowData.terminal && (
                 <button
                   onClick={raiseDispute}
                   className="flex-1 px-4 py-3 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20"
                 >
                   Raise Dispute
                 </button>
-              )}
+              )} */}
             </div>
           </section>
         )}
@@ -723,6 +726,42 @@ export default function FreelancerJobDetailPage() {
         onSubmit={requestCancel}
         loading={cancelLoading}
       />
+
+      {/* KYC VERIFICATION MODAL */}
+      {showKYCModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-surface border border-amber-500/30 p-6 rounded-xl w-full max-w-md space-y-4">
+            <div className="flex items-center gap-3 text-amber-400">
+              <ShieldAlert className="w-8 h-8" />
+              <h2 className="text-xl font-semibold">KYC Verification Required</h2>
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              You need to complete KYC verification before you can access job details.
+            </p>
+
+            <p className="text-sm text-muted-foreground">
+              Please complete your KYC verification in your profile settings to access all freelancer features.
+            </p>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => router.push("/freelancer")}
+                className="px-4 py-2 border rounded-lg hover:bg-surface-secondary transition"
+              >
+                Back to Dashboard
+              </button>
+
+              <button
+                onClick={() => router.push("/freelancer/Profile")}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition"
+              >
+                Go to Profile
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

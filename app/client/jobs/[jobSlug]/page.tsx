@@ -21,14 +21,12 @@ import {
   readContract,
   prepareContractCall,
   sendTransaction,
-  prepareEvent,
 } from "thirdweb";
 import { getWalletBalance } from "thirdweb/wallets";
 import {
   useActiveAccount,
   useConnectionManager,
 } from "thirdweb/react";
-import { useClientEvents } from "@/contexts/ClientEventsContext";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { client } from "@/lib/thirdweb-client";
@@ -747,180 +745,6 @@ export default function JobAnalyticsPage() {
   }, [jobId]);
 
   /* ============================================================
-      REAL-TIME EVENT LISTENER - New Applications
-  ============================================================ */
-  const jobBoard = useMemo(
-    () =>
-      jobId !== 0n
-        ? getContract({
-          client,
-          chain: CHAIN,
-          address: DEPLOYED_CONTRACTS.addresses.JobBoard,
-        })
-        : null,
-    [jobId]
-  );
-
-  // Reload applicants function (extracted for reuse)
-  const reloadApplicants = async () => {
-    if (jobId === 0n) return;
-
-    try {
-      const jobBoardContract = getContract({
-        client,
-        chain: CHAIN,
-        address: DEPLOYED_CONTRACTS.addresses.JobBoard,
-      });
-
-      const count = Number(
-        await readContract({
-          contract: jobBoardContract,
-          method: "function getApplicantCount(uint256) view returns (uint256)",
-          params: [jobId],
-        })
-      );
-
-      if (count === 0) {
-        setApplicants([]);
-        return;
-      }
-
-      const [freelancers] = (await readContract({
-        contract: jobBoardContract,
-        method:
-          "function getApplicants(uint256,uint256,uint256) view returns (address[],uint64[])",
-        params: [jobId, 0n, BigInt(count)],
-      })) as [string[], bigint[]];
-
-      const enriched: Applicant[] = [];
-
-      for (const addr of freelancers) {
-        if (!addr) continue;
-
-        const details = await readContract({
-          contract: jobBoardContract,
-          method:
-            "function getApplicantDetails(uint256,address) view returns (address,uint64,string,uint256,uint64)",
-          params: [jobId, addr],
-        });
-
-        const [_f, appliedAt, proposalURI, bidAmount, deliveryDays] =
-          details as any;
-
-        let text = proposalURI;
-        try {
-          const r = await fetch(ipfsToHttp(proposalURI));
-          const j = await r.json();
-          text = j.proposal ?? proposalURI;
-        } catch { }
-
-        enriched.push({
-          freelancer: addr,
-          appliedAt,
-          proposalText: text,
-          bidAmount,
-          deliveryDays,
-        });
-      }
-
-      setApplicants(enriched);
-    } catch (e) {
-      console.error("Applicants reload error:", e);
-    }
-  };
-
-  // Listen to Job events from Global Context
-  const { latestJobApplied, latestJobHired } = useClientEvents();
-
-  // Reload job data (for handling JobHired events)
-  const reloadJobData = async () => {
-    if (jobId === 0n) return;
-
-    try {
-      const jobBoard = getContract({
-        client,
-        chain: CHAIN,
-        address: DEPLOYED_CONTRACTS.addresses.JobBoard,
-      });
-
-      const data = await readContract({
-        contract: jobBoard,
-        method:
-          "function getJob(uint256) view returns (address,string,string,uint256,uint8,address,address,uint64,uint64,uint64,bytes32[],uint256)",
-        params: [jobId],
-      });
-
-      const [
-        clientAddr,
-        title,
-        descriptionURI,
-        budgetUSDC,
-        status,
-        hiredFreelancer,
-        escrowAddress,
-        createdAt,
-        ,
-        expiresAt,
-        rawTags,
-      ] = data as any;
-
-      let desc = "";
-      if (descriptionURI) {
-        try {
-          const r = await fetch(ipfsToHttp(descriptionURI));
-          const j = await r.json();
-          desc = j.description ?? descriptionURI;
-        } catch {
-          desc = descriptionURI;
-        }
-      }
-
-      const tags = (rawTags as string[])
-        .map((hex) => hexToText(hex))
-        .filter(Boolean);
-
-      setJob({
-        jobId: Number(jobId),
-        client: clientAddr,
-        title,
-        budgetUSDC,
-        status: Number(status),
-        createdAt,
-        expiresAt,
-        tags,
-        hiredFreelancer,
-        escrowAddress,
-      });
-
-      setDescription(desc);
-    } catch (e) {
-      console.error("Job reload error:", e);
-    }
-  };
-
-  // JobApplied event: Reload applicants
-  useEffect(() => {
-    if (!latestJobApplied) return;
-
-    // Check if event matches our current job
-    if (latestJobApplied.jobId === jobId.toString()) {
-      console.log("🎉 Page: New application detected via Context!", latestJobApplied);
-      reloadApplicants();
-    }
-  }, [latestJobApplied, jobId]);
-
-  // JobHired event: Reload job data to show new status
-  useEffect(() => {
-    if (!latestJobHired) return;
-
-    // Check if event matches our current job
-    if (latestJobHired.jobId === jobId.toString()) {
-      console.log("🤝 Page: Job hired event detected, reloading job data...", latestJobHired);
-      reloadJobData();
-    }
-  }, [latestJobHired, jobId]);
-
-  /* ============================================================
       LOAD ESCROW DATA (timeline + delivery)
   ============================================================ */
   useEffect(() => {
@@ -1016,7 +840,7 @@ export default function JobAnalyticsPage() {
     }
 
     fetchEscrow();
-    const interval = setInterval(fetchEscrow, 60000); // Poll every 60s to avoid rate limits
+    const interval = setInterval(fetchEscrow, 15000);
 
     return () => {
       isMounted = false;
@@ -1194,8 +1018,6 @@ export default function JobAnalyticsPage() {
   return (
     <main className="max-w-4xl mx-auto p-4 space-y-10">
 
-
-
       {/* Hire Success Popup */}
       <HireSuccessModal
         open={successOpen}
@@ -1372,7 +1194,7 @@ export default function JobAnalyticsPage() {
                     <button
                       disabled={disputeLoading}
                       onClick={handleRaiseDispute}
-                      className="flex-1 px-4 py-2 rounded-xl bg-red-500/10 text-red-400 border border-red-500/30 text-sm disabled:opacity-60"
+                      className="flex-1 px-4 py-2 rounded-xl bg-red-500/10 text-red-400 border border-red-500/30 text-sm disabled:opacity-60 hover:bg-red-500/20 transition"
                     >
                       {disputeLoading ? "Submitting..." : "Raise Dispute"}
                     </button>
@@ -1382,8 +1204,8 @@ export default function JobAnalyticsPage() {
             )}
           </div>
 
-          {/* Cancellation controls */}
-          {isClient && !escrowData.terminal && (
+          {/* Cancellation controls - Commented out for future implementation */}
+          {/* {isClient && !escrowData.terminal && (
             <div className="p-4 rounded-xl border bg-neutral-950/60 space-y-3">
               <h3 className="text-lg font-semibold flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5" />
@@ -1397,7 +1219,6 @@ export default function JobAnalyticsPage() {
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3 mt-3">
-                {/* Request cancel (no existing request) */}
                 {escrowData.cancelRequestedBy ===
                   "0x0000000000000000000000000000000000000000" && (
                     <button
@@ -1409,7 +1230,6 @@ export default function JobAnalyticsPage() {
                     </button>
                   )}
 
-                {/* Accept cancel if freelancer requested */}
                 {escrowData.cancelRequestedBy &&
                   escrowData.cancelRequestedBy.toLowerCase() !==
                   smartAddress.toLowerCase() &&
@@ -1425,7 +1245,7 @@ export default function JobAnalyticsPage() {
                   )}
               </div>
             </div>
-          )}
+          )} */}
         </section>
       )}
 

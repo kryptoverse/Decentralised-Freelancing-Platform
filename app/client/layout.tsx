@@ -5,8 +5,6 @@ import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { TopNavbar } from "@/components/dashboard/top-navbar";
 import { WalletSessionGuard } from "@/components/auth/WalletSessionGuard";
-import { ClientGlobalNotifications } from "@/components/client/ClientGlobalNotifications";
-import { ClientEventsProvider } from "@/contexts/ClientEventsContext";
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -43,42 +41,40 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   return (
     <WalletSessionGuard>
-      <ClientEventsProvider>
-        <ClientGlobalNotifications />
-        {/* Prevent ANY horizontal overflow */}
-        <div className="flex h-screen w-full overflow-hidden">
+      {/* Prevent ANY horizontal overflow */}
+      <div className="flex h-screen w-full overflow-hidden">
 
-          {/* ----------- SIDEBAR (ALWAYS MOUNTED, FIXES MOBILE BURGER) ----------- */}
-          <Sidebar
-            userRole={userRole}
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-            isOpen={isOpen}
-            onToggle={() => setIsOpen(!isOpen)}
-            isCollapsed={isCollapsed}
-            onCollapse={() => setIsCollapsed(!isCollapsed)}
-          />
+        {/* ----------- SIDEBAR (ALWAYS MOUNTED, FIXES MOBILE BURGER) ----------- */}
+        <Sidebar
+          userRole={userRole}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          isOpen={isOpen}
+          onToggle={() => setIsOpen(!isOpen)}
+          isCollapsed={isCollapsed}
+          onCollapse={() => setIsCollapsed(!isCollapsed)}
+        />
 
-          {/* ----------- MAIN CONTENT ----------- */}
-          <div
-            className={`
+        {/* ----------- MAIN CONTENT ----------- */}
+        <div
+          className={`
             flex-1 flex flex-col 
             w-full h-full
             transition-all duration-300
             overflow-hidden
             ${isCollapsed ? "sm:ml-[5rem]" : "sm:ml-[16rem]"}
           `}
-          >
-            {/* Top Navbar */}
-            <TopNavbar
-              userRole={userRole}
-              onLogout={handleLogout}
-              onRoleChange={handleRoleChange}
-            />
+        >
+          {/* Top Navbar */}
+          <TopNavbar
+            userRole={userRole}
+            onLogout={handleLogout}
+            onRoleChange={handleRoleChange}
+          />
 
-            {/* Page Content */}
-            <main
-              className="
+          {/* Page Content */}
+          <main
+            className="
               flex-1 
               p-4 md:p-6 lg:p-8
               overflow-y-auto 
@@ -86,12 +82,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               overflow-x-hidden
               space-y-8
             "
-            >
-              {children}
-            </main>
-          </div>
+          >
+            {children}
+          </main>
         </div>
-      </ClientEventsProvider>
+      </div>
     </WalletSessionGuard>
   );
 }

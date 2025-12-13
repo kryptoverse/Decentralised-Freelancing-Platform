@@ -13,7 +13,7 @@ export function AIAssistantChat({ isOpen, onToggle }: AIAssistantChatProps) {
   const [messages, setMessages] = useState([
     {
       id: 1,
-      text: "Hello! I'm your FYP AI Assistant. I can help you write better proposals, analyze startups, and automate your workflow. What can I help you with today?",
+      text: "Hello! I'm your Decentralized Freelancing AI Assistant. I can help you write better proposals, analyze startups, and automate your workflow. What can I help you with today?",
       sender: "ai",
       timestamp: new Date(),
     },
@@ -92,11 +92,10 @@ export function AIAssistantChat({ isOpen, onToggle }: AIAssistantChatProps) {
                     className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`max-w-xs px-4 py-3 rounded-2xl ${
-                        message.sender === "user"
+                      className={`max-w-xs px-4 py-3 rounded-2xl ${message.sender === "user"
                           ? "bg-gradient-primary dark:text-white text-gray-900 rounded-br-none"
                           : "glass-effect text-foreground rounded-bl-none"
-                      }`}
+                        }`}
                     >
                       <p className="text-sm break-words">{message.text}</p>
                     </div>

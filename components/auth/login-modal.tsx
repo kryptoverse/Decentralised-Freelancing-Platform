@@ -40,7 +40,7 @@ export function LoginModal({ onLogin, onClose }: LoginModalProps) {
           className="bg-surface rounded-2xl p-8 w-[90%] max-w-md shadow-xl text-center"
         >
           <h2 className="text-2xl font-bold mb-4 text-foreground">
-            Login to FYP
+            Login to Decentralized Freelancing
           </h2>
           <p className="text-foreground-secondary mb-6">
             Sign in with Google or Email to continue.

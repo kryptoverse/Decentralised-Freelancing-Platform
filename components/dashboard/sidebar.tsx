@@ -32,14 +32,14 @@ export function Sidebar({
   //    - else show that role's full sidebar config
   const navItems = !userRole
     ? [
-        {
-          id: "home",
-          label: "Home",
-          icon: HomeIcon,
-          path: "/",
-          match: "exact" as const,
-        },
-      ]
+      {
+        id: "home",
+        label: "Home",
+        icon: HomeIcon,
+        path: "/",
+        match: "exact" as const,
+      },
+    ]
     : ROLE_TABS[userRole];
 
   // Normalize helper for comparisons
@@ -88,7 +88,7 @@ export function Sidebar({
         <div className="mb-8 pt-8 md:pt-0 flex items-center justify-between">
           {!isCollapsed && (
             <div>
-              <h1 className="text-2xl font-bold gradient-text">FYP</h1>
+              <h1 className="text-2xl font-bold gradient-text">Decentralized Freelancing</h1>
               <p className="text-xs text-foreground-secondary">Web3 Platform</p>
             </div>
           )}
@@ -119,19 +119,16 @@ export function Sidebar({
                   router.push(item.path);
                   if (window.innerWidth < 768) onToggle();
                 }}
-                className={`w-full flex items-center transition-all duration-300 ease-out rounded-xl ${
-                  isCollapsed ? "justify-center p-4" : "gap-3 px-4 py-3"
-                } ${
-                  isActive
+                className={`w-full flex items-center transition-all duration-300 ease-out rounded-xl ${isCollapsed ? "justify-center p-4" : "gap-3 px-4 py-3"
+                  } ${isActive
                     ? "bg-gradient-primary text-foreground shadow-lg shadow-primary/30 font-semibold"
                     : "text-foreground-secondary hover:bg-surface-secondary hover:text-foreground"
-                }`}
+                  }`}
                 title={isCollapsed ? item.label : ""}
               >
                 <Icon
-                  className={`w-6 h-6 flex-shrink-0 transition-transform duration-200 ${
-                    isCollapsed ? "hover:scale-110" : ""
-                  }`}
+                  className={`w-6 h-6 flex-shrink-0 transition-transform duration-200 ${isCollapsed ? "hover:scale-110" : ""
+                    }`}
                 />
                 {!isCollapsed && (
                   <span className="font-medium text-sm md:text-base">

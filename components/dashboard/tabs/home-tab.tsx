@@ -65,7 +65,7 @@ export function HomeTab({ userRole, onRoleChange }: HomeTabProps) {
         transition={{ duration: 0.6 }}
       >
         <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-3">
-          Welcome to <span className="gradient-text">FYP</span>
+          Welcome to <span className="gradient-text">Decentralized Freelancing</span>
         </h1>
         <p className="text-foreground-secondary max-w-xl mx-auto">
           Choose what you want to do today. Your dashboard will adjust

@@ -26,7 +26,7 @@ export function FooterSection() {
           <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent mb-6 sm:mb-8" />
 
           <p className="text-foreground-secondary text-xs sm:text-sm">
-            © 2025 FYP. Powered by Web3 and built for the future.
+            © 2025 Decentralized Freelancing. Powered by Web3 and built for the future.
           </p>
         </motion.div>
       </div>

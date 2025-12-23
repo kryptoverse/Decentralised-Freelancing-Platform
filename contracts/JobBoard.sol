@@ -40,6 +40,14 @@ contract JobBoard {
     error ApplicationNotFound();
     error NotFreelancer();
 
+    // NEW DIRECT OFFER ERRORS
+    error OfferNotFound();
+    error OfferExpired();
+    error OfferAlreadyProcessed();
+    error NotOfferRecipient();
+    error InsufficientAllowance();
+    error InsufficientBalance();
+
     /*//////////////////////////////////////////////////////////////
                                 EVENTS
     //////////////////////////////////////////////////////////////*/
@@ -89,6 +97,32 @@ contract JobBoard {
     event RequireApplicationToHireSet(bool required);
     event JobApplied(uint256 indexed jobId, address indexed freelancer, uint64 appliedAt);
     event JobApplicationWithdrawn(uint256 indexed jobId, address indexed freelancer);
+
+    // NEW DIRECT OFFER EVENTS
+    event DirectOfferCreated(
+        uint256 indexed jobId,
+        address indexed client,
+        address indexed freelancer,
+        string title,
+        uint256 budgetUSDT,
+        uint64 expiresAt
+    );
+
+    event DirectOfferAccepted(
+        uint256 indexed jobId,
+        address indexed freelancer,
+        address escrow
+    );
+
+    event DirectOfferRejected(
+        uint256 indexed jobId,
+        address indexed freelancer
+    );
+
+    event DirectOfferCancelled(
+        uint256 indexed jobId,
+        address indexed client
+    );
 
     /*//////////////////////////////////////////////////////////////
                                 STATE
@@ -150,6 +184,35 @@ contract JobBoard {
     mapping(uint256 => mapping(address => uint256)) private applicantIndex;
     // freelancer => applied jobIds
     mapping(address => uint256[]) private jobsAppliedBy;
+
+    /*//////////////////////////////////////////////////////////////
+                    DIRECT OFFER SYSTEM STORAGE
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Represents a direct offer from client to specific freelancer
+    struct DirectOffer {
+        uint256 jobId;              // Associated job ID
+        address client;             // Client who sent the offer
+        address freelancer;         // Target freelancer
+        string title;               // Job title
+        string descriptionURI;      // IPFS URI with job details
+        uint256 budgetUSDT;         // Offered budget in USDT
+        uint64 deliveryDays;        // Expected delivery timeline
+        uint64 createdAt;           // Offer creation timestamp
+        uint64 expiresAt;           // Offer expiration (0 = no expiry)
+        bool accepted;              // Whether freelancer accepted
+        bool rejected;              // Whether freelancer rejected
+        bool cancelled;             // Whether client cancelled
+    }
+
+    // Mapping: jobId => DirectOffer
+    mapping(uint256 => DirectOffer) public directOffers;
+
+    // Mapping: freelancer => array of jobIds with offers
+    mapping(address => uint256[]) private offersToFreelancer;
+
+    // Mapping: client => array of jobIds they offered
+    mapping(address => uint256[]) private offersFromClient;
 
     /*//////////////////////////////////////////////////////////////
                                 MODIFIERS
@@ -447,6 +510,184 @@ contract JobBoard {
     }
 
     /*//////////////////////////////////////////////////////////////
+                    DIRECT OFFER FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Client creates a direct offer to a specific freelancer
+    /// @dev Does NOT lock funds yet - only checks allowance
+    /// @param freelancer Target freelancer address
+    /// @param title Job title
+    /// @param descriptionURI IPFS URI with full job description
+    /// @param budgetUSDT Offered budget in USDT (6 decimals)
+    /// @param deliveryDays Expected delivery timeline in days
+    /// @param expiresAt Offer expiration timestamp (0 = no expiry)
+    /// @return jobId The created job ID
+    function createDirectOffer(
+        address freelancer,
+        string calldata title,
+        string calldata descriptionURI,
+        uint256 budgetUSDT,
+        uint64 deliveryDays,
+        uint64 expiresAt
+    ) external whenNotPaused nonReentrant returns (uint256 jobId) {
+        if (freelancer == address(0)) revert ZeroAddress();
+        if (budgetUSDT == 0) revert AmountZero();
+        if (expiresAt != 0 && expiresAt <= block.timestamp) revert InvalidStatus();
+        
+        // Verify freelancer has a profile
+        if (address(freelancerFactory) != address(0)) {
+            address profile = freelancerFactory.freelancerProfile(freelancer);
+            if (profile == address(0)) revert NotFreelancer();
+        }
+        
+        // Check client has sufficient USDT allowance
+        // (We don't pull funds yet - that happens on acceptance)
+        if (address(usdc) != address(0)) {
+            uint256 allowance = usdc.allowance(msg.sender, address(this));
+            if (allowance < budgetUSDT) revert InsufficientAllowance();
+        }
+        
+        // Create job with special "Unknown" status for direct offers
+        jobId = nextJobId++;
+        
+        Job storage j = jobs[jobId];
+        j.client = msg.sender;
+        j.title = title;
+        j.descriptionURI = descriptionURI;
+        j.budgetUSDC = budgetUSDT;
+        j.status = JobStatus.Unknown; // Special status for pending direct offers
+        j.createdAt = uint64(block.timestamp);
+        j.updatedAt = uint64(block.timestamp);
+        j.expiresAt = expiresAt;
+        
+        // Store direct offer details
+        DirectOffer storage offer = directOffers[jobId];
+        offer.jobId = jobId;
+        offer.client = msg.sender;
+        offer.freelancer = freelancer;
+        offer.title = title;
+        offer.descriptionURI = descriptionURI;
+        offer.budgetUSDT = budgetUSDT;
+        offer.deliveryDays = deliveryDays;
+        offer.createdAt = uint64(block.timestamp);
+        offer.expiresAt = expiresAt;
+        
+        // Track offers
+        jobsOf[msg.sender].push(jobId);
+        offersToFreelancer[freelancer].push(jobId);
+        offersFromClient[msg.sender].push(jobId);
+        
+        emit DirectOfferCreated(jobId, msg.sender, freelancer, title, budgetUSDT, expiresAt);
+    }
+
+    /// @notice Freelancer accepts a direct offer - marks it as accepted
+    /// @dev Frontend must then call EscrowFactory.createAndFundEscrowForJob()
+    /// @param jobId The job ID of the offer to accept
+    function acceptDirectOffer(uint256 jobId) 
+        external 
+        whenNotPaused 
+        nonReentrant 
+    {
+        DirectOffer storage offer = directOffers[jobId];
+        
+        // Validations
+        if (offer.client == address(0)) revert OfferNotFound();
+        if (msg.sender != offer.freelancer) revert NotOfferRecipient();
+        if (offer.accepted || offer.rejected || offer.cancelled) revert OfferAlreadyProcessed();
+        if (offer.expiresAt != 0 && block.timestamp > offer.expiresAt) revert OfferExpired();
+        
+        // Check client still has sufficient balance and allowance
+        if (address(usdc) != address(0)) {
+            uint256 balance = usdc.balanceOf(offer.client);
+            uint256 allowance = usdc.allowance(offer.client, address(this));
+            
+            if (balance < offer.budgetUSDT) revert InsufficientBalance();
+            if (allowance < offer.budgetUSDT) revert InsufficientAllowance();
+        }
+        
+        // Mark as accepted
+        offer.accepted = true;
+        
+        // Update job status to Open (will be marked Hired by EscrowFactory)
+        Job storage j = jobs[jobId];
+        j.status = JobStatus.Open;
+        j.updatedAt = uint64(block.timestamp);
+        
+        emit DirectOfferAccepted(jobId, msg.sender, address(0));
+    }
+
+    /// @notice Freelancer rejects a direct offer
+    /// @param jobId The job ID of the offer to reject
+    function rejectDirectOffer(uint256 jobId) external whenNotPaused {
+        DirectOffer storage offer = directOffers[jobId];
+        
+        if (offer.client == address(0)) revert OfferNotFound();
+        if (msg.sender != offer.freelancer) revert NotOfferRecipient();
+        if (offer.accepted || offer.rejected || offer.cancelled) revert OfferAlreadyProcessed();
+        
+        offer.rejected = true;
+        
+        Job storage j = jobs[jobId];
+        j.status = JobStatus.Cancelled;
+        j.updatedAt = uint64(block.timestamp);
+        
+        emit DirectOfferRejected(jobId, msg.sender);
+    }
+
+    /// @notice Client cancels a pending direct offer
+    /// @param jobId The job ID of the offer to cancel
+    function cancelDirectOffer(uint256 jobId) external whenNotPaused {
+        DirectOffer storage offer = directOffers[jobId];
+        
+        if (offer.client == address(0)) revert OfferNotFound();
+        if (msg.sender != offer.client) revert NotClient();
+        if (offer.accepted || offer.rejected || offer.cancelled) revert OfferAlreadyProcessed();
+        
+        offer.cancelled = true;
+        
+        Job storage j = jobs[jobId];
+        j.status = JobStatus.Cancelled;
+        j.updatedAt = uint64(block.timestamp);
+        
+        emit DirectOfferCancelled(jobId, msg.sender);
+    }
+
+    /// @notice Get all offers sent to a freelancer
+    /// @param freelancer Freelancer address
+    /// @return Array of job IDs
+    function getOffersToFreelancer(address freelancer) 
+        external 
+        view 
+        returns (uint256[] memory) 
+    {
+        return offersToFreelancer[freelancer];
+    }
+
+    /// @notice Get all offers sent by a client
+    /// @param client Client address
+    /// @return Array of job IDs
+    function getOffersFromClient(address client) 
+        external 
+        view 
+        returns (uint256[] memory) 
+    {
+        return offersFromClient[client];
+    }
+
+    /// @notice Get direct offer details
+    /// @param jobId Job ID
+    /// @return Full DirectOffer struct
+    function getDirectOffer(uint256 jobId) 
+        external 
+        view 
+        returns (DirectOffer memory) 
+    {
+        DirectOffer storage offer = directOffers[jobId];
+        if (offer.client == address(0)) revert OfferNotFound();
+        return offer;
+    }
+
+    /*//////////////////////////////////////////////////////////////
                             FACTORY HOOKS
     //////////////////////////////////////////////////////////////*/
     function markAsHired(
@@ -454,25 +695,35 @@ contract JobBoard {
         address freelancer,
         address escrow
     ) external whenNotPaused onlyAllowedFactory nonReentrant {
-
         if (freelancer == address(0) || escrow == address(0)) revert ZeroAddress();
-
+        
         Job storage j = jobs[jobId];
         if (j.client == address(0)) revert JobNotFound();
+        
+        // Allow hiring for both Open jobs and accepted DirectOffers
         if (j.status != JobStatus.Open) revert AlreadyHiredOrClosed();
-
-        if (requireApplicationToHire) {
-            if (applicantIndex[jobId][freelancer] == 0) revert ApplicationNotFound();
+        
+        // Check if this is a direct offer
+        DirectOffer storage offer = directOffers[jobId];
+        if (offer.client != address(0)) {
+            // This is a direct offer - verify freelancer matches and offer is accepted
+            if (freelancer != offer.freelancer) revert NotFreelancer();
+            if (!offer.accepted) revert OfferNotFound();
+        } else {
+            // Regular job - check application if required
+            if (requireApplicationToHire) {
+                if (applicantIndex[jobId][freelancer] == 0) revert ApplicationNotFound();
+            }
         }
-
+        
         j.hiredFreelancer = freelancer;
         j.escrow = escrow;
         j.status = JobStatus.Hired;
         j.updatedAt = uint64(block.timestamp);
-
+        
         _openRemove(jobId);
         _refundBondIfAny(j);
-
+        
         emit JobHired(jobId, j.client, freelancer, escrow);
     }
 

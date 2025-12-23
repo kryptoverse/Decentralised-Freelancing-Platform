@@ -57,6 +57,12 @@ interface Proposal {
   deliveryDays: bigint;
 }
 
+interface Delivery {
+  uri: string;
+  timestamp: bigint;
+  version: bigint;
+}
+
 interface EscrowData {
   escrowAddr: string;
   cancelEnd: bigint;
@@ -65,6 +71,7 @@ interface EscrowData {
   delivered: boolean;
   terminal: boolean;
   cancelRequestedBy: string;
+  deliveryHistory: Delivery[];
 }
 
 /* ============================================================
@@ -336,7 +343,7 @@ export default function FreelancerJobDetailPage() {
             method: "function currentDeadlines() view returns (uint64,uint64,uint64)",
           });
 
-          const [delivered, terminal, cancelRequestedBy] = await Promise.all([
+          const [delivered, terminal, cancelRequestedBy, deliveryHistory] = await Promise.all([
             readContract({
               contract: escrowC,
               method: "function delivered() view returns (bool)",
@@ -349,6 +356,10 @@ export default function FreelancerJobDetailPage() {
               contract: escrowC,
               method: "function cancelRequestedBy() view returns (address)",
             }),
+            readContract({
+              contract: escrowC,
+              method: "function getAllDeliveries() view returns ((string,uint64,uint256)[])",
+            }).catch(() => []), // Fallback to empty array for old escrows
           ]);
 
           setEscrowData({
@@ -359,6 +370,11 @@ export default function FreelancerJobDetailPage() {
             delivered,
             terminal,
             cancelRequestedBy,
+            deliveryHistory: (deliveryHistory as any[]).map((d: any) => ({
+              uri: d[0],
+              timestamp: d[1],
+              version: d[2],
+            })),
           });
         }
       } catch (err) {
@@ -532,10 +548,7 @@ export default function FreelancerJobDetailPage() {
   const canDeliver =
     job.status === 2 &&
     escrowData &&
-    !escrowData.delivered &&
-    !escrowData.terminal &&
-    escrowData.cancelEnd > nowBn &&
-    escrowData.deliveryDue > nowBn;
+    !escrowData.terminal; // Removed delivered check to allow multiple submissions
 
   const isHired =
     job.status === 2 &&
@@ -659,13 +672,43 @@ export default function FreelancerJobDetailPage() {
                 </button>
               ) : (
                 <div className="flex-1 px-4 py-3 rounded-xl border border-border text-sm text-muted-foreground flex items-center justify-center">
-                  {escrowData.delivered
-                    ? "Already delivered"
-                    : escrowData.terminal
-                      ? "Escrow closed"
-                      : "Delivery window has passed"}
+                  {escrowData.terminal
+                    ? "Escrow closed"
+                    : "Delivery window has passed"}
                 </div>
               )}
+
+              {/* CLAIM AUTO PAY */}
+              {escrowData.delivered &&
+                !escrowData.terminal &&
+                escrowData.reviewDue > 0n &&
+                BigInt(Math.floor(Date.now() / 1000)) > escrowData.reviewDue && (
+                  <button
+                    onClick={async () => {
+                      if (!escrowData) return;
+                      try {
+                        const escrow = getContract({
+                          client,
+                          chain: CHAIN,
+                          address: escrowData.escrowAddr as `0x${string}`,
+                        });
+                        const tx = await prepareContractCall({
+                          contract: escrow,
+                          method: "function processTimeouts()",
+                          params: [],
+                        });
+                        await sendTransaction({ account: walletAccount, transaction: tx });
+                        router.refresh();
+                      } catch (err: any) {
+                        console.error(err);
+                        alert(getFriendlyError(err));
+                      }
+                    }}
+                    className="flex-1 px-4 py-3 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition font-semibold animate-pulse"
+                  >
+                    Claim Automatic Payment
+                  </button>
+                )}
 
               {/* REQUEST CANCEL - Commented out for future implementation */}
               {/* {!escrowData.terminal &&
@@ -704,6 +747,69 @@ export default function FreelancerJobDetailPage() {
                 </button>
               )} */}
             </div>
+          </section>
+        )}
+
+        {/* DELIVERY HISTORY */}
+        {isHired && escrowData && escrowData.deliveryHistory && escrowData.deliveryHistory.length > 0 && (
+          <section className="p-6 border rounded-2xl bg-surface space-y-4">
+            <h2 className="text-lg font-bold flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              Delivery History
+              <span className="text-sm font-normal text-muted-foreground">
+                ({escrowData.deliveryHistory.length} submission{escrowData.deliveryHistory.length !== 1 ? 's' : ''})
+              </span>
+            </h2>
+
+            <div className="space-y-3">
+              {escrowData.deliveryHistory.map((delivery, idx) => {
+                const isLatest = idx === escrowData.deliveryHistory.length - 1;
+                return (
+                  <div
+                    key={idx}
+                    className={`p-4 border rounded-xl ${isLatest
+                        ? 'bg-primary/5 border-primary/30'
+                        : 'bg-surface-secondary border-border'
+                      }`}
+                  >
+                    <div className="flex justify-between items-center mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold">
+                          Version {delivery.version.toString()}
+                        </span>
+                        {isLatest && (
+                          <span className="px-2 py-0.5 text-xs bg-primary text-primary-foreground rounded-full">
+                            Latest
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {fmt(delivery.timestamp)}
+                      </span>
+                    </div>
+
+                    <a
+                      href={ipfsToHttp(delivery.uri)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-primary hover:underline flex items-center gap-1"
+                    >
+                      <Send className="w-3 h-3" />
+                      View Delivery Details
+                    </a>
+                  </div>
+                );
+              })}
+            </div>
+
+            {escrowData.deliveryHistory.length > 1 && (
+              <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl text-sm text-blue-400">
+                <p className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" />
+                  You have submitted {escrowData.deliveryHistory.length} versions. The client will review the latest submission.
+                </p>
+              </div>
+            )}
           </section>
         )}
       </main>

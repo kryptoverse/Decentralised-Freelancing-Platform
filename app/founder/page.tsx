@@ -22,7 +22,7 @@ export default function FounderDashboard() {
             key={proj}
             className="glass-effect rounded-xl p-5 hover:shadow-lg transition-all duration-300"
           >
-            <h3 className="text-lg font-semibold mb-2">Decentralized Freelancing Project #{proj}</h3>
+            <h3 className="text-lg font-semibold mb-2">FYP Project #{proj}</h3>
             <p className="text-sm text-foreground-secondary mb-3">
               A decentralized freelance platform component under development.
             </p>

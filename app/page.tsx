@@ -66,7 +66,7 @@ export default function Home() {
       {/* FIXED NAVBAR INLINE — NO EXTRA COMPONENT */}
       <nav className="fixed top-0 left-0 w-full z-50 bg-background/70 backdrop-blur-lg border-b border-border px-6 py-4 flex items-center justify-between">
         {/* Logo / Branding */}
-        <div className="text-xl font-bold">Decentralized Freelancing</div>
+        <div className="text-xl font-bold">FYP</div>
 
         {/* Login Button */}
         <button

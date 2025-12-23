@@ -61,7 +61,7 @@ export function WalletConnect({ selectedRole, onConnect }: WalletConnectProps) {
               <span className="text-primary">{account.address}</span>
             </p>
             <p className="text-xs text-foreground-secondary mt-2">
-              Gas sponsored by Decentralized Freelancing 🚀
+              Gas sponsored by FYP 🚀
             </p>
           </>
         ) : (

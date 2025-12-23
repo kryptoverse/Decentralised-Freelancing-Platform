@@ -310,4 +310,4 @@ See [`GAS_COST_OPTIONS.md`](./GAS_COST_OPTIONS.md) for detailed strategies.
 
 ---
 
-**Built with ❤️**
+**Built with ❤️ as a Final Year Project**

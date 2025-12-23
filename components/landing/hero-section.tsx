@@ -32,7 +32,7 @@ export function HeroSection({ onGetStarted }: HeroSectionProps) {
           transition={{ duration: 0.8, delay: 0.2 }}
           className="text-base sm:text-lg md:text-2xl text-foreground-secondary mb-10 sm:mb-12 max-w-2xl mx-auto px-2"
         >
-          Decentralized Freelancing connects people, capital, and AI — through blockchain simplicity.
+          FYP connects people, capital, and AI — through blockchain simplicity.
         </motion.p>
 
         <motion.div

@@ -61,6 +61,14 @@ interface Applicant {
   deliveryDays: bigint;
 }
 
+interface Delivery {
+  uri: string;
+  timestamp: bigint;
+  version: bigint;
+  deliveryLink?: string;
+  notes?: string;
+}
+
 interface EscrowData {
   escrowAddr: string;
   cancelEnd: bigint;
@@ -73,6 +81,7 @@ interface EscrowData {
   lastDeliveryURI: string;
   deliveryLink?: string;
   deliveryNotes?: string;
+  deliveryHistory: Delivery[];
 }
 
 /* ============================================================
@@ -339,6 +348,7 @@ export default function JobAnalyticsPage() {
 
   // Escrow-related state
   const [escrowData, setEscrowData] = useState<EscrowData | null>(null);
+  const [selectedDeliveryVersion, setSelectedDeliveryVersion] = useState<number | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
@@ -530,7 +540,7 @@ export default function JobAnalyticsPage() {
           bidAmount,
           "",
           86400n, // 1d cancel window
-          BigInt(now + 7 * 86400), // 7d delivery
+          BigInt(now + Number(app.deliveryDays) * 86400), // delivery from proposal
           172800n, // 2d review window
           5, // default rating for auto-approve
         ],
@@ -806,7 +816,37 @@ export default function JobAnalyticsPage() {
             method: "function lastDeliveryURI() view returns (string)",
             params: [],
           }),
+          readContract({
+            contract: escrow,
+            method: "function getAllDeliveries() view returns ((string,uint64,uint256)[])",
+            params: [],
+          }).catch(() => []), // Fallback for old escrows without this function
         ]);
+
+        // Parse delivery history
+        const deliveryHistory: Delivery[] = [];
+        if (Array.isArray(lastDeliveryURI) && (lastDeliveryURI as any[]).length > 0) {
+          // New contract with delivery history
+          for (const d of lastDeliveryURI as any[]) {
+            const delivery: Delivery = {
+              uri: d[0],
+              timestamp: d[1],
+              version: d[2],
+            };
+
+            // Try to fetch metadata for each delivery
+            try {
+              const res = await fetch(ipfsToHttp(d[0]));
+              const json = await res.json();
+              delivery.deliveryLink = json.deliveryLink ?? "";
+              delivery.notes = json.notes ?? "";
+            } catch (err) {
+              console.warn(`Failed to parse delivery ${d[2]} metadata:`, err);
+            }
+
+            deliveryHistory.push(delivery);
+          }
+        }
 
         const data: EscrowData = {
           escrowAddr: assuredEscrowAddr,
@@ -817,10 +857,12 @@ export default function JobAnalyticsPage() {
           disputed,
           terminal,
           cancelRequestedBy,
-          lastDeliveryURI,
+          lastDeliveryURI: typeof lastDeliveryURI === 'string' ? lastDeliveryURI : '',
+          deliveryHistory,
         };
 
-        if (delivered && lastDeliveryURI) {
+        // For backward compatibility: if no history but delivered, parse lastDeliveryURI
+        if (delivered && deliveryHistory.length === 0 && typeof lastDeliveryURI === 'string' && lastDeliveryURI) {
           try {
             const res = await fetch(ipfsToHttp(lastDeliveryURI as string));
             const json = await res.json();
@@ -829,6 +871,11 @@ export default function JobAnalyticsPage() {
           } catch (err) {
             console.warn("Failed to parse delivery metadata:", err);
           }
+        } else if (deliveryHistory.length > 0) {
+          // Use latest delivery for quick access
+          const latest = deliveryHistory[deliveryHistory.length - 1];
+          data.deliveryLink = latest.deliveryLink;
+          data.deliveryNotes = latest.notes;
         }
 
         if (isMounted) {
@@ -1140,66 +1187,149 @@ export default function JobAnalyticsPage() {
             )}
 
           {/* Work Delivery */}
-          <div className="p-4 rounded-xl border bg-neutral-950/60 space-y-3">
+          <div className="p-4 rounded-xl border bg-neutral-950/60 space-y-4">
             <h3 className="text-lg font-semibold flex items-center gap-2">
               <Send className="w-5 h-5" />
               Work Delivery
+              {escrowData.deliveryHistory.length > 0 && (
+                <span className="text-sm font-normal text-neutral-400">
+                  ({escrowData.deliveryHistory.length} version{escrowData.deliveryHistory.length !== 1 ? 's' : ''})
+                </span>
+              )}
             </h3>
 
-            {!escrowData.delivered ? (
+            {!escrowData.delivered || escrowData.deliveryHistory.length === 0 ? (
               <p className="text-sm text-neutral-400">
                 The freelancer has not submitted any work yet. Once they do, the
                 delivery details will appear here.
               </p>
             ) : (
               <>
-                <p className="text-xs text-neutral-400">
-                  A delivery has been submitted. Review the link and notes below.
-                </p>
+                {/* Version Tabs */}
+                {escrowData.deliveryHistory.length > 1 && (
+                  <div className="flex gap-2 overflow-x-auto pb-2">
+                    {escrowData.deliveryHistory.map((delivery, idx) => {
+                      const isLatest = idx === escrowData.deliveryHistory.length - 1;
+                      const isSelected = selectedDeliveryVersion === idx || (selectedDeliveryVersion === null && isLatest);
 
-                {escrowData.deliveryLink && (
-                  <div>
-                    <p className="text-xs text-neutral-500 mb-1">
-                      Delivery Link
-                    </p>
-                    <a
-                      href={escrowData.deliveryLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 text-sm text-primary hover:underline break-all"
-                    >
-                      {escrowData.deliveryLink}
-                    </a>
+                      return (
+                        <button
+                          key={idx}
+                          onClick={() => setSelectedDeliveryVersion(idx)}
+                          className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition ${isSelected
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
+                            }`}
+                        >
+                          Version {delivery.version.toString()}
+                          {isLatest && (
+                            <span className="ml-2 px-1.5 py-0.5 text-xs bg-emerald-500 text-white rounded">
+                              Latest
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
 
-                {escrowData.deliveryNotes && (
-                  <div>
-                    <p className="text-xs text-neutral-500 mb-1">Notes</p>
-                    <p className="text-sm whitespace-pre-wrap text-neutral-200">
-                      {escrowData.deliveryNotes}
-                    </p>
-                  </div>
-                )}
+                {/* Selected Delivery Content */}
+                {(() => {
+                  const selectedIdx = selectedDeliveryVersion ?? escrowData.deliveryHistory.length - 1;
+                  const selectedDelivery = escrowData.deliveryHistory[selectedIdx];
+                  const isLatest = selectedIdx === escrowData.deliveryHistory.length - 1;
 
-                {isClient && !escrowData.terminal && !escrowData.disputed && (
-                  <div className="flex flex-col sm:flex-row gap-3 mt-4">
-                    <button
-                      onClick={() => setReviewOpen(true)}
-                      className="flex-1 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm"
-                    >
-                      Approve Work & Release Payment
-                    </button>
+                  if (!selectedDelivery) return null;
 
-                    <button
-                      disabled={disputeLoading}
-                      onClick={handleRaiseDispute}
-                      className="flex-1 px-4 py-2 rounded-xl bg-red-500/10 text-red-400 border border-red-500/30 text-sm disabled:opacity-60 hover:bg-red-500/20 transition"
-                    >
-                      {disputeLoading ? "Submitting..." : "Raise Dispute"}
-                    </button>
-                  </div>
-                )}
+                  return (
+                    <div className="space-y-3">
+                      {/* Version Info Banner */}
+                      <div className={`p-3 rounded-lg border ${isLatest
+                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                        : 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+                        }`}>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-medium">
+                            {isLatest ? '✓ Latest Submission' : `Previous Version ${selectedDelivery.version.toString()}`}
+                          </span>
+                          <span className="text-xs">
+                            {formatTs(selectedDelivery.timestamp)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Delivery Link */}
+                      {selectedDelivery.deliveryLink && (
+                        <div>
+                          <p className="text-xs text-neutral-500 mb-1">
+                            Delivery Link
+                          </p>
+                          <a
+                            href={selectedDelivery.deliveryLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 text-sm text-primary hover:underline break-all"
+                          >
+                            {selectedDelivery.deliveryLink}
+                          </a>
+                        </div>
+                      )}
+
+                      {/* Delivery Notes */}
+                      {selectedDelivery.notes && (
+                        <div>
+                          <p className="text-xs text-neutral-500 mb-1">Notes</p>
+                          <p className="text-sm whitespace-pre-wrap text-neutral-200">
+                            {selectedDelivery.notes}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Raw IPFS Link */}
+                      <div>
+                        <p className="text-xs text-neutral-500 mb-1">IPFS Metadata</p>
+                        <a
+                          href={ipfsToHttp(selectedDelivery.uri)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-neutral-400 hover:text-primary hover:underline break-all"
+                        >
+                          {selectedDelivery.uri}
+                        </a>
+                      </div>
+
+                      {/* Action Buttons - Only show for latest version */}
+                      {isLatest && isClient && !escrowData.terminal && !escrowData.disputed && (
+                        <div className="flex flex-col sm:flex-row gap-3 mt-4 pt-4 border-t border-neutral-800">
+                          <button
+                            onClick={() => setReviewOpen(true)}
+                            className="flex-1 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition"
+                          >
+                            Approve Work & Release Payment
+                          </button>
+
+                          <button
+                            disabled={disputeLoading}
+                            onClick={handleRaiseDispute}
+                            className="flex-1 px-4 py-2 rounded-xl bg-red-500/10 text-red-400 border border-red-500/30 text-sm disabled:opacity-60 hover:bg-red-500/20 transition"
+                          >
+                            {disputeLoading ? "Submitting..." : "Raise Dispute"}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Info for viewing older versions */}
+                      {!isLatest && (
+                        <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-sm text-amber-400">
+                          <p className="flex items-center gap-2">
+                            <AlertTriangle className="w-4 h-4" />
+                            You are viewing an older version. Switch to the latest version to approve or dispute.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </>
             )}
           </div>

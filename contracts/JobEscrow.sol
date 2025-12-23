@@ -78,6 +78,15 @@ contract JobEscrow is ReentrancyGuard {
     string  public lastDeliveryURI;
     string  public lastDisputeURI;
 
+    // NEW: Track all deliveries for multiple submission support
+    struct Delivery {
+        string uri;                       // IPFS URI with delivery details
+        uint64 timestamp;                 // when it was submitted
+        uint256 version;                  // delivery version number (1, 2, 3...)
+    }
+
+    Delivery[] public deliveryHistory;    // all submissions in chronological order
+
     /*//////////////////////////////////////////////////////////////
                                 CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
@@ -166,18 +175,32 @@ contract JobEscrow is ReentrancyGuard {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Freelancer marks the work delivered; starts client review timer if configured.
+    /// @dev Can be called multiple times - each submission is tracked in history
     function deliverWork(string calldata deliveryURI) external onlyFreelancer notTerminal {
-        if (delivered) revert AlreadyDelivered();
+        // REMOVED: if (delivered) revert AlreadyDelivered();
+        // Now allows multiple submissions
 
-        delivered = true;
+        // Mark as delivered (if first time)
+        if (!delivered) {
+            delivered = true;
+        }
+
+        // Store latest delivery
         lastDeliveryURI = deliveryURI;
 
-        // Set review due if a window is configured
+        // Add to history
+        deliveryHistory.push(Delivery({
+            uri: deliveryURI,
+            timestamp: uint64(block.timestamp),
+            version: deliveryHistory.length + 1
+        }));
+
+        // Reset/set review due on each new submission
         if (reviewWindowSecs > 0) {
             reviewDue = uint64(block.timestamp) + reviewWindowSecs;
         }
 
-        // Update profile status → Delivered
+        // Update profile status → Delivered (resets to Delivered even if already delivered)
         profile.updateJobStatus(jobKey, FreelancerProfile.JobStatus.Delivered);
 
         emit WorkDelivered(jobKey, deliveryURI);
@@ -362,5 +385,35 @@ contract JobEscrow is ReentrancyGuard {
     //////////////////////////////////////////////////////////////*/
     function currentDeadlines() external view returns (uint64 cancelEnd, uint64 _deliveryDue, uint64 _reviewDue) {
         return (cancelWindowEnd, deliveryDue, reviewDue);
+    }
+
+    /// @notice Get total number of deliveries submitted
+    function getDeliveryCount() external view returns (uint256) {
+        return deliveryHistory.length;
+    }
+
+    /// @notice Get a specific delivery by index
+    /// @param index The delivery index (0-based)
+    /// @return uri The IPFS URI
+    /// @return timestamp When it was submitted
+    /// @return version The version number
+    function getDelivery(uint256 index) 
+        external 
+        view 
+        returns (
+            string memory uri,
+            uint64 timestamp,
+            uint256 version
+        ) 
+    {
+        require(index < deliveryHistory.length, "Invalid index");
+        Delivery storage d = deliveryHistory[index];
+        return (d.uri, d.timestamp, d.version);
+    }
+
+    /// @notice Get all deliveries at once
+    /// @return Array of all Delivery structs
+    function getAllDeliveries() external view returns (Delivery[] memory) {
+        return deliveryHistory;
     }
 }

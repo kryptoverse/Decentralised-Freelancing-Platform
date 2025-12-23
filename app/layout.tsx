@@ -9,9 +9,9 @@ import { ThirdwebProvider } from "thirdweb/react";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Decentralized Freelancing",
+  title: "FYP",
   description:
-    "Decentralized Freelancing Platform",
+    "Final Year Project",
 };
 
 export default function RootLayout({

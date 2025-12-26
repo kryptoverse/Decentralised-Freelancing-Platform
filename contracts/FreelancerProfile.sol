@@ -284,7 +284,7 @@ contract FreelancerProfile {
     function _allowedTransition(JobStatus from, JobStatus to) internal pure returns (bool) {
         if (from == JobStatus.Created && (to == JobStatus.InProgress || to == JobStatus.Cancelled)) return true;
         if (from == JobStatus.InProgress && (to == JobStatus.Delivered || to == JobStatus.Cancelled || to == JobStatus.Disputed)) return true;
-        if (from == JobStatus.Delivered && (to == JobStatus.Approved || to == JobStatus.Disputed || to == JobStatus.Cancelled)) return true;
+        if (from == JobStatus.Delivered && (to == JobStatus.Approved || to == JobStatus.Disputed || to == JobStatus.Cancelled || to == JobStatus.Delivered)) return true;
         if (from == JobStatus.Approved && (to == JobStatus.Completed)) return true; // completion happens via markJobCompleted
         if (from == JobStatus.Disputed && (to == JobStatus.Approved || to == JobStatus.Cancelled)) return true;
         // Completed/Cancelled are terminal in this model

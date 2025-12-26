@@ -790,6 +790,7 @@ export default function JobAnalyticsPage() {
           terminal,
           cancelRequestedBy,
           lastDeliveryURI,
+          rawHistory,
         ] = await Promise.all([
           readContract({
             contract: escrow,
@@ -825,9 +826,9 @@ export default function JobAnalyticsPage() {
 
         // Parse delivery history
         const deliveryHistory: Delivery[] = [];
-        if (Array.isArray(lastDeliveryURI) && (lastDeliveryURI as any[]).length > 0) {
+        if (Array.isArray(rawHistory) && (rawHistory as any[]).length > 0) {
           // New contract with delivery history
-          for (const d of lastDeliveryURI as any[]) {
+          for (const d of rawHistory) {
             const delivery: Delivery = {
               uri: d[0],
               timestamp: d[1],

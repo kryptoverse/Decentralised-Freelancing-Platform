@@ -2,12 +2,37 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { getContract, readContract } from "thirdweb";
+import { getContract, readContract, prepareContractCall, sendTransaction } from "thirdweb";
+import { useActiveAccount } from "thirdweb/react";
 import { client } from "@/lib/thirdweb-client";
 import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { ipfsToHttp } from "@/utils/ipfs";
-import { Loader2, Copy, Check, DollarSign, Briefcase, TrendingUp, Star } from "lucide-react";
+import { uploadToIPFS } from "@/utils/ipfs-upload";
+import { Loader2, Copy, Check, DollarSign, Briefcase, TrendingUp, Star, Send } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/components/ui/use-toast";
+import { useRouter } from "next/navigation";
+
+// ... (Metadata interface)
+
+// ... (FreelancerStats interface)
+
+// ... (component start)
+
+// ... (component start)
 
 interface Metadata {
   name: string;
@@ -37,6 +62,20 @@ export default function PublicFreelancerProfile() {
   const [loading, setLoading] = useState(true);
   const [metadata, setMetadata] = useState<Metadata | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const { toast } = useToast();
+  const account = useActiveAccount();
+  const router = useRouter();
+
+  // Hire Modal State
+  const [isHireModalOpen, setIsHireModalOpen] = useState(false);
+  const [hiring, setHiring] = useState(false);
+  const [offerForm, setOfferForm] = useState({
+    title: "",
+    description: "",
+    budget: "",
+    days: "",
+  });
 
   const [stats, setStats] = useState<FreelancerStats>({
     totalEarnings: 0,
@@ -269,6 +308,119 @@ export default function PublicFreelancerProfile() {
     }
   };
 
+  const handleSendOffer = async () => {
+    if (!account) {
+      toast({
+        title: "Wallet not connected",
+        description: "Please connect your wallet to send an offer.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!offerForm.title || !offerForm.description || !offerForm.budget || !offerForm.days) {
+      toast({
+        title: "Missing fields",
+        description: "Please fill in all fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setHiring(true);
+
+      // 1. Upload description to IPFS
+      let uri = "";
+      try {
+        uri = await uploadToIPFS({
+          title: offerForm.title,
+          description: offerForm.description,
+          budget: offerForm.budget,
+          duration: offerForm.days
+        });
+      } catch (e) {
+        console.error("IPFS Upload Error", e);
+        toast({ title: "Failed to upload offer details", variant: "destructive" });
+        setHiring(false);
+        return;
+      }
+
+      const budgetUSDT = BigInt(Math.floor(Number(offerForm.budget) * 1e6)); // USDC/USDT is 6 decimals
+      const durationDays = BigInt(offerForm.days);
+      const expiry = BigInt(0); // No expiry for now, or could set 7 days
+
+      const jobBoard = getContract({
+        client,
+        chain: CHAIN,
+        address: DEPLOYED_CONTRACTS.addresses.JobBoard,
+      });
+
+      // 2. Check Allowance (USDC)
+      // If allowance < budget, approve first?
+      // Contract: createDirectOffer checks allowance but DOES NOT transfer yet.
+      // So we just need to make sure we HAVE allowance.
+
+      const usdc = getContract({
+        client,
+        chain: CHAIN,
+        address: DEPLOYED_CONTRACTS.addresses.MockUSDT,
+      });
+
+      const allowance = await readContract({
+        contract: usdc,
+        method: "function allowance(address owner, address spender) view returns (uint256)",
+        params: [account.address, DEPLOYED_CONTRACTS.addresses.JobBoard]
+      });
+
+      if (allowance < budgetUSDT) {
+        const approveTx = prepareContractCall({
+          contract: usdc,
+          method: "function approve(address spender, uint256 amount) returns (bool)",
+          params: [DEPLOYED_CONTRACTS.addresses.JobBoard, budgetUSDT]
+        });
+        await sendTransaction({ transaction: approveTx, account });
+      }
+
+      // 3. Create Direct Offer
+      const transaction = prepareContractCall({
+        contract: jobBoard,
+        method: "function createDirectOffer(address freelancer, string title, string descriptionURI, uint256 budgetUSDT, uint64 deliveryDays, uint64 expiresAt) returns (uint256)",
+        params: [
+          address as `0x${string}`,
+          offerForm.title,
+          uri,
+          budgetUSDT,
+          durationDays,
+          expiry
+        ],
+      });
+
+      const { transactionHash } = await sendTransaction({
+        transaction,
+        account,
+      });
+
+      toast({
+        title: "Offer Sent!",
+        description: "The freelancer has been notified of your proposal.",
+      });
+
+      setIsHireModalOpen(false);
+      setOfferForm({ title: "", description: "", budget: "", days: "" });
+
+    } catch (err: any) {
+      console.error(err);
+      toast({
+        title: "Error sending offer",
+        description: err.message || "Something went wrong",
+        variant: "destructive",
+      });
+    } finally {
+      setHiring(false);
+    }
+  };
+
   return (
     <section
       className="
@@ -311,27 +463,101 @@ export default function PublicFreelancerProfile() {
               </p>
             </div>
 
-            <button
-              onClick={handleCopyLink}
-              className="
+            <div className="flex gap-2 w-full sm:w-auto">
+              <button
+                onClick={handleCopyLink}
+                className="
                 flex items-center gap-2 px-4 py-2 rounded-xl 
                 bg-surface border border-border 
                 hover:bg-surface-secondary transition
-                w-full sm:w-auto
+                flex-1 sm:flex-none justify-center
               "
-            >
-              {copied ? (
-                <>
-                  <Check className="w-4 h-4 text-green-400" />
-                  <span className="text-sm text-green-400">Copied!</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="w-4 h-4" />
-                  <span className="text-sm">Copy Link</span>
-                </>
+              >
+                {copied ? (
+                  <>
+                    <Check className="w-4 h-4 text-green-400" />
+                    <span className="text-sm text-green-400">Copied</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    <span className="text-sm">Copy Link</span>
+                  </>
+                )}
+              </button>
+
+              {/* HIRE BUTTON - Only if connected and not self */}
+              {account && account.address.toLowerCase() !== address?.toString().toLowerCase() && (
+                <Dialog open={isHireModalOpen} onOpenChange={setIsHireModalOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="flex-1 sm:flex-none gap-2 bg-primary hover:bg-primary/90 text-primary-foreground">
+                      <Send className="w-4 h-4" />
+                      Hire Directly
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[425px] bg-background border-border text-foreground">
+                    <DialogHeader>
+                      <DialogTitle>Hire {metadata.name}</DialogTitle>
+                      <DialogDescription>
+                        Send a direct proposal to this freelancer.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="title">Job Title</Label>
+                        <Input
+                          id="title"
+                          placeholder="e.g. Build landing page"
+                          value={offerForm.title}
+                          onChange={(e) => setOfferForm({ ...offerForm, title: e.target.value })}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="desc">Description</Label>
+                        <Textarea
+                          id="desc"
+                          placeholder="Describe the work..."
+                          value={offerForm.description}
+                          onChange={(e) => setOfferForm({ ...offerForm, description: e.target.value })}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                          <Label htmlFor="budget">Budget (USDT)</Label>
+                          <div className="relative">
+                            <DollarSign className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                            <Input
+                              id="budget"
+                              type="number"
+                              className="pl-8"
+                              placeholder="500"
+                              value={offerForm.budget}
+                              onChange={(e) => setOfferForm({ ...offerForm, budget: e.target.value })}
+                            />
+                          </div>
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="days">Duration (Days)</Label>
+                          <Input
+                            id="days"
+                            type="number"
+                            placeholder="7"
+                            value={offerForm.days}
+                            onChange={(e) => setOfferForm({ ...offerForm, days: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button onClick={handleSendOffer} disabled={hiring}>
+                        {hiring && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {hiring ? "Sending..." : "Send Proposal"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               )}
-            </button>
+            </div>
           </div>
         </div>
       </div>

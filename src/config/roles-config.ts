@@ -52,6 +52,13 @@ export const ROLE_TABS: Record<
       match: "startsWith",
     },
     {
+      id: "proposals",
+      label: "Proposals",
+      icon: Briefcase, // Or another icon like FileText if imported
+      path: "/freelancer/proposals",
+      match: "startsWith",
+    },
+    {
       id: "profile",
       label: "Profile",
       icon: UserIcon,
@@ -80,6 +87,13 @@ export const ROLE_TABS: Record<
       label: "Find Freelancer",
       icon: Briefcase,
       path: "/client/find-freelancer",
+      match: "startsWith",
+    },
+    {
+      id: "offers",
+      label: "My Offers",
+      icon: Briefcase, // Or specific icon
+      path: "/client/offers",
       match: "startsWith",
     },
     {

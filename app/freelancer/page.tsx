@@ -279,14 +279,37 @@ export default function FreelancerHome() {
         address: DEPLOYED_CONTRACTS.addresses.JobBoard as `0x${string}`,
       });
 
-      // Get job IDs this freelancer has applied to
-      const jobIds = (await readContract({
+      // ---------------------------------------------------------
+      // 1) Get job IDs this freelancer has APPLIED to
+      // ---------------------------------------------------------
+      const appliedJobIdsPromise = readContract({
         contract: jobBoard,
         method: "function getJobsAppliedBy(address) view returns (uint256[])",
         params: [account.address],
-      })) as bigint[];
+      });
 
-      if (!jobIds || jobIds.length === 0) {
+      // ---------------------------------------------------------
+      // 2) Get job IDs from DIRECT OFFERS (Storage-based, no events needed!)
+      // ---------------------------------------------------------
+      const directOfferIdsPromise = readContract({
+        contract: jobBoard,
+        method: "function getOffersToFreelancer(address) view returns (uint256[])",
+        params: [account.address],
+      });
+
+      const [appliedJobIds, directOfferIds] = await Promise.all([
+        appliedJobIdsPromise,
+        directOfferIdsPromise
+      ]);
+
+      // Merge and deduplicate (some jobs might technically be in both if logic allowed, safe to merge)
+      const allJobIds = Array.from(new Set([
+        ...(appliedJobIds as bigint[]).map(n => Number(n)),
+        ...(directOfferIds as bigint[]).map(n => Number(n))
+      ]));
+
+
+      if (allJobIds.length === 0) {
         setAppliedJobs([]);
         setHiredJobs([]);
         setCompletedJobs([]);
@@ -294,8 +317,8 @@ export default function FreelancerHome() {
       }
 
       // Parallel fetch all job details
-      const jobPromises = jobIds.map(async (idBig) => {
-        const idNum = Number(idBig);
+      const jobPromises = allJobIds.map(async (idNum) => {
+        if (!idNum) return null;
         if (!idNum) return null;
 
         try {

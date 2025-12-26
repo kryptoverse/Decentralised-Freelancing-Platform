@@ -9,7 +9,7 @@ import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { ipfsToHttp } from "@/utils/ipfs";
 import { uploadToIPFS } from "@/utils/ipfs-upload";
-import { Loader2, Copy, Check, DollarSign, Briefcase, TrendingUp, Star, Send } from "lucide-react";
+import { Loader2, Copy, Check, DollarSign, Briefcase, TrendingUp, Star, Send, User as UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -463,31 +463,28 @@ export default function PublicFreelancerProfile() {
               </p>
             </div>
 
+            {/* ACTIONS */}
             <div className="flex gap-2 w-full sm:w-auto">
+              {/* COPY LINK */}
               <button
                 onClick={handleCopyLink}
-                className="
-                flex items-center gap-2 px-4 py-2 rounded-xl 
-                bg-surface border border-border 
-                hover:bg-surface-secondary transition
-                flex-1 sm:flex-none justify-center
-              "
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-surface border border-border hover:bg-surface-secondary transition flex-1 sm:flex-none justify-center"
               >
-                {copied ? (
-                  <>
-                    <Check className="w-4 h-4 text-green-400" />
-                    <span className="text-sm text-green-400">Copied</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-4 h-4" />
-                    <span className="text-sm">Copy Link</span>
-                  </>
-                )}
+                {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                <span className="text-sm">{copied ? "Copied" : "Copy Link"}</span>
               </button>
 
-              {/* HIRE BUTTON - Only if connected and not self */}
-              {account && account.address.toLowerCase() !== address?.toString().toLowerCase() && (
+              {/* HIRE BUTTON LOGIC */}
+              {!account ? (
+                <Button disabled className="flex-1 sm:flex-none gap-2 bg-muted text-muted-foreground">
+                  Connect to Hire
+                </Button>
+              ) : account.address.toLowerCase() === address?.toString().toLowerCase() ? (
+                <Button variant="outline" className="flex-1 sm:flex-none gap-2 border-primary text-primary" disabled>
+                  <UserIcon className="w-4 h-4" />
+                  Your Profile
+                </Button>
+              ) : (
                 <Dialog open={isHireModalOpen} onOpenChange={setIsHireModalOpen}>
                   <DialogTrigger asChild>
                     <Button className="flex-1 sm:flex-none gap-2 bg-primary hover:bg-primary/90 text-primary-foreground">

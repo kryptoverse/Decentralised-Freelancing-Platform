@@ -211,6 +211,7 @@ export default function ClientHome() {
               title: res[1],
               status: jobStatus,
               budgetUSDC: Number(res[3]),
+              hiredFreelancer: res[5],
               expiresAt: Number(res[9]),
               applicants: realCount,
             };
@@ -535,11 +536,27 @@ export default function ClientHome() {
                 <div className="flex-1 min-w-0">
                   <h3 className="text-lg font-semibold break-words">{job.title}</h3>
 
-                  <p className="text-muted-foreground text-sm">
-                    Applicants: {job.applicants}
-                  </p>
+                  {job.status === 2 || job.status === 4 ? (
+                    <div className="mt-1 mb-2">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${job.status === 4
+                        ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                        : "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                        }`}>
+                        {job.status === 4 ? "Completed" : "Hired"}
+                      </span>
+                      {job.hiredFreelancer && job.hiredFreelancer !== "0x0000000000000000000000000000000000000000" && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Freelancer: {job.hiredFreelancer.slice(0, 6)}...{job.hiredFreelancer.slice(-4)}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">
+                      Applicants: {job.applicants}
+                    </p>
+                  )}
 
-                  <p className="text-muted-foreground text-sm">
+                  <p className="text-muted-foreground text-sm text-primary font-medium">
                     Budget: {(job.budgetUSDC / 1e6).toFixed(2)} USDT
                   </p>
                 </div>

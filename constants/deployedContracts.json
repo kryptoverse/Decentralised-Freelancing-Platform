@@ -3,10 +3,10 @@
   "chainId": 80002,
   "addresses": {
     "MockUSDT": "0x4eC3e0BeCEC0054397f140eF2501191bE93A19cA",
-    "FreelancerFactory": "0xbd6542384effae7bc619c37a525cc900e50b1ac9",
-    "ClientFactory": "0x538e4d350019f4d94931d432f72ce6f2760028c2",
-    "EscrowFactory": "0x1bd3b06a83d361ff05ce27b1000035db7e8ae3a0",
-    "JobBoard": "0x74fdabbf9c693bdc4384a8587c1ff68aa363d87f"
+    "FreelancerFactory": "0xec8ecd7973e987e336064f55be1f879a807a6725",
+    "ClientFactory": "0x56bc0d995f4f2bde97194b535ab2bca6c9720777",
+    "EscrowFactory": "0xa57c44388616f98ae52676659e95612860be8694",
+    "JobBoard": "0x5da90a143221eaf6ebdc10d7da1ca1800027f859"
   },
   "roles": {
     "platformWallet": "0xDE9aabc1421BA15ed9aCD975D11668272e26aaf5",

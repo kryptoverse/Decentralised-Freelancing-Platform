@@ -23,10 +23,11 @@ export function ThemeToggle() {
   return (
     <button
       onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-      className="p-2 rounded-full glass-effect hover:bg-surface-secondary transition-all duration-300 ease-out"
+      className="p-2 rounded-full hover:bg-brand-primary/10 transition-all duration-300 ease-out"
       aria-label="Toggle theme"
+      title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
     >
-      {theme === "dark" ? <Sun className="w-5 h-5 text-secondary" /> : <Moon className="w-5 h-5 text-primary" />}
+      {theme === "dark" ? <Sun className="w-5 h-5 text-brand-dark" /> : <Moon className="w-5 h-5 text-brand-dark" />}
     </button>
   )
 }

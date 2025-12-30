@@ -51,7 +51,7 @@ export function AIAssistantChat({ isOpen, onToggle }: AIAssistantChatProps) {
     <>
       <motion.button
         onClick={onToggle}
-        className="fixed bottom-4 right-4 md:bottom-6 md:right-6 w-14 h-14 rounded-full bg-gradient-primary dark:text-white text-gray-900 shadow-lg hover:shadow-xl flex items-center justify-center z-40 transition-all duration-300 ease-out border-2 border-primary/50"
+        className="fixed bottom-4 right-4 md:bottom-6 md:right-6 w-14 h-14 rounded-full bg-gradient-primary text-white shadow-lg hover:shadow-xl flex items-center justify-center z-40 transition-all duration-300 ease-out border-2 border-primary/50"
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
         title="Open AI Assistant"
@@ -92,11 +92,10 @@ export function AIAssistantChat({ isOpen, onToggle }: AIAssistantChatProps) {
                     className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`max-w-xs px-4 py-3 rounded-2xl ${
-                        message.sender === "user"
+                      className={`max-w-xs px-4 py-3 rounded-2xl ${message.sender === "user"
                           ? "bg-gradient-primary dark:text-white text-gray-900 rounded-br-none"
                           : "glass-effect text-foreground rounded-bl-none"
-                      }`}
+                        }`}
                     >
                       <p className="text-sm break-words">{message.text}</p>
                     </div>
@@ -152,7 +151,7 @@ export function AIAssistantChat({ isOpen, onToggle }: AIAssistantChatProps) {
               />
               <button
                 onClick={() => handleSendMessage()}
-                className="px-4 py-2 rounded-full bg-gradient-primary dark:text-white text-gray-900 font-medium hover:shadow-lg hover:shadow-primary/30 transition-all duration-300 ease-out disabled:opacity-50"
+                className="px-4 py-2 rounded-full bg-gradient-primary text-white font-medium hover:shadow-lg hover:shadow-primary/30 transition-all duration-300 ease-out disabled:opacity-50"
                 disabled={!input.trim()}
               >
                 <Send className="w-4 h-4" />

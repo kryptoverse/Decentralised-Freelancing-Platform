@@ -28,7 +28,7 @@ export default function FounderDashboard() {
             </p>
             <div className="flex justify-between items-center">
               <span className="text-sm text-foreground-secondary">Status: Building</span>
-              <button className="px-4 py-2 bg-gradient-primary text-sm font-medium rounded-full hover:scale-105 transition-all">
+              <button className="px-4 py-2 bg-gradient-primary text-white text-sm font-medium rounded-full hover:scale-105 transition-all">
                 View
               </button>
             </div>

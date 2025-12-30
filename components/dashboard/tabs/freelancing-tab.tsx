@@ -30,7 +30,7 @@ export function FreelancingTab({ userRole }: FreelancingTabProps) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.1 }}
-          className="rounded-full px-6 py-3 font-medium transition-all duration-300 ease-out hover:scale-105 active:scale-95 bg-gradient-primary text-primary-foreground shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 w-fit"
+          className="rounded-full px-6 py-3 font-medium transition-all duration-300 ease-out hover:scale-105 active:scale-95 bg-gradient-primary text-white shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 w-fit"
         >
           Post a New Job
           <ArrowRight className="inline-block ml-2 w-4 h-4" />

@@ -4,7 +4,7 @@ import { motion } from "framer-motion"
 
 export function FooterSection() {
   return (
-    <footer className="py-12 sm:py-16 px-4 sm:px-6 border-t border-border text-center">
+    <footer className="py-12 sm:py-16 px-4 sm:px-6 border-t border-soft-divider bg-section-background text-center">
       <div className="max-w-4xl mx-auto">
         <motion.div
           initial={{ opacity: 0 }}
@@ -16,17 +16,17 @@ export function FooterSection() {
               <a
                 key={i}
                 href="#"
-                className="text-foreground-secondary hover:text-foreground transition-all duration-300 ease-out"
+                className="text-text-secondary hover:text-brand-secondary transition-all duration-300 ease-out font-medium"
               >
                 {item}
               </a>
             ))}
           </div>
 
-          <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent mb-6 sm:mb-8" />
+          <div className="h-px bg-gradient-to-r from-transparent via-soft-divider to-transparent mb-6 sm:mb-8" />
 
-          <p className="text-foreground-secondary text-xs sm:text-sm">
-            © 2025 FYP. Powered by Web3 and built for the future.
+          <p className="text-text-secondary text-xs sm:text-sm">
+            © 2025 Decentralized Freelancing Platform. Powered by Web3 and built for the future.
           </p>
         </motion.div>
       </div>

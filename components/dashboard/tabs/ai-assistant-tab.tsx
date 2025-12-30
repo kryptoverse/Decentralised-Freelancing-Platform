@@ -20,7 +20,7 @@ const AIAssistantTab = () => {
       />
       <button
         onClick={() => handleSendMessage()}
-        className="px-6 py-3 rounded-full bg-gradient-primary text-primary-foreground font-medium hover:shadow-lg hover:shadow-primary/30 transition-all duration-300 ease-out disabled:opacity-50"
+        className="px-6 py-3 rounded-full bg-gradient-primary text-white font-medium hover:shadow-lg hover:shadow-primary/30 transition-all duration-300 ease-out disabled:opacity-50"
         disabled={!input.trim()}
       >
         <Send className="w-5 h-5" />

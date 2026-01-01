@@ -1,27 +1,59 @@
 {
   "compilerOptions": {
-    "lib": ["dom", "dom.iterable", "esnext"],
+    /* ✅ Target ES2020 so BigInt (0n) works */
+    "target": "ES2020",
+    /* ✅ Include modern JavaScript & browser libs */
+    "lib": [
+      "DOM",
+      "DOM.Iterable",
+      "ES2020"
+    ],
+    /* ✅ Support JS + TS */
     "allowJs": true,
-    "target": "ES6",
-    "skipLibCheck": true,
+    /* ✅ Always strict type checking */
     "strict": true,
+    /* ✅ Do not emit compiled JS (Next handles it) */
     "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
+    /* ✅ Fix for BigInt + Next.js build issues */
+    "skipLibCheck": true,
+    /* ✅ Module system (modern for Next) */
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    /* ✅ JSON imports, JSX transform */
     "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "preserve",
+    "jsx": "react-jsx",
+    /* ✅ Consistent imports & React interop */
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    /* ✅ Enables incremental build caching */
     "incremental": true,
+    "isolatedModules": true,
+    /* ✅ Next.js plugin */
     "plugins": [
       {
         "name": "next"
       }
     ],
+    /* ✅ Path alias (import @/...) */
+    "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"]
+      "@/*": [
+        "./*"
+      ]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  /* ✅ Include project source files */
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next\\dev/types/**/*.ts",
+    ".next\\dev/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  /* ✅ Exclude build outputs & node modules */
+  "exclude": [
+    "node_modules"
+  ]
 }

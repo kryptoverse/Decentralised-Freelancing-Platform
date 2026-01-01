@@ -1,36 +1,33 @@
-import type React from "react"
-import type { Metadata } from "next"
-import { GeistSans } from "geist/font/sans"
-import { GeistMono } from "geist/font/mono"
-import { Analytics } from "@vercel/analytics/next"
-import Providers from "@/components/Providers"
-import "./globals.css"
-import { Suspense } from "react"
-import ChatWidget from "@/components/ChatWidget"
+// app/layout.tsx
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+
+import { ThemeProvider } from "@/components/theme-provider";
+import { ThirdwebProvider } from "thirdweb/react";
+
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "FreelanceChain - Decentralized Freelancing & Shares",
-  description: "Connect with freelancers and invest in companies using blockchain technology",
-  
-}
+  title: "FYP",
+  description:
+    "Final Year Project",
+};
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode
-}>) {
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
-        <Suspense fallback={<div>Loading...</div>}>
-          <Providers>
+      <body className={inter.className}>
+        <ThirdwebProvider>
+          <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
             {children}
-            {/* Floating AI chat */}
-            <ChatWidget />
-          </Providers>
-        </Suspense>
-        <Analytics />
+          </ThemeProvider>
+        </ThirdwebProvider>
       </body>
     </html>
-  )
+  );
 }

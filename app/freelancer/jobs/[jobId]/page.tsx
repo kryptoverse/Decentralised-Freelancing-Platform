@@ -14,7 +14,10 @@ import {
   Send,
   Loader2,
   ShieldAlert,
+  Flag,
 } from "lucide-react";
+
+import DisputeModal from "@/components/modals/DisputeModal";
 
 import {
   getContract,
@@ -69,6 +72,7 @@ interface EscrowData {
   deliveryDue: bigint;
   reviewDue: bigint;
   delivered: boolean;
+  disputed: boolean;
   terminal: boolean;
   cancelRequestedBy: string;
   deliveryHistory: Delivery[];
@@ -179,6 +183,7 @@ export default function FreelancerJobDetailPage() {
 
   const [deliverModal, setDeliverModal] = useState(false);
   const [cancelModal, setCancelModal] = useState(false);
+  const [disputeModal, setDisputeModal] = useState(false);
 
   const [deliverLink, setDeliverLink] = useState("");
   const [deliverNotes, setDeliverNotes] = useState("");
@@ -343,10 +348,14 @@ export default function FreelancerJobDetailPage() {
             method: "function currentDeadlines() view returns (uint64,uint64,uint64)",
           });
 
-          const [delivered, terminal, cancelRequestedBy, deliveryHistory] = await Promise.all([
+          const [delivered, disputed, terminal, cancelRequestedBy, deliveryHistory] = await Promise.all([
             readContract({
               contract: escrowC,
               method: "function delivered() view returns (bool)",
+            }),
+            readContract({
+              contract: escrowC,
+              method: "function disputed() view returns (bool)",
             }),
             readContract({
               contract: escrowC,
@@ -368,6 +377,7 @@ export default function FreelancerJobDetailPage() {
             deliveryDue,
             reviewDue,
             delivered,
+            disputed,
             terminal,
             cancelRequestedBy,
             deliveryHistory: (deliveryHistory as any[]).map((d: any) => ({
@@ -499,11 +509,8 @@ export default function FreelancerJobDetailPage() {
     }
   }
 
-  async function raiseDispute() {
+  async function raiseDispute(reason: string) {
     if (!escrowData) return;
-
-    const reason = prompt("Describe dispute reason:");
-    if (!reason) return;
 
     try {
       const uri = await uploadJSON({ reason });
@@ -522,10 +529,12 @@ export default function FreelancerJobDetailPage() {
 
       await sendTransaction({ account: walletAccount, transaction: tx });
 
+      setDisputeModal(false);
       router.refresh();
     } catch (err) {
       console.error("raiseDispute error:", err);
       alert(getFriendlyError(err));
+      throw err; // Re-throw to let modal handle error state
     }
   }
 
@@ -548,7 +557,8 @@ export default function FreelancerJobDetailPage() {
   const canDeliver =
     job.status === 2 &&
     escrowData &&
-    !escrowData.terminal; // Removed delivered check to allow multiple submissions
+    !escrowData.disputed &&
+    !escrowData.terminal; // Check disputed flag to prevent delivery during disputes
 
   const isHired =
     job.status === 2 &&
@@ -660,6 +670,14 @@ export default function FreelancerJobDetailPage() {
                 </div>
               )}
 
+            {/* DISPUTED STATUS */}
+            {escrowData.disputed && (
+              <div className="p-4 rounded-xl border border-red-500/40 bg-red-500/10 text-red-400 flex items-center gap-2">
+                <Flag className="w-4 h-4" />
+                This job is currently in dispute. Further actions are restricted until the admin resolves the dispute.
+              </div>
+            )}
+
             {/* ACTION BUTTONS */}
             <div className="flex flex-col sm:flex-row gap-3">
               {/* DELIVER */}
@@ -672,9 +690,11 @@ export default function FreelancerJobDetailPage() {
                 </button>
               ) : (
                 <div className="flex-1 px-4 py-3 rounded-xl border border-border text-sm text-muted-foreground flex items-center justify-center">
-                  {escrowData.terminal
-                    ? "Escrow closed"
-                    : "Delivery window has passed"}
+                  {escrowData.disputed
+                    ? "Cannot deliver - job is in dispute"
+                    : escrowData.terminal
+                      ? "Escrow closed"
+                      : "Delivery window has passed"}
                 </div>
               )}
 
@@ -737,15 +757,15 @@ export default function FreelancerJobDetailPage() {
                   </button>
                 )} */}
 
-              {/* DISPUTE - Commented out for future implementation */}
-              {/* {!escrowData.terminal && (
+              {/* DISPUTE */}
+              {!escrowData.terminal && !escrowData.disputed && (
                 <button
-                  onClick={raiseDispute}
-                  className="flex-1 px-4 py-3 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20"
+                  onClick={() => setDisputeModal(true)}
+                  className="flex-1 px-4 py-3 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition"
                 >
                   Raise Dispute
                 </button>
-              )} */}
+              )}
             </div>
           </section>
         )}
@@ -768,8 +788,8 @@ export default function FreelancerJobDetailPage() {
                   <div
                     key={idx}
                     className={`p-4 border rounded-xl ${isLatest
-                        ? 'bg-primary/5 border-primary/30'
-                        : 'bg-surface-secondary border-border'
+                      ? 'bg-primary/5 border-primary/30'
+                      : 'bg-surface-secondary border-border'
                       }`}
                   >
                     <div className="flex justify-between items-center mb-2">
@@ -831,6 +851,12 @@ export default function FreelancerJobDetailPage() {
         onClose={() => setCancelModal(false)}
         onSubmit={requestCancel}
         loading={cancelLoading}
+      />
+
+      <DisputeModal
+        open={disputeModal}
+        onClose={() => setDisputeModal(false)}
+        onSubmit={raiseDispute}
       />
 
       {/* KYC VERIFICATION MODAL */}

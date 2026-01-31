@@ -36,6 +36,7 @@ import { ipfsToHttp } from "@/utils/ipfs";
 import { useIPFSUpload } from "@/hooks/useIPFSUpload";
 
 import HireSuccessModal from "@/components/client/HireSuccessModal";
+import DisputeModal from "@/components/modals/DisputeModal";
 
 /* ============================================================
    TYPES
@@ -353,6 +354,7 @@ export default function JobAnalyticsPage() {
   const [reviewLoading, setReviewLoading] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [disputeLoading, setDisputeLoading] = useState(false);
+  const [disputeModal, setDisputeModal] = useState(false);
   const [errorModal, setErrorModal] = useState<{
     open: boolean;
     title: string;
@@ -1010,11 +1012,8 @@ export default function JobAnalyticsPage() {
     }
   }
 
-  async function handleRaiseDispute() {
+  async function handleRaiseDispute(reason: string) {
     if (!escrowData) return;
-
-    const reason = prompt("Describe the dispute reason:");
-    if (!reason) return;
 
     try {
       setDisputeLoading(true);
@@ -1039,10 +1038,12 @@ export default function JobAnalyticsPage() {
       });
 
       await sendTransaction({ account: nonGasAccount, transaction: tx });
+      setDisputeModal(false);
       router.refresh();
     } catch (err) {
       console.error("raiseDispute error:", err);
       alert("Failed to raise dispute.");
+      throw err; // Re-throw to let modal handle error state
     } finally {
       // Restore sponsored gas
       await enableSponsoredGas(connectionManager);
@@ -1311,10 +1312,10 @@ export default function JobAnalyticsPage() {
 
                           <button
                             disabled={disputeLoading}
-                            onClick={handleRaiseDispute}
+                            onClick={() => setDisputeModal(true)}
                             className="flex-1 px-4 py-2 rounded-xl bg-red-500/10 text-red-400 border border-red-500/30 text-sm disabled:opacity-60 hover:bg-red-500/20 transition"
                           >
-                            {disputeLoading ? "Submitting..." : "Raise Dispute"}
+                            Raise Dispute
                           </button>
                         </div>
                       )}
@@ -1514,6 +1515,12 @@ export default function JobAnalyticsPage() {
           Okay
         </button>
       </Modal>
+
+      <DisputeModal
+        open={disputeModal}
+        onClose={() => setDisputeModal(false)}
+        onSubmit={handleRaiseDispute}
+      />
     </main>
   );
 }

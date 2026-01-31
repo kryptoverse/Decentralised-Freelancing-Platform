@@ -1,0 +1,79 @@
+╔══════════════════════════════════════════════════════════════╗
+║           SUPABASE SETUP - QUICK REFERENCE                   ║
+╚══════════════════════════════════════════════════════════════╝
+
+📋 STEP-BY-STEP:
+
+1. CREATE PROJECT
+   → Go to supabase.com
+   → New Project
+   → Save your database password!
+
+2. RUN SQL SCHEMA
+   → Open: lib/supabase/schema.sql
+   → Copy ALL contents
+   → Supabase → SQL Editor → New Query
+   → Paste → Run
+   → Should see: "Success. No rows returned"
+
+3. GET API KEYS
+   → Supabase → Settings (gear icon) → API
+   → Copy these 3 values:
+     • Project URL
+     • anon public key
+     • service_role key (click "Reveal")
+
+4. ADD TO .env.local
+   → Copy .env.local.example to .env.local
+   → Replace the placeholder values:
+
+NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGc...
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGc...
+ENABLE_DB_CACHE=true
+
+5. RESTART DEV SERVER
+   → Stop npm run dev (Ctrl+C)
+   → npm run dev
+   → Check console for "[Cache MISS]" messages
+
+╔══════════════════════════════════════════════════════════════╗
+║ COMMON MISTAKES                                              ║
+╚══════════════════════════════════════════════════════════════╝
+
+❌ Running SUPABASE_SETUP.md in SQL editor
+   ✅ Run lib/supabase/schema.sql instead
+
+❌ Forgetting to restart dev server after adding env vars
+   ✅ Always restart after changing .env.local
+
+❌ Using wrong API key
+   ✅ NEXT_PUBLIC_* = anon key
+   ✅ SUPABASE_SERVICE_ROLE_KEY = service_role key
+
+╔══════════════════════════════════════════════════════════════╗
+║ VERIFICATION                                                 ║
+╚══════════════════════════════════════════════════════════════╝
+
+✓ In Supabase → Table Editor → Should see 6 tables:
+  - jobs
+  - freelancer_profiles  
+  - proposals
+  - escrows
+  - delivery_history
+  - sync_status
+
+✓ In your app console → Should NOT see:
+  "Supabase not configured - caching disabled"
+
+✓ Test API:
+  http://localhost:3000/api/jobs?limit=5
+
+╔══════════════════════════════════════════════════════════════╗
+║ FILES REFERENCE                                              ║
+╚══════════════════════════════════════════════════════════════╝
+
+📄 lib/supabase/schema.sql       ← RUN THIS in Supabase
+📄 SUPABASE_SETUP.md             ← Instructions (don't run)
+📄 .env.local.example            ← Template
+📄 .env.local                    ← Your actual config (create this)

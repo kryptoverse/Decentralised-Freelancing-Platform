@@ -247,7 +247,70 @@ export default function AdminPage() {
     }
   };
 
-  const copyToClipboard = (text: string) => navigator.clipboard.writeText(text);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (username === "admin" && password === "admin123") {
+      setIsAuthenticated(true);
+    } else {
+      alert("Invalid credentials");
+    }
+  };
+
+  if (!isAuthenticated) {
+    const copyToClipboard = (text: string) => navigator.clipboard.writeText(text);
+
+    return (
+      <main className="flex items-center justify-center min-h-screen p-4">
+        <div className="w-full max-w-md p-8 border border-border rounded-xl bg-surface-secondary/50 backdrop-blur-sm">
+          <div className="flex justify-center mb-6">
+            <div className="p-3 bg-primary/10 rounded-full">
+              <Shield className="w-8 h-8 text-primary" />
+            </div>
+          </div>
+
+          <h1 className="text-2xl font-bold text-center mb-2">Admin Access</h1>
+          <p className="text-sm text-center text-muted-foreground mb-8">
+            Please enter your credentials to continue
+          </p>
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="text-sm font-medium mb-1 block">Username</label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full px-4 py-2 rounded-lg bg-background border border-border focus:border-primary focus:ring-1 focus:ring-primary outline-none transition"
+                placeholder="Enter username"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1 block">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-2 rounded-lg bg-background border border-border focus:border-primary focus:ring-1 focus:ring-primary outline-none transition"
+                placeholder="Enter password"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-2.5 bg-primary text-primary-foreground font-medium rounded-lg hover:opacity-90 transition mt-2"
+            >
+              Login
+            </button>
+          </form>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">

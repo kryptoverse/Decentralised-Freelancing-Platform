@@ -34,6 +34,7 @@ import { client } from "@/lib/thirdweb-client";
 import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { ipfsToHttp } from "@/utils/ipfs";
+import { supabase } from "@/lib/supabase";
 
 /* ============================================================
    STRICT TYPES
@@ -527,7 +528,25 @@ export default function FreelancerJobDetailPage() {
         params: [uri],
       });
 
-      await sendTransaction({ account: walletAccount, transaction: tx });
+      const transaction = await sendTransaction({ account: walletAccount, transaction: tx });
+
+      // Store in Supabase
+      try {
+        const { error: sbError } = await supabase
+          .from('disputes')
+          .insert({
+            job_id: jobId.toString(),
+            disputer_address: walletAccount.address,
+            dispute_reason_uri: uri,
+            transaction_hash: transaction.transactionHash,
+          });
+
+        if (sbError) {
+          console.error("Supabase insert error:", sbError);
+        }
+      } catch (err) {
+        console.error("Failed to save dispute to DB:", err);
+      }
 
       setDisputeModal(false);
       router.refresh();

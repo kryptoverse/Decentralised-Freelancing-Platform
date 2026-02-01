@@ -33,6 +33,7 @@ import { client } from "@/lib/thirdweb-client";
 import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { ipfsToHttp } from "@/utils/ipfs";
+import { supabase } from "@/lib/supabase";
 import { useIPFSUpload } from "@/hooks/useIPFSUpload";
 
 import HireSuccessModal from "@/components/client/HireSuccessModal";
@@ -1037,7 +1038,28 @@ export default function JobAnalyticsPage() {
         params: [uri],
       });
 
-      await sendTransaction({ account: nonGasAccount, transaction: tx });
+      const transaction = await sendTransaction({ account: nonGasAccount, transaction: tx });
+
+      // Store in Supabase
+      try {
+        if (job) {
+          const { error: sbError } = await supabase
+            .from('disputes')
+            .insert({
+              job_id: job.jobId.toString(),
+              disputer_address: nonGasAccount.address,
+              dispute_reason_uri: uri,
+              transaction_hash: transaction.transactionHash,
+            });
+
+          if (sbError) {
+            console.error("Supabase insert error:", sbError);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to save dispute to DB:", err);
+      }
+
       setDisputeModal(false);
       router.refresh();
     } catch (err) {

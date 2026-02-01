@@ -81,6 +81,7 @@ interface EscrowData {
   terminal: boolean;
   cancelRequestedBy: string;
   lastDeliveryURI: string;
+  lastDisputeURI: string;
   deliveryLink?: string;
   deliveryNotes?: string;
   deliveryHistory: Delivery[];
@@ -608,6 +609,55 @@ export default function JobAnalyticsPage() {
   }
 
   /* ============================================================
+      SYNC DISPUTE STATUS (Self-Healing)
+  ============================================================ */
+  useEffect(() => {
+    if (!escrowData || !escrowData.disputed || !job || !activeAccount) return;
+
+    const syncDisputeData = async () => {
+      try {
+        // Check if dispute exists in DB
+        const { data: existing, error } = await supabase
+          .from("disputes")
+          .select("id")
+          .eq("job_id", job.jobId.toString())
+          .maybeSingle();
+
+        if (error) {
+          console.error("Error checking dispute sync:", error);
+          return;
+        }
+
+        // If not found in DB but disputed on chain -> Insert it
+        if (!existing) {
+          console.log("⚠️ Dispute missing from DB, syncing...");
+          const disputeReason = escrowData.lastDisputeURI || "ipfs://unknown";
+
+          const { error: insertError } = await supabase
+            .from("disputes")
+            .insert({
+              job_id: job.jobId.toString(),
+              disputer_address: "0x0000000000000000000000000000000000000000", // Unknown, recovered from chain state
+              dispute_reason_uri: disputeReason,
+              transaction_hash: "0x", // Unknown hash for synced disputes
+              status: "OPEN"
+            });
+
+          if (insertError) {
+            console.error("Failed to sync dispute to DB:", insertError);
+          } else {
+            console.log("✅ Dispute synced to DB successfully");
+          }
+        }
+      } catch (err) {
+        console.error("Sync dispute exception:", err);
+      }
+    };
+
+    syncDisputeData();
+  }, [escrowData, job, activeAccount]);
+
+  /* ============================================================
       LOAD JOB DETAILS
   ============================================================ */
   useEffect(() => {
@@ -793,6 +843,7 @@ export default function JobAnalyticsPage() {
           terminal,
           cancelRequestedBy,
           lastDeliveryURI,
+          lastDisputeURI,
           rawHistory,
         ] = await Promise.all([
           readContract({
@@ -820,6 +871,11 @@ export default function JobAnalyticsPage() {
             method: "function lastDeliveryURI() view returns (string)",
             params: [],
           }),
+          readContract({
+            contract: escrow,
+            method: "function lastDisputeURI() view returns (string)",
+            params: [],
+          }).catch(() => ""),
           readContract({
             contract: escrow,
             method: "function getAllDeliveries() view returns ((string,uint64,uint256)[])",
@@ -862,6 +918,7 @@ export default function JobAnalyticsPage() {
           terminal,
           cancelRequestedBy,
           lastDeliveryURI: typeof lastDeliveryURI === 'string' ? lastDeliveryURI : '',
+          lastDisputeURI: typeof lastDisputeURI === 'string' ? lastDisputeURI : '',
           deliveryHistory,
         };
 
@@ -1062,9 +1119,13 @@ export default function JobAnalyticsPage() {
 
       setDisputeModal(false);
       router.refresh();
-    } catch (err) {
+    } catch (err: any) {
       console.error("raiseDispute error:", err);
-      alert("Failed to raise dispute.");
+      if (err.message.includes("0x62e6201d") || JSON.stringify(err).includes("0x62e6201d")) {
+        alert("This job has already been disputed.");
+      } else {
+        alert("Failed to raise dispute.");
+      }
       throw err; // Re-throw to let modal handle error state
     } finally {
       // Restore sponsored gas

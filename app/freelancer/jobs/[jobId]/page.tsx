@@ -76,6 +76,7 @@ interface EscrowData {
   disputed: boolean;
   terminal: boolean;
   cancelRequestedBy: string;
+  lastDisputeURI: string;
   deliveryHistory: Delivery[];
 }
 
@@ -349,7 +350,7 @@ export default function FreelancerJobDetailPage() {
             method: "function currentDeadlines() view returns (uint64,uint64,uint64)",
           });
 
-          const [delivered, disputed, terminal, cancelRequestedBy, deliveryHistory] = await Promise.all([
+          const [delivered, disputed, terminal, cancelRequestedBy, lastDisputeURI, deliveryHistory] = await Promise.all([
             readContract({
               contract: escrowC,
               method: "function delivered() view returns (bool)",
@@ -368,6 +369,10 @@ export default function FreelancerJobDetailPage() {
             }),
             readContract({
               contract: escrowC,
+              method: "function lastDisputeURI() view returns (string)",
+            }).catch(() => ""),
+            readContract({
+              contract: escrowC,
               method: "function getAllDeliveries() view returns ((string,uint64,uint256)[])",
             }).catch(() => []), // Fallback to empty array for old escrows
           ]);
@@ -381,6 +386,7 @@ export default function FreelancerJobDetailPage() {
             disputed,
             terminal,
             cancelRequestedBy,
+            lastDisputeURI: typeof lastDisputeURI === 'string' ? lastDisputeURI : '',
             deliveryHistory: (deliveryHistory as any[]).map((d: any) => ({
               uri: d[0],
               timestamp: d[1],
@@ -397,6 +403,55 @@ export default function FreelancerJobDetailPage() {
 
     load();
   }, [walletAccount.address, jobId]);
+
+  /* ============================================================
+      SYNC DISPUTE STATUS (Self-Healing)
+  ============================================================ */
+  useEffect(() => {
+    if (!escrowData || !escrowData.disputed || !job || !walletAccount) return;
+
+    const syncDisputeData = async () => {
+      try {
+        // Check if dispute exists in DB
+        const { data: existing, error } = await supabase
+          .from("disputes")
+          .select("id")
+          .eq("job_id", jobId.toString())
+          .maybeSingle();
+
+        if (error) {
+          console.error("Error checking dispute sync:", error);
+          return;
+        }
+
+        // If not found in DB but disputed on chain -> Insert it
+        if (!existing) {
+          console.log("⚠️ Dispute missing from DB, syncing...");
+          const disputeReason = escrowData.lastDisputeURI || "ipfs://unknown";
+
+          const { error: insertError } = await supabase
+            .from("disputes")
+            .insert({
+              job_id: jobId.toString(),
+              disputer_address: "0x0000000000000000000000000000000000000000", // Unknown, recovered from chain state
+              dispute_reason_uri: disputeReason,
+              transaction_hash: "0x", // Unknown hash for synced disputes
+              status: "OPEN"
+            });
+
+          if (insertError) {
+            console.error("Failed to sync dispute to DB:", insertError);
+          } else {
+            console.log("✅ Dispute synced to DB successfully");
+          }
+        }
+      } catch (err) {
+        console.error("Sync dispute exception:", err);
+      }
+    };
+
+    syncDisputeData();
+  }, [escrowData, job, walletAccount, jobId]);
 
   /* ============================================================
      ACTION HELPERS
@@ -550,9 +605,13 @@ export default function FreelancerJobDetailPage() {
 
       setDisputeModal(false);
       router.refresh();
-    } catch (err) {
+    } catch (err: any) {
       console.error("raiseDispute error:", err);
-      alert(getFriendlyError(err));
+      if (err.message?.includes("0x62e6201d") || JSON.stringify(err).includes("0x62e6201d")) {
+        alert("This job has already been disputed.");
+      } else {
+        alert(getFriendlyError(err));
+      }
       throw err; // Re-throw to let modal handle error state
     }
   }

@@ -594,6 +594,7 @@ export default function FreelancerJobDetailPage() {
             disputer_address: walletAccount.address,
             dispute_reason_uri: uri,
             transaction_hash: transaction.transactionHash,
+            status: "OPEN",
           });
 
         if (sbError) {

@@ -1107,6 +1107,7 @@ export default function JobAnalyticsPage() {
               disputer_address: nonGasAccount.address,
               dispute_reason_uri: uri,
               transaction_hash: transaction.transactionHash,
+              status: "OPEN",
             });
 
           if (sbError) {

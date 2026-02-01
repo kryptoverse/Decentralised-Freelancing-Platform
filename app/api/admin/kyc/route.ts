@@ -6,6 +6,16 @@ import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 
 export async function POST(request: Request) {
     try {
+        // Check authentication
+        const cookies = (request as any).cookies;
+        const session = cookies?.get?.("admin_session");
+        if (session?.value !== "authenticated") {
+            return NextResponse.json(
+                { success: false, error: "Unauthorized" },
+                { status: 401 }
+            );
+        }
+
         const { freelancerAddress, approve } = await request.json();
 
         if (!freelancerAddress) {

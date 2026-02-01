@@ -3,8 +3,18 @@ import { createThirdwebClient, getContract, readContract } from "thirdweb";
 import { polygonAmoy } from "thirdweb/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 
-export async function GET() {
+export async function GET(req: Request) {
     try {
+        // Check authentication
+        const cookies = (req as any).cookies;
+        const session = cookies?.get?.("admin_session");
+        if (session?.value !== "authenticated") {
+            return NextResponse.json(
+                { success: false, error: "Unauthorized" },
+                { status: 401 }
+            );
+        }
+
         // Create client
         const client = createThirdwebClient({
             secretKey: process.env.NEXT_PUBLIC_THIRDWEB_SECRET_KEY as string,

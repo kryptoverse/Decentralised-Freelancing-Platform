@@ -18,6 +18,15 @@ const polygonAmoyInfura = defineChain({
 
 export async function GET(req: NextRequest) {
     try {
+        // Check authentication
+        const session = req.cookies.get("admin_session");
+        if (session?.value !== "authenticated") {
+            return NextResponse.json(
+                { success: false, error: "Unauthorized" },
+                { status: 401 }
+            );
+        }
+
         console.log("🔍 Fetching disputes from SUPABASE...");
 
         // 1. Fetch open disputes from Supabase

@@ -5,6 +5,15 @@ import { polygonAmoy } from "thirdweb/chains";
 
 export async function POST(req: NextRequest) {
     try {
+        // Check authentication
+        const session = req.cookies.get("admin_session");
+        if (session?.value !== "authenticated") {
+            return NextResponse.json(
+                { success: false, error: "Unauthorized" },
+                { status: 401 }
+            );
+        }
+
         const { escrowAddress, outcome, payoutBps, rating } = await req.json();
 
         if (!escrowAddress) {

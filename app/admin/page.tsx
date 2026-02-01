@@ -95,14 +95,21 @@ export default function AdminPage() {
   const fetchDisputes = async () => {
     try {
       setLoadingDisputes(true);
+      console.log("📋 Fetching disputes from API...");
+
       const res = await fetch("/api/admin/disputes");
       const data = await res.json();
 
+      console.log("📋 Disputes API response:", data);
+
       if (data.success) {
+        console.log(`✅ Loaded ${data.disputes?.length || 0} disputes`);
         setDisputes(data.disputes);
+      } else {
+        console.error("❌ Failed to fetch disputes:", data.error);
       }
     } catch (err: any) {
-      console.error("Failed to fetch disputes:", err);
+      console.error("❌ Failed to fetch disputes:", err);
     } finally {
       setLoadingDisputes(false);
     }
@@ -250,19 +257,73 @@ export default function AdminPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [loginError, setLoginError] = useState("");
 
-  const handleLogin = (e: React.FormEvent) => {
+  // Utility function for copying to clipboard
+  const copyToClipboard = (text: string) => navigator.clipboard.writeText(text);
+
+  // Verify session on mount
+  useEffect(() => {
+    const verifySession = async () => {
+      try {
+        const res = await fetch("/api/admin/verify");
+        const data = await res.json();
+        setIsAuthenticated(data.authenticated);
+      } catch (err) {
+        console.error("Session verification failed:", err);
+        setIsAuthenticated(false);
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+
+    verifySession();
+  }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (username === "admin" && password === "admin123") {
-      setIsAuthenticated(true);
-    } else {
-      alert("Invalid credentials");
+    setLoginError("");
+
+    try {
+      const res = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setIsAuthenticated(true);
+      } else {
+        setLoginError(data.error || "Invalid credentials");
+      }
+    } catch (err) {
+      setLoginError("Login failed. Please try again.");
     }
   };
 
-  if (!isAuthenticated) {
-    const copyToClipboard = (text: string) => navigator.clipboard.writeText(text);
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/admin/logout", { method: "POST" });
+      setIsAuthenticated(false);
+      setUsername("");
+      setPassword("");
+    } catch (err) {
+      console.error("Logout failed:", err);
+    }
+  };
 
+  if (authLoading) {
+    return (
+      <main className="flex items-center justify-center min-h-screen p-4">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </main>
+    );
+  }
+
+  if (!isAuthenticated) {
     return (
       <main className="flex items-center justify-center min-h-screen p-4">
         <div className="w-full max-w-md p-8 border border-border rounded-xl bg-surface-secondary/50 backdrop-blur-sm">
@@ -276,6 +337,12 @@ export default function AdminPage() {
           <p className="text-sm text-center text-muted-foreground mb-8">
             Please enter your credentials to continue
           </p>
+
+          {loginError && (
+            <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+              {loginError}
+            </div>
+          )}
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
@@ -315,14 +382,22 @@ export default function AdminPage() {
   return (
     <main className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <Server className="w-8 h-8 text-primary" />
-          Admin Dashboard
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Manage contracts, KYC verification, and system configuration
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <Server className="w-8 h-8 text-primary" />
+            Admin Dashboard
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Manage contracts, KYC verification, and system configuration
+          </p>
+        </div>
+        <button
+          onClick={handleLogout}
+          className="px-4 py-2 rounded-lg bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20 transition text-sm font-medium"
+        >
+          Logout
+        </button>
       </div>
 
       {/* Contract Deployment Section */}

@@ -5,15 +5,30 @@ import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { ethers } from "ethers";
 import { supabase } from "@/lib/supabase";
 
-// Create Infura-based client for admin operations
+// Check keys and setup robust RPC
+const secretKey = process.env.NEXT_PUBLIC_THIRDWEB_SECRET_KEY;
+const infuraKey = process.env.INFURA_API_KEY;
+
+if (!secretKey) {
+    console.error("❌ ADMIN API: Missing NEXT_PUBLIC_THIRDWEB_SECRET_KEY");
+}
+if (!infuraKey) {
+    console.warn("⚠️ ADMIN API: Missing INFURA_API_KEY, falling back to public RPC");
+}
+
+// Create client
 const infuraClient = createThirdwebClient({
-    secretKey: process.env.NEXT_PUBLIC_THIRDWEB_SECRET_KEY || "",
+    secretKey: secretKey || "", // specific error will be thrown by SDK if empty
 });
 
-// Custom RPC for Infura
+// Custom RPC for Infura with Fallback
+const rpcUrl = infuraKey
+    ? `https://polygon-amoy.infura.io/v3/${infuraKey}`
+    : "https://rpc-amoy.polygon.technology/";
+
 const polygonAmoyInfura = defineChain({
     id: 80002,
-    rpc: `https://polygon-amoy.infura.io/v3/${process.env.INFURA_API_KEY}`,
+    rpc: rpcUrl,
 });
 
 export async function GET(req: NextRequest) {

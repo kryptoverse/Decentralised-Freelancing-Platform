@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
                 const [clientAddr, title, descriptionURI, budgetUSDC, status, hiredFreelancer, escrowAddr] = jobData;
 
                 if (!escrowAddr || escrowAddr === "0x0000000000000000000000000000000000000000") {
-                    return null; // Job might not have escrow or invalid state
+                    throw new Error("Job has no escrow address");
                 }
 
                 // Check active status on escrow
@@ -129,9 +129,29 @@ export async function GET(req: NextRequest) {
                     dbId: record.id // Internal DB ID
                 };
 
-            } catch (err) {
+            } catch (err: any) {
                 console.error(`Error hydrating dispute ${record.id}:`, err);
-                return null;
+                // Return fallback data so it's not hidden
+                return {
+                    jobId: Number(record.job_id),
+                    jobTitle: `Job #${record.job_id} (Sync Error)`,
+                    escrowAddress: "0x0000000000000000000000000000000000000000",
+                    client: "Unknown",
+                    clientName: "Unknown",
+                    freelancer: "Unknown",
+                    freelancerName: "Unknown",
+                    budget: 0,
+                    disputed: true,
+                    delivered: false,
+                    terminal: false,
+                    lastDeliveryURI: "",
+                    lastDisputeURI: record.dispute_reason_uri,
+                    disputeReason: "Failed to sync with blockchain: " + (err.message || "Unknown error"),
+                    jobDescription: "Blockchain sync failed",
+                    createdAt: new Date(record.created_at).getTime(),
+                    dbId: record.id,
+                    isError: true
+                };
             }
         }));
 

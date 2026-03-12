@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -15,9 +15,14 @@ import {
   Loader2,
   ShieldAlert,
   Flag,
+  TrendingUp,
+  RefreshCw,
+  CheckCircle2,
+  Zap,
 } from "lucide-react";
 
 import DisputeModal from "@/components/modals/DisputeModal";
+import DisputeInfoPanel from "@/components/disputes/DisputeInfoPanel";
 
 import {
   getContract,
@@ -26,7 +31,8 @@ import {
   sendTransaction,
 } from "thirdweb";
 
-import { useConnect, useActiveAccount } from "thirdweb/react";
+import { smartWallet } from "thirdweb/wallets";
+import { useConnect, useActiveAccount, useActiveWallet } from "thirdweb/react";
 import { inAppSmartWalletNoGas } from "@/lib/thirdweb";
 import { useIPFSUpload } from "@/hooks/useIPFSUpload";
 
@@ -34,7 +40,6 @@ import { client } from "@/lib/thirdweb-client";
 import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { ipfsToHttp } from "@/utils/ipfs";
-import { supabase } from "@/lib/supabase";
 
 /* ============================================================
    STRICT TYPES
@@ -77,6 +82,7 @@ interface EscrowData {
   terminal: boolean;
   cancelRequestedBy: string;
   lastDisputeURI: string;
+  lastDeliveryURI: string;
   deliveryHistory: Delivery[];
 }
 
@@ -139,6 +145,31 @@ function getFriendlyError(err: unknown): string {
   return "Transaction failed. Please check the console for details.";
 }
 
+const USEROP_ERROR_MESSAGES: Array<[string, string]> = [
+  ["AA21", "⛽ Your wallet has no MATIC to pay gas fees. Please add a small amount of MATIC (e.g. 0.01) to your smart wallet to cover transaction costs."],
+  ["AA25", "⛽ Gas payment failed — your wallet could not pay the required prefund. Please top up your wallet with MATIC."],
+  ["AA31", "⛽ Paymaster deposit is too low. Please try again in a moment or contact support."],
+  ["didn't pay prefund", "⛽ Your wallet has no MATIC to pay gas fees. Please add a small amount of MATIC (e.g. 0.01) to your smart wallet address to continue."],
+  ["insufficient funds", "⛽ Insufficient funds to cover the transaction. Please add MATIC to your wallet."],
+  ["UserOperation reverted", "Transaction was rejected by the network. This is often caused by missing gas funds (MATIC). Please check your wallet balance."],
+];
+
+function getFundraiseError(err: unknown): string {
+  const raw = err && typeof err === "object" && "message" in err
+    ? String((err as any).message ?? "")
+    : String(err ?? "");
+  // Check stringified error too (sometimes nested in JSON)
+  const fullStr = raw + JSON.stringify(err ?? "");
+  for (const [keyword, friendly] of USEROP_ERROR_MESSAGES) {
+    if (fullStr.includes(keyword)) return friendly;
+  }
+  // Fall back to ABI errors
+  for (const [sig, text] of Object.entries(ABI_ERROR_MESSAGES)) {
+    if (fullStr.includes(sig)) return text;
+  }
+  return raw.slice(0, 200) || "Transaction failed. Please try again.";
+}
+
 /* ============================================================
    PAGE
 ============================================================ */
@@ -147,39 +178,34 @@ export default function FreelancerJobDetailPage() {
   const params = useParams<{ jobId: string }>();
 
   /* ============================================================
-     FORCE NON-SPONSORED SMART WALLET
+     WALLET SETUP
   ============================================================ */
   const { connect, isConnecting } = useConnect();
   const account = useActiveAccount();
+  const activeWallet = useActiveWallet();
   const { uploadMetadata } = useIPFSUpload();
 
-  useEffect(() => {
-    if (account || isConnecting) return;
 
-    let mounted = true;
-    (async () => {
-      try {
-        await connect(inAppSmartWalletNoGas);
-      } catch (err) {
-        if (mounted) console.error("Failed to connect smart wallet:", err);
-      }
-    })();
-
-    return () => {
-      mounted = false;
-    };
-  }, [account, isConnecting, connect]);
 
   if (!account)
     return <main className="p-8">Connecting to your smart wallet...</main>;
 
   const walletAccount = account;
 
+  // Non-sponsored execution account (same smart wallet, no paymaster)
+  async function getExecutionAccount() {
+    if (!activeWallet) throw new Error("No active wallet");
+    const personal = (activeWallet as any).getAdminAccount?.();
+    if (!personal) throw new Error("Could not get personal EOA");
+    return await smartWallet({ chain: CHAIN, sponsorGas: false }).connect({ client, personalAccount: personal });
+  }
+
   const [job, setJob] = useState<Job | null>(null);
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [description, setDescription] = useState("");
   const [escrowData, setEscrowData] = useState<EscrowData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [isKYCVerified, setIsKYCVerified] = useState<boolean | null>(null);
   const [showKYCModal, setShowKYCModal] = useState(false);
 
@@ -191,6 +217,19 @@ export default function FreelancerJobDetailPage() {
   const [deliverNotes, setDeliverNotes] = useState("");
   const [deliverLoading, setDeliverLoading] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
+
+  // ── Fundraise state ──────────────────────────────────
+  const [fundraiseAddr, setFundraiseAddr] = useState<string | null>(null);
+  const [fundraiseData, setFundraiseData] = useState<{
+    targetAmount: bigint; totalRaised: bigint; fundingDeadline: bigint;
+    investorProfitShareBps: bigint; isResolved: boolean; isAccepted: boolean;
+    payoutDistributed: boolean; freelancerClaimed: boolean; freelancerPoolTotal: bigint;
+    raisedFundsWithdrawn: boolean;
+  } | null>(null);
+  const [frForm, setFrForm] = useState({ targetUSDT: "", profitShare: "30", durationDays: "7" });
+  const [frStep, setFrStep] = useState<"idle" | "creating" | "linking" | "done" | "error">("idle");
+  const [frError, setFrError] = useState("");
+  const [frTxLoading, setFrTxLoading] = useState("");
 
   const jobId = useMemo(() => {
     try {
@@ -321,7 +360,13 @@ export default function FreelancerJobDetailPage() {
             params: [jobId, walletAccount.address as `0x${string}`],
           });
 
-          const [_f, appliedAt, propUri, bidAmt, deliveryDays] = rawP as any;
+          const [
+            _f,
+            appliedAt,
+            propUri,
+            bidAmt,
+            deliveryDays,
+          ] = rawP as [string, bigint, string, bigint, bigint];
 
           let txt = propUri;
           try {
@@ -387,12 +432,48 @@ export default function FreelancerJobDetailPage() {
             terminal,
             cancelRequestedBy,
             lastDisputeURI: typeof lastDisputeURI === 'string' ? lastDisputeURI : '',
+            lastDeliveryURI: typeof lastDisputeURI === 'string' ? (await readContract({
+              contract: escrowC,
+              method: "function lastDeliveryURI() view returns (string)",
+            }).catch(() => '')) as string : '',
             deliveryHistory: (deliveryHistory as any[]).map((d: any) => ({
               uri: d[0],
               timestamp: d[1],
               version: d[2],
             })),
           });
+
+          // ── Load fundraise if linked ──────────────────────
+          try {
+            const linkedFundraise = await readContract({
+              contract: escrowC,
+              method: "function fundraiseContract() view returns (address)",
+            }) as string;
+            const ZERO = "0x0000000000000000000000000000000000000000";
+            if (linkedFundraise && linkedFundraise !== ZERO) {
+              setFundraiseAddr(linkedFundraise);
+              const fc = getContract({ client, chain: CHAIN, address: linkedFundraise as `0x${string}` });
+              const [tgt, raised, deadline, bps, isRes, isAcc, payDist, frClaimed, frPool, rwdrawn] = await Promise.all([
+                readContract({ contract: fc, method: "function targetAmount() view returns (uint256)" }),
+                readContract({ contract: fc, method: "function totalRaised() view returns (uint256)" }),
+                readContract({ contract: fc, method: "function fundingDeadline() view returns (uint64)" }),
+                readContract({ contract: fc, method: "function investorProfitShareBps() view returns (uint96)" }),
+                readContract({ contract: fc, method: "function isResolved() view returns (bool)" }),
+                readContract({ contract: fc, method: "function isAccepted() view returns (bool)" }),
+                readContract({ contract: fc, method: "function payoutDistributed() view returns (bool)" }),
+                readContract({ contract: fc, method: "function freelancerClaimed() view returns (bool)" }),
+                readContract({ contract: fc, method: "function freelancerPoolTotal() view returns (uint256)" }),
+                readContract({ contract: fc, method: "function raisedFundsWithdrawn() view returns (bool)" }),
+              ]);
+              setFundraiseData({
+                targetAmount: tgt as bigint, totalRaised: raised as bigint,
+                fundingDeadline: deadline as bigint, investorProfitShareBps: bps as bigint,
+                isResolved: isRes as boolean, isAccepted: isAcc as boolean,
+                payoutDistributed: payDist as boolean, freelancerClaimed: frClaimed as boolean,
+                freelancerPoolTotal: frPool as bigint, raisedFundsWithdrawn: rwdrawn as boolean,
+              });
+            }
+          } catch { /* no fundraise linked */ }
         }
       } catch (err) {
         console.error(err);
@@ -403,55 +484,6 @@ export default function FreelancerJobDetailPage() {
 
     load();
   }, [walletAccount.address, jobId]);
-
-  /* ============================================================
-      SYNC DISPUTE STATUS (Self-Healing)
-  ============================================================ */
-  useEffect(() => {
-    if (!escrowData || !escrowData.disputed || !job || !walletAccount) return;
-
-    const syncDisputeData = async () => {
-      try {
-        // Check if dispute exists in DB
-        const { data: existing, error } = await supabase
-          .from("disputes")
-          .select("id")
-          .eq("job_id", jobId.toString())
-          .maybeSingle();
-
-        if (error) {
-          console.error("Error checking dispute sync:", error);
-          return;
-        }
-
-        // If not found in DB but disputed on chain -> Insert it
-        if (!existing) {
-          console.log("⚠️ Dispute missing from DB, syncing...");
-          const disputeReason = escrowData.lastDisputeURI || "ipfs://unknown";
-
-          const { error: insertError } = await supabase
-            .from("disputes")
-            .insert({
-              job_id: jobId.toString(),
-              disputer_address: "0x0000000000000000000000000000000000000000", // Unknown, recovered from chain state
-              dispute_reason_uri: disputeReason,
-              transaction_hash: "0x", // Unknown hash for synced disputes
-              status: "OPEN"
-            });
-
-          if (insertError) {
-            console.error("Failed to sync dispute to DB:", insertError);
-          } else {
-            console.log("✅ Dispute synced to DB successfully");
-          }
-        }
-      } catch (err) {
-        console.error("Sync dispute exception:", err);
-      }
-    };
-
-    syncDisputeData();
-  }, [escrowData, job, walletAccount, jobId]);
 
   /* ============================================================
      ACTION HELPERS
@@ -585,25 +617,6 @@ export default function FreelancerJobDetailPage() {
 
       const transaction = await sendTransaction({ account: walletAccount, transaction: tx });
 
-      // Store in Supabase
-      try {
-        const { error: sbError } = await supabase
-          .from('disputes')
-          .insert({
-            job_id: jobId.toString(),
-            disputer_address: walletAccount.address,
-            dispute_reason_uri: uri,
-            transaction_hash: transaction.transactionHash,
-            status: "OPEN",
-          });
-
-        if (sbError) {
-          console.error("Supabase insert error:", sbError);
-        }
-      } catch (err) {
-        console.error("Failed to save dispute to DB:", err);
-      }
-
       setDisputeModal(false);
       router.refresh();
     } catch (err: any) {
@@ -618,8 +631,154 @@ export default function FreelancerJobDetailPage() {
   }
 
   /* ============================================================
+     FUNDRAISE ACTIONS
+  ============================================================ */
+
+  async function handleRefreshPage() {
+    setRefreshing(true);
+    // Re-trigger by invalidating and re-calling load flow
+    setFundraiseAddr(null);
+    setFundraiseData(null);
+    // Trigger load via router.refresh (will re-render server components)
+    // For client state, we manually reload:
+    window.location.reload();
+  }
+
+  async function handleCreateFundraise() {
+    if (!escrowData) return;
+    const targetRaw = parseFloat(frForm.targetUSDT);
+    const profitBps = parseFloat(frForm.profitShare);
+    const durationSecs = parseInt(frForm.durationDays) * 86400;
+
+    const jobAmountUSDT = Number(proposal?.bidAmount || 0n) / 1e6;
+
+    if (isNaN(targetRaw) || targetRaw <= 0) { setFrError("Enter a valid target amount"); return; }
+    if (targetRaw > jobAmountUSDT) { setFrError(`Target amount must not exceed the job reward (${jobAmountUSDT} USDT)`); return; }
+    if (profitBps < 0 || profitBps > 100) { setFrError("Profit share must be 0–100%"); return; }
+    if (durationSecs < 86400) { setFrError("Minimum 1 day duration"); return; }
+
+    const targetAmountRaw = BigInt(Math.floor(targetRaw * 1e6));
+    const bps = BigInt(Math.floor(profitBps * 100)); // e.g. 50% → 5000
+
+    setFrError(""); setFrStep("creating");
+    try {
+      const execAccount = await getExecutionAccount();
+      const factory = getContract({
+        client, chain: CHAIN,
+        address: DEPLOYED_CONTRACTS.addresses.FundraiseFactory as `0x${string}`,
+      });
+
+      const createTx = prepareContractCall({
+        contract: factory,
+        method: "function createFundraise(address,uint256,uint96,uint64) returns (address)",
+        params: [escrowData.escrowAddr as `0x${string}`, targetAmountRaw, bps, BigInt(durationSecs)],
+        gas: 3000000n,
+      });
+
+      const receipt = await sendTransaction({ transaction: createTx, account: execAccount });
+      // Wait briefly then link
+      await new Promise((r) => setTimeout(r, 3000));
+
+      // We need to find the deployed fundraise address from FundraiseFactory
+      // Read total fundraises and get the last one
+      const total = await readContract({
+        contract: factory, method: "function getTotalFundraises() view returns (uint256)",
+      }) as bigint;
+      const newFundraiseAddr = (await readContract({
+        contract: factory,
+        method: "function getFundraises(uint256,uint256) view returns (address[])",
+        params: [total - 1n, 1n],
+      }) as string[])[0];
+
+      // Step 2: Link to escrow
+      setFrStep("linking");
+      const escrowC = getContract({ client, chain: CHAIN, address: escrowData.escrowAddr as `0x${string}` });
+      await sendTransaction({
+        transaction: prepareContractCall({
+          contract: escrowC,
+          method: "function setFundraiseContract(address)",
+          params: [newFundraiseAddr as `0x${string}`],
+          gas: 150000n,
+        }),
+        account: execAccount,
+      });
+
+      setFundraiseAddr(newFundraiseAddr);
+      setFrStep("done");
+      // Reload page to get fresh state
+      setTimeout(() => window.location.reload(), 2000);
+    } catch (err: any) {
+      setFrError(getFundraiseError(err));
+      setFrStep("error");
+    }
+  }
+
+  async function handleWithdrawFunds() {
+    if (!fundraiseAddr) return;
+    setFrTxLoading("withdraw");
+    try {
+      const execAccount = await getExecutionAccount();
+      const fc = getContract({ client, chain: CHAIN, address: fundraiseAddr as `0x${string}` });
+      await sendTransaction({
+        transaction: prepareContractCall({ contract: fc, method: "function withdrawRaisedFunds()", params: [], gas: 150000n }),
+        account: execAccount,
+      });
+      window.location.reload();
+    } catch (err: any) {
+      setFrError(getFundraiseError(err));
+      setFrStep("error");
+    } finally {
+      setFrTxLoading("");
+    }
+  }
+
+  async function handleClaimFreelancer() {
+    if (!fundraiseAddr) return;
+    setFrTxLoading("claim");
+    try {
+      const execAccount = await getExecutionAccount();
+      const fc = getContract({ client, chain: CHAIN, address: fundraiseAddr as `0x${string}` });
+      await sendTransaction({
+        transaction: prepareContractCall({ contract: fc, method: "function claimFreelancer()", params: [], gas: 150000n }),
+        account: execAccount,
+      });
+      window.location.reload();
+    } catch (err: any) {
+      setFrError(getFundraiseError(err));
+      setFrStep("error");
+    } finally {
+      setFrTxLoading("");
+    }
+  }
+
+  async function handleResolveFundraise(acceptPartial: boolean) {
+    if (!fundraiseAddr) return;
+    setFrTxLoading("resolve");
+    try {
+      const execAccount = await getExecutionAccount();
+      const fc = getContract({ client, chain: CHAIN, address: fundraiseAddr as `0x${string}` });
+      await sendTransaction({
+        transaction: prepareContractCall({
+          contract: fc,
+          method: "function resolveFundraise(bool)",
+          params: [acceptPartial],
+          gas: 150000n,
+        }),
+        account: execAccount,
+      });
+      window.location.reload();
+    } catch (err: any) {
+      setFrError(getFundraiseError(err));
+      setFrStep("error");
+    } finally {
+      setFrTxLoading("");
+    }
+  }
+
+  /* ============================================================
      RENDER
   ============================================================ */
+
 
   if (loading || !job) {
     return (
@@ -635,284 +794,476 @@ export default function FreelancerJobDetailPage() {
   const nowBn = BigInt(Math.floor(Date.now() / 1000));
   const canDeliver =
     job.status === 2 &&
-    escrowData &&
-    !escrowData.disputed &&
-    !escrowData.terminal; // Check disputed flag to prevent delivery during disputes
+    escrowData != null &&
+    !escrowData.terminal; // Only terminal state blocks delivery; disputes allow more work submissions
 
   const isHired =
-    job.status === 2 &&
+    job.status >= 2 && job.status !== 5 &&
     job.hiredFreelancer.toLowerCase() === walletAccount.address.toLowerCase();
+
+  const fmtUSDT = (v: bigint) => (Number(v) / 1e6).toLocaleString("en-US", { minimumFractionDigits: 2 });
+  const fmtTs = (ts: bigint) => {
+    if (!ts || Number(ts) === 0) return "—";
+    const diff = Number(ts) - Math.floor(Date.now() / 1000);
+    if (diff <= 0) return "Deadline passed";
+    const d = Math.floor(diff / 86400);
+    const h = Math.floor((diff % 86400) / 3600);
+    return d > 0 ? `${d}d ${h}h remaining` : `${h}h remaining`;
+  };
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  const jobAmountUSDT = Number(proposal?.bidAmount || job?.budgetUSDC || 0n) / 1e6;
 
   return (
     <>
-      <main className="max-w-4xl mx-auto p-4 space-y-8">
+      <div className="max-w-7xl mx-auto p-4 md:p-6">
 
-        {/* BACK BUTTON */}
+        {/* BACK */}
         <button
-          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6"
           onClick={() => router.back()}
         >
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
 
-        {/* JOB CARD */}
-        <section className="p-6 border rounded-2xl bg-surface-secondary space-y-4">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <h1 className="text-2xl md:text-3xl font-bold">{job.title}</h1>
+        {/* TWO-COLUMN GRID */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 items-start">
 
-            <span className={`px-3 py-1 text-xs border rounded-full ${statusColor}`}>
-              {jobStatus}
-              {isHired && " • You’re hired"}
-            </span>
-          </div>
+          {/* ══════════════ LEFT COLUMN ══════════════ */}
+          <div className="space-y-6">
 
-          <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <DollarSign className="w-4 h-4" />
-              {(Number(job.budgetUSDC) / 1e6).toFixed(2)} USDT
-            </span>
-
-            <span className="flex items-center gap-1">
-              <Clock className="w-4 h-4" />
-              Posted: {fmt(job.createdAt)}
-            </span>
-          </div>
-
-          {job.tags.length > 0 && (
-            <div className="flex gap-2 flex-wrap">
-              {job.tags.map((t, i) => (
-                <span
-                  key={i}
-                  className="px-2 py-1 text-xs bg-primary/10 border border-primary/30 rounded-full text-primary flex items-center gap-1"
-                >
-                  <Tag className="w-3 h-3" />
-                  {t}
+            {/* JOB HEADER */}
+            <section className="p-6 border rounded-2xl bg-surface space-y-4">
+              <div className="flex items-start justify-between flex-wrap gap-3">
+                <div className="space-y-1 flex-1 min-w-0">
+                  <h1 className="text-2xl md:text-3xl font-bold leading-tight">{job.title}</h1>
+                  <p className="text-xs text-muted-foreground font-mono">
+                    Client: {job.client.slice(0, 10)}…{job.client.slice(-8)}
+                  </p>
+                </div>
+                <span className={`px-3 py-1.5 text-xs border rounded-full font-medium shrink-0 ${statusColor}`}>
+                  {jobStatus}{isHired && " · You're hired"}
                 </span>
-              ))}
-            </div>
-          )}
-        </section>
+              </div>
 
-        {/* DESCRIPTION */}
-        <section className="p-6 border rounded-2xl bg-surface space-y-3">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <FileText className="w-5 h-5" /> Job Description
-          </h2>
-          <p className="text-sm whitespace-pre-wrap text-muted-foreground">{description}</p>
-        </section>
-
-        {/* PROPOSAL */}
-        {proposal && (
-          <section className="p-6 border rounded-2xl bg-surface space-y-3">
-            <h2 className="text-lg font-semibold">Your Proposal</h2>
-
-            <p className="text-xs text-muted-foreground">
-              Applied: {fmt(proposal.appliedAt)}
-            </p>
-
-            <p className="text-sm whitespace-pre-wrap">{proposal.proposalText}</p>
-
-            <div className="flex flex-wrap gap-4 text-sm text-muted-foreground mt-3">
-              <span>
-                Bid: <strong>{(Number(proposal.bidAmount) / 1e6).toFixed(2)} USDT</strong>
-              </span>
-              <span>
-                Delivery: <strong>{proposal.deliveryDays.toString()} days</strong>
-              </span>
-            </div>
-          </section>
-        )}
-
-        {/* ESCROW */}
-        {isHired && escrowData && (
-          <section className="p-6 border rounded-2xl bg-surface space-y-6">
-            <h2 className="text-lg font-bold">Escrow Timeline</h2>
-
-            <div className="grid sm:grid-cols-2 gap-4">
-              <TimelineCard label="Cancel Window Ends" value={fmt(escrowData.cancelEnd)} />
-              <TimelineCard label="Delivery Due" value={fmt(escrowData.deliveryDue)} />
-              <TimelineCard
-                label="Review Window Ends"
-                value={escrowData.reviewDue === 0n ? "Not delivered" : fmt(escrowData.reviewDue)}
-              />
-            </div>
-
-            {/* CANCEL STATUS */}
-            {escrowData.cancelRequestedBy !==
-              "0x0000000000000000000000000000000000000000" && (
-                <div className="p-4 rounded-xl border bg-amber-500/10 text-amber-400 flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4" />
-                  {escrowData.cancelRequestedBy.toLowerCase() ===
-                    walletAccount.address.toLowerCase()
-                    ? "You requested cancellation. Waiting for client."
-                    : "Client requested cancellation. You must accept or reject."}
+              {job.tags.length > 0 && (
+                <div className="flex gap-2 flex-wrap">
+                  {job.tags.map((t, i) => (
+                    <span key={i} className="px-2 py-1 text-xs bg-primary/10 border border-primary/30 rounded-full text-primary flex items-center gap-1">
+                      <Tag className="w-3 h-3" />{t}
+                    </span>
+                  ))}
                 </div>
               )}
+            </section>
 
-            {/* DISPUTED STATUS */}
-            {escrowData.disputed && (
-              <div className="p-4 rounded-xl border border-red-500/40 bg-red-500/10 text-red-400 flex items-center gap-2">
-                <Flag className="w-4 h-4" />
-                This job is currently in dispute. Further actions are restricted until the admin resolves the dispute.
+            {/* DISPUTE INFO PANEL */}
+            {isHired && escrowData && (escrowData.disputed || escrowData.terminal) && (
+              <DisputeInfoPanel
+                lastDisputeURI={escrowData.lastDisputeURI}
+                clientAddr={job.client}
+                freelancerAddr={walletAccount.address}
+                terminal={escrowData.terminal}
+                delivered={escrowData.delivered}
+                lastDeliveryURI={escrowData.lastDeliveryURI || escrowData.deliveryHistory[escrowData.deliveryHistory.length - 1]?.uri}
+                viewerRole="freelancer"
+              />
+            )}
+
+            {/* DESCRIPTION */}
+            <section className="p-6 border rounded-2xl bg-surface space-y-3">
+              <h2 className="text-base font-semibold flex items-center gap-2">
+                <FileText className="w-4 h-4 text-primary" /> Job Description
+              </h2>
+              <p className="text-sm whitespace-pre-wrap text-muted-foreground leading-relaxed">{description}</p>
+            </section>
+
+            {/* PROPOSAL */}
+            {proposal && (
+              <section className="p-6 border rounded-2xl bg-surface space-y-4">
+                <h2 className="text-base font-semibold">Your Proposal</h2>
+                <p className="text-sm whitespace-pre-wrap text-muted-foreground leading-relaxed">{proposal.proposalText}</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
+                  <div className="bg-surface-secondary rounded-xl p-3">
+                    <p className="text-xs text-muted-foreground">Applied</p>
+                    <p className="text-sm font-medium mt-0.5">{fmt(proposal.appliedAt)}</p>
+                  </div>
+                  <div className="bg-surface-secondary rounded-xl p-3">
+                    <p className="text-xs text-muted-foreground">Your Bid</p>
+                    <p className="text-sm font-bold text-emerald-400 mt-0.5">{(Number(proposal.bidAmount) / 1e6).toFixed(2)} USDT</p>
+                  </div>
+                  <div className="bg-surface-secondary rounded-xl p-3">
+                    <p className="text-xs text-muted-foreground">Delivery</p>
+                    <p className="text-sm font-medium mt-0.5">{proposal.deliveryDays.toString()} days</p>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* DELIVERY HISTORY */}
+            {isHired && escrowData && escrowData.deliveryHistory.length > 0 && (
+              <section className="p-6 border rounded-2xl bg-surface space-y-4">
+                <h2 className="text-base font-semibold flex items-center gap-2">
+                  <Send className="w-4 h-4 text-primary" />
+                  Delivery History
+                  <span className="text-xs font-normal text-muted-foreground">
+                    ({escrowData.deliveryHistory.length} submission{escrowData.deliveryHistory.length !== 1 ? "s" : ""})
+                  </span>
+                </h2>
+                <div className="space-y-3">
+                  {escrowData.deliveryHistory.map((delivery, idx) => {
+                    const isLatest = idx === escrowData.deliveryHistory.length - 1;
+                    return (
+                      <div key={idx} className={`p-4 border rounded-xl flex items-center justify-between gap-4 ${isLatest ? "bg-primary/5 border-primary/30" : "bg-surface-secondary border-border"}`}>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-sm font-semibold shrink-0">v{delivery.version.toString()}</span>
+                          {isLatest && <span className="px-2 py-0.5 text-[10px] bg-primary text-primary-foreground rounded-full">Latest</span>}
+                          <span className="text-xs text-muted-foreground truncate">{fmt(delivery.timestamp)}</span>
+                        </div>
+                        <a href={ipfsToHttp(delivery.uri)} target="_blank" rel="noopener noreferrer"
+                          className="text-xs text-primary hover:underline flex items-center gap-1 shrink-0">
+                          <Send className="w-3 h-3" /> View
+                        </a>
+                      </div>
+                    );
+                  })}
+                </div>
+                {escrowData.deliveryHistory.length > 1 && (
+                  <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl text-xs text-blue-400 flex items-center gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    Client reviews only the latest submission.
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* FUNDRAISE HUB — available for jobs ≥ $1000 or if already linked */}
+            {isHired && escrowData && (fundraiseAddr || (!escrowData.terminal && jobAmountUSDT >= 1000)) && (
+              <section className="p-6 border border-primary/30 rounded-2xl bg-primary/5 space-y-5">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-base font-semibold flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-primary" /> {fundraiseAddr ? "Fundraise Dashboard" : "Raise Funds"}
+                  </h2>
+                  <button onClick={handleRefreshPage} disabled={refreshing}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-surface-secondary transition-colors">
+                    <RefreshCw className={`w-3 h-3 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+                  </button>
+                </div>
+
+                {!fundraiseAddr ? (
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Need funding? Create a fundraise — investors pool USDT which you withdraw upfront. When the client approves, the escrow rewards flow through the fundraise contract. Investors get principal + profit share; you keep the rest.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground">Target Amount (USDT)</label>
+                        <input type="number" placeholder="e.g. 500" value={frForm.targetUSDT}
+                          onChange={e => setFrForm(f => ({ ...f, targetUSDT: e.target.value }))}
+                          className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground">Investor Profit Share (%)</label>
+                        <input type="number" placeholder="e.g. 30" min="0" max="50" value={frForm.profitShare}
+                          onChange={e => setFrForm(f => ({ ...f, profitShare: e.target.value }))}
+                          className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground">Duration (days)</label>
+                        <input type="number" placeholder="e.g. 7" min="1" value={frForm.durationDays}
+                          onChange={e => setFrForm(f => ({ ...f, durationDays: e.target.value }))}
+                          className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+                      </div>
+                    </div>
+
+                    {frForm.targetUSDT && frForm.profitShare && (() => {
+                      const tgtRaw = parseFloat(frForm.targetUSDT);
+                      const profitPct = parseFloat(frForm.profitShare);
+                      if (isNaN(tgtRaw) || isNaN(profitPct)) return null;
+                      const isValid = tgtRaw > 0 && tgtRaw <= jobAmountUSDT;
+                      const netProfit = jobAmountUSDT > tgtRaw ? jobAmountUSDT - tgtRaw : 0;
+                      const invShare = netProfit * (profitPct / 100);
+                      const yourEarnings = netProfit - invShare;
+                      return (
+                        <div className={`text-xs p-4 rounded-xl border space-y-2 ${isValid ? "bg-surface border-primary/20" : "bg-red-500/10 border-red-500/30"}`}>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <p className="text-muted-foreground">Job Reward</p>
+                              <p className="font-medium">{jobAmountUSDT} USDT</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Your Target</p>
+                              <p className={`font-medium ${isValid ? "" : "text-red-400"}`}>{frForm.targetUSDT} USDT{!isValid && " ⚠ max allowed is job reward"}</p>
+                            </div>
+                            {isValid && <>
+                              <div>
+                                <p className="text-muted-foreground">Investors Get</p>
+                                <p className="font-medium text-emerald-400">{(tgtRaw + invShare).toFixed(2)} USDT</p>
+                              </div>
+                              <div className="col-span-2 p-2 bg-primary/10 rounded-lg">
+                                <p className="text-muted-foreground">Your Projected Earnings</p>
+                                <p className="font-bold text-base text-primary">{yourEarnings.toFixed(2)} USDT</p>
+                              </div>
+                            </>}
+                          </div>
+                          {isValid && <p className="text-amber-400 flex items-center gap-1"><Zap className="w-3 h-3" /> Requires 2 transactions: deploy + link to escrow</p>}
+                        </div>
+                      );
+                    })()}
+
+                    {frError && <p className="text-red-400 text-xs flex items-center gap-1"><AlertTriangle className="w-3 h-3" />{frError}</p>}
+
+                    {(frStep === "creating" || frStep === "linking" || frStep === "done") && (
+                      <div className="flex items-center gap-2 text-sm text-primary">
+                        {frStep !== "done" ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                        {frStep === "creating" && "Deploying fundraise contract..."}
+                        {frStep === "linking" && "Linking to your escrow..."}
+                        {frStep === "done" && "Fundraise created! Reloading..."}
+                      </div>
+                    )}
+
+                    <button onClick={handleCreateFundraise}
+                      disabled={frStep === "creating" || frStep === "linking" || frStep === "done"}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary to-purple-500 text-white font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-50">
+                      {(frStep === "creating" || frStep === "linking") ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                      Create Fundraise
+                    </button>
+                  </div>
+                ) : fundraiseData ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="bg-surface rounded-xl p-3">
+                        <p className="text-xs text-muted-foreground mb-1">Raised</p>
+                        <p className="font-bold text-emerald-400 text-sm">{fmtUSDT(fundraiseData.totalRaised)} USDT</p>
+                      </div>
+                      <div className="bg-surface rounded-xl p-3">
+                        <p className="text-xs text-muted-foreground mb-1">Target</p>
+                        <p className="font-bold text-sm">{fmtUSDT(fundraiseData.targetAmount)} USDT</p>
+                      </div>
+                      <div className="bg-surface rounded-xl p-3">
+                        <p className="text-xs text-muted-foreground mb-1">Profit Share</p>
+                        <p className="font-bold text-primary text-sm">{Number(fundraiseData.investorProfitShareBps) / 100}%</p>
+                      </div>
+                      <div className="bg-surface rounded-xl p-3">
+                        <p className="text-xs text-muted-foreground mb-1">Deadline</p>
+                        <p className={`font-bold text-xs ${fundraiseData.fundingDeadline <= now ? "text-red-400" : "text-amber-400"}`}>
+                          {fmtTs(fundraiseData.fundingDeadline)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Funding Progress</span>
+                        <span>{Math.min(100, Math.round(Number(fundraiseData.totalRaised * 10000n / fundraiseData.targetAmount) / 100))}%</span>
+                      </div>
+                      <div className="h-2 bg-surface rounded-full overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all"
+                          style={{ width: `${Math.min(100, Math.round(Number(fundraiseData.totalRaised * 10000n / fundraiseData.targetAmount) / 100))}%` }} />
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground font-mono">Contract: {fundraiseAddr!.slice(0, 12)}…{fundraiseAddr!.slice(-8)}</p>
+
+                    <div className="flex flex-wrap gap-2">
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${fundraiseData.isResolved ? "bg-blue-500/20 text-blue-400" : "bg-emerald-500/20 text-emerald-400"}`}>
+                        {fundraiseData.isResolved ? (fundraiseData.isAccepted ? "✅ Accepted" : "❌ Rejected") : "⏳ Fundraising Active"}
+                      </span>
+                      {fundraiseData.raisedFundsWithdrawn && <span className="px-2.5 py-1 rounded-full text-xs bg-amber-500/20 text-amber-400">Funds Withdrawn</span>}
+                      {fundraiseData.payoutDistributed && <span className="px-2.5 py-1 rounded-full text-xs bg-purple-500/20 text-purple-400">Payout Distributed</span>}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {!fundraiseData.isResolved && (fundraiseData.fundingDeadline <= now || fundraiseData.totalRaised >= fundraiseData.targetAmount) && (
+                        <>
+                          <button onClick={() => handleResolveFundraise(true)} disabled={!!frTxLoading}
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50">
+                            {frTxLoading === "resolve" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                            Accept & Unlock Funds
+                          </button>
+                          <button onClick={() => handleResolveFundraise(false)} disabled={!!frTxLoading}
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-500/20 text-red-400 border border-red-500/30 text-sm font-medium hover:bg-red-500/30 disabled:opacity-50">
+                            Reject & Refund Investors
+                          </button>
+                        </>
+                      )}
+                      {fundraiseData.isResolved && fundraiseData.isAccepted && !fundraiseData.raisedFundsWithdrawn && !fundraiseData.payoutDistributed && (
+                        <button onClick={handleWithdrawFunds} disabled={!!frTxLoading}
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-primary to-purple-500 text-white text-sm font-semibold hover:opacity-90 disabled:opacity-50">
+                          {frTxLoading === "withdraw" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <DollarSign className="w-3.5 h-3.5" />}
+                          Withdraw {fmtUSDT(fundraiseData.totalRaised)} USDT
+                        </button>
+                      )}
+                      {fundraiseData.freelancerClaimed && (
+                        <div className="flex items-center gap-1.5 text-sm text-emerald-400"><CheckCircle2 className="w-4 h-4" /> Earnings claimed</div>
+                      )}
+                    </div>
+
+                    {/* Prominent claim banner — shown when job is done and freelancer has unclaimed earnings */}
+                    {fundraiseData.payoutDistributed && !fundraiseData.freelancerClaimed && fundraiseData.freelancerPoolTotal > 0n && (
+                      <div className="p-4 bg-amber-500/10 border border-amber-500/40 rounded-xl space-y-3">
+                        <div className="flex items-center gap-2 text-amber-400 font-semibold text-sm">
+                          <Zap className="w-4 h-4 shrink-0" />
+                          Your earnings are ready to claim!
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          The job is complete and your share has been calculated. Your <span className="text-amber-400 font-semibold">{fmtUSDT(fundraiseData.freelancerPoolTotal)} USDT</span> is currently held inside the fundraise contract — it is <strong>not</strong> sent to your wallet automatically. Click below to transfer it.
+                        </p>
+                        <button
+                          onClick={handleClaimFreelancer}
+                          disabled={!!frTxLoading}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+                        >
+                          {frTxLoading === "claim" ? <Loader2 className="w-4 h-4 animate-spin" /> : <DollarSign className="w-4 h-4" />}
+                          Claim {fmtUSDT(fundraiseData.freelancerPoolTotal)} USDT to My Wallet
+                        </button>
+                      </div>
+                    )}
+
+
+                    {frError && (
+                      <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-400 flex items-start gap-2">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                        <span>{frError}</span>
+                        <button onClick={() => setFrError("")} className="ml-auto shrink-0 hover:text-red-300">✕</button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Loading fundraise data...
+                  </div>
+                )}
+              </section>
+            )}
+          </div>
+
+          {/* ══════════════ RIGHT COLUMN ══════════════ */}
+          <div className="space-y-4 lg:sticky lg:top-6">
+
+            {/* QUICK STATS */}
+            <div className="p-5 border rounded-2xl bg-surface-secondary space-y-4">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Job Overview</h3>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground flex items-center gap-1.5"><DollarSign className="w-3.5 h-3.5" /> Budget</span>
+                  <span className="text-sm font-bold text-emerald-400">{(Number(job.budgetUSDC) / 1e6).toFixed(2)} USDT</span>
+                </div>
+                {proposal && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-muted-foreground flex items-center gap-1.5"><Tag className="w-3.5 h-3.5" /> Your Bid</span>
+                    <span className="text-sm font-bold text-primary">{(Number(proposal.bidAmount) / 1e6).toFixed(2)} USDT</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Posted</span>
+                  <span className="text-xs text-right">{fmt(job.createdAt)}</span>
+                </div>
+                {job.expiresAt && Number(job.expiresAt) > 0 && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-muted-foreground">Expires</span>
+                    <span className="text-xs text-right">{fmt(job.expiresAt)}</span>
+                  </div>
+                )}
+                {isHired && escrowData && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-muted-foreground">Escrow</span>
+                    <a href={`https://sepolia.basescan.org/address/${escrowData.escrowAddr}`} target="_blank" rel="noopener noreferrer"
+                      className="text-xs text-primary hover:underline font-mono">
+                      {escrowData.escrowAddr.slice(0, 8)}…{escrowData.escrowAddr.slice(-6)}
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ESCROW TIMELINE */}
+            {isHired && escrowData && (
+              <div className="p-5 border rounded-2xl bg-surface-secondary space-y-3">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Escrow Timeline</h3>
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between items-center py-2 border-b border-border/50">
+                    <span className="text-muted-foreground">Cancel Window</span>
+                    <span className="font-medium text-right">{fmt(escrowData.cancelEnd)}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-border/50">
+                    <span className="text-muted-foreground">Delivery Due</span>
+                    <span className="font-medium text-right">{fmt(escrowData.deliveryDue)}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-muted-foreground">Review Ends</span>
+                    <span className="font-medium text-right">{escrowData.reviewDue === 0n ? "Not started" : fmt(escrowData.reviewDue)}</span>
+                  </div>
+                </div>
+
+                {/* Status banners */}
+                {escrowData.cancelRequestedBy !== "0x0000000000000000000000000000000000000000" && (
+                  <div className="p-3 rounded-xl bg-amber-500/10 text-amber-400 text-xs flex items-start gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    {escrowData.cancelRequestedBy.toLowerCase() === walletAccount.address.toLowerCase()
+                      ? "You requested cancellation. Waiting for client."
+                      : "Client requested cancellation."}
+                  </div>
+                )}
+                {escrowData.disputed && (
+                  <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-start gap-2">
+                    <Flag className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    Job is in dispute. Actions restricted until admin resolves.
+                  </div>
+                )}
+                {escrowData.delivered && !escrowData.terminal && (
+                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                    Work delivered — awaiting client review.
+                  </div>
+                )}
               </div>
             )}
 
             {/* ACTION BUTTONS */}
-            <div className="flex flex-col sm:flex-row gap-3">
-              {/* DELIVER */}
-              {canDeliver ? (
-                <button
-                  onClick={() => setDeliverModal(true)}
-                  className="flex-1 px-4 py-3 rounded-xl bg-primary text-primary-foreground"
-                >
-                  Deliver Work
-                </button>
-              ) : (
-                <div className="flex-1 px-4 py-3 rounded-xl border border-border text-sm text-muted-foreground flex items-center justify-center">
-                  {escrowData.disputed
-                    ? "Cannot deliver - job is in dispute"
-                    : escrowData.terminal
-                      ? "Escrow closed"
-                      : "Delivery window has passed"}
-                </div>
-              )}
+            {isHired && escrowData && (
+              <div className="p-5 border rounded-2xl bg-surface-secondary space-y-3">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Actions</h3>
 
-              {/* CLAIM AUTO PAY */}
-              {escrowData.delivered &&
-                !escrowData.terminal &&
-                escrowData.reviewDue > 0n &&
-                BigInt(Math.floor(Date.now() / 1000)) > escrowData.reviewDue && (
-                  <button
-                    onClick={async () => {
-                      if (!escrowData) return;
-                      try {
-                        const escrow = getContract({
-                          client,
-                          chain: CHAIN,
-                          address: escrowData.escrowAddr as `0x${string}`,
-                        });
-                        const tx = await prepareContractCall({
-                          contract: escrow,
-                          method: "function processTimeouts()",
-                          params: [],
-                        });
-                        await sendTransaction({ account: walletAccount, transaction: tx });
-                        router.refresh();
-                      } catch (err: any) {
-                        console.error(err);
-                        alert(getFriendlyError(err));
-                      }
-                    }}
-                    className="flex-1 px-4 py-3 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition font-semibold animate-pulse"
-                  >
-                    Claim Automatic Payment
+                {canDeliver ? (
+                  <button onClick={() => setDeliverModal(true)}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity">
+                    <Send className="w-4 h-4" /> Submit Delivery
                   </button>
+                ) : (
+                  <div className="w-full px-4 py-3 rounded-xl border border-border text-sm text-muted-foreground text-center">
+                    {escrowData.disputed ? "⛔ In dispute" : escrowData.terminal ? "✅ Escrow closed" : "Delivery window passed"}
+                  </div>
                 )}
 
-              {/* REQUEST CANCEL - Commented out for future implementation */}
-              {/* {!escrowData.terminal &&
-                escrowData.cancelRequestedBy ===
-                "0x0000000000000000000000000000000000000000" && (
-                  <button
-                    onClick={() => setCancelModal(true)}
-                    className="flex-1 px-4 py-3 rounded-xl bg-surface-secondary border"
-                  >
-                    Request Cancel
+                {escrowData.delivered && !escrowData.terminal && escrowData.reviewDue > 0n &&
+                  BigInt(Math.floor(Date.now() / 1000)) > escrowData.reviewDue && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          const escrow = getContract({ client, chain: CHAIN, address: escrowData.escrowAddr as `0x${string}` });
+                          const tx = await prepareContractCall({ contract: escrow, method: "function processTimeouts()", params: [] });
+                          await sendTransaction({ account: walletAccount, transaction: tx });
+                          router.refresh();
+                        } catch (err: any) { alert(getFriendlyError(err)); }
+                      }}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition animate-pulse">
+                      <Zap className="w-4 h-4" /> Claim Auto-Payment
+                    </button>
+                  )}
+
+                {!escrowData.terminal && !escrowData.disputed && (
+                  <button onClick={() => setDisputeModal(true)}
+                    className="w-full px-4 py-2.5 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition text-sm font-medium">
+                    Raise Dispute
                   </button>
-                )} */}
-
-              {/* ACCEPT CANCEL - Commented out for future implementation */}
-              {/* {!escrowData.terminal &&
-                escrowData.cancelRequestedBy &&
-                escrowData.cancelRequestedBy.toLowerCase() !==
-                walletAccount.address.toLowerCase() &&
-                escrowData.cancelRequestedBy !==
-                "0x0000000000000000000000000000000000000000" && (
-                  <button
-                    onClick={acceptCancel}
-                    className="flex-1 px-4 py-3 rounded-xl bg-amber-600 text-white"
-                  >
-                    Accept Cancel
-                  </button>
-                )} */}
-
-              {/* DISPUTE */}
-              {!escrowData.terminal && !escrowData.disputed && (
-                <button
-                  onClick={() => setDisputeModal(true)}
-                  className="flex-1 px-4 py-3 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition"
-                >
-                  Raise Dispute
-                </button>
-              )}
-            </div>
-          </section>
-        )}
-
-        {/* DELIVERY HISTORY */}
-        {isHired && escrowData && escrowData.deliveryHistory && escrowData.deliveryHistory.length > 0 && (
-          <section className="p-6 border rounded-2xl bg-surface space-y-4">
-            <h2 className="text-lg font-bold flex items-center gap-2">
-              <FileText className="w-5 h-5" />
-              Delivery History
-              <span className="text-sm font-normal text-muted-foreground">
-                ({escrowData.deliveryHistory.length} submission{escrowData.deliveryHistory.length !== 1 ? 's' : ''})
-              </span>
-            </h2>
-
-            <div className="space-y-3">
-              {escrowData.deliveryHistory.map((delivery, idx) => {
-                const isLatest = idx === escrowData.deliveryHistory.length - 1;
-                return (
-                  <div
-                    key={idx}
-                    className={`p-4 border rounded-xl ${isLatest
-                      ? 'bg-primary/5 border-primary/30'
-                      : 'bg-surface-secondary border-border'
-                      }`}
-                  >
-                    <div className="flex justify-between items-center mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold">
-                          Version {delivery.version.toString()}
-                        </span>
-                        {isLatest && (
-                          <span className="px-2 py-0.5 text-xs bg-primary text-primary-foreground rounded-full">
-                            Latest
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-xs text-muted-foreground">
-                        {fmt(delivery.timestamp)}
-                      </span>
-                    </div>
-
-                    <a
-                      href={ipfsToHttp(delivery.uri)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-primary hover:underline flex items-center gap-1"
-                    >
-                      <Send className="w-3 h-3" />
-                      View Delivery Details
-                    </a>
-                  </div>
-                );
-              })}
-            </div>
-
-            {escrowData.deliveryHistory.length > 1 && (
-              <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl text-sm text-blue-400">
-                <p className="flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4" />
-                  You have submitted {escrowData.deliveryHistory.length} versions. The client will review the latest submission.
-                </p>
+                )}
               </div>
             )}
-          </section>
-        )}
-      </main>
+          </div>
+        </div>
+      </div>
 
+      {/* MODALS */}
       {/* MODALS */}
       <DeliverModal
         open={deliverModal}
@@ -938,7 +1289,6 @@ export default function FreelancerJobDetailPage() {
         onSubmit={raiseDispute}
       />
 
-      {/* KYC VERIFICATION MODAL */}
       {showKYCModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-surface border border-amber-500/30 p-6 rounded-xl w-full max-w-md space-y-4">
@@ -946,29 +1296,10 @@ export default function FreelancerJobDetailPage() {
               <ShieldAlert className="w-8 h-8" />
               <h2 className="text-xl font-semibold">KYC Verification Required</h2>
             </div>
-
-            <p className="text-sm text-muted-foreground">
-              You need to complete KYC verification before you can access job details.
-            </p>
-
-            <p className="text-sm text-muted-foreground">
-              Please complete your KYC verification in your profile settings to access all freelancer features.
-            </p>
-
+            <p className="text-sm text-muted-foreground">Complete KYC verification in your profile settings to access all freelancer features.</p>
             <div className="flex justify-end gap-3 pt-2">
-              <button
-                onClick={() => router.push("/freelancer")}
-                className="px-4 py-2 border rounded-lg hover:bg-surface-secondary transition"
-              >
-                Back to Dashboard
-              </button>
-
-              <button
-                onClick={() => router.push("/freelancer/Profile")}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition"
-              >
-                Go to Profile
-              </button>
+              <button onClick={() => router.push("/freelancer")} className="px-4 py-2 border rounded-lg hover:bg-surface-secondary transition">Back to Dashboard</button>
+              <button onClick={() => router.push("/freelancer/Profile")} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition">Go to Profile</button>
             </div>
           </div>
         </div>
@@ -976,6 +1307,7 @@ export default function FreelancerJobDetailPage() {
     </>
   );
 }
+
 
 /* ============================================================
    TIMELINE CARD

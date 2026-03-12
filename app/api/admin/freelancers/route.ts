@@ -1,7 +1,23 @@
 import { NextResponse } from "next/server";
-import { createThirdwebClient, getContract, readContract } from "thirdweb";
-import { polygonAmoy } from "thirdweb/chains";
+import { ethers } from "ethers";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
+
+const FREELANCER_FACTORY_ABI = [
+    "function getAllFreelancers() view returns (address[])",
+    "function freelancerProfile(address) view returns (address)",
+];
+
+const FREELANCER_PROFILE_ABI = [
+    "function name() view returns (string)",
+    "function isKYCVerified() view returns (bool)",
+];
+
+function getProvider() {
+    return new ethers.providers.StaticJsonRpcProvider(
+        { url: "https://rpc-amoy.polygon.technology/", skipFetchSetup: true },
+        80002
+    );
+}
 
 export async function GET(req: Request) {
     try {
@@ -15,34 +31,22 @@ export async function GET(req: Request) {
             );
         }
 
-        // Create client
-        const client = createThirdwebClient({
-            secretKey: process.env.NEXT_PUBLIC_THIRDWEB_SECRET_KEY as string,
-        });
+        const provider = getProvider();
 
-        // Get FreelancerFactory contract
-        const factory = getContract({
-            client,
-            chain: polygonAmoy,
-            address: DEPLOYED_CONTRACTS.addresses.FreelancerFactory,
-        });
+        const factory = new ethers.Contract(
+            DEPLOYED_CONTRACTS.addresses.FreelancerFactory,
+            FREELANCER_FACTORY_ABI,
+            provider
+        );
 
         // Get all freelancer addresses
-        const freelancerAddresses = (await readContract({
-            contract: factory,
-            method: "function getAllFreelancers() view returns (address[])",
-        })) as string[];
+        const freelancerAddresses: string[] = await factory.getAllFreelancers();
 
         // Fetch profile data for each freelancer
         const freelancers = await Promise.all(
             freelancerAddresses.map(async (address) => {
                 try {
-                    // Get profile address
-                    const profileAddress = (await readContract({
-                        contract: factory,
-                        method: "function freelancerProfile(address) view returns (address)",
-                        params: [address as `0x${string}`],
-                    })) as string;
+                    const profileAddress: string = await factory.freelancerProfile(address);
 
                     if (profileAddress === "0x0000000000000000000000000000000000000000") {
                         return {
@@ -53,31 +57,18 @@ export async function GET(req: Request) {
                         };
                     }
 
-                    // Get profile contract
-                    const profile = getContract({
-                        client,
-                        chain: polygonAmoy,
-                        address: profileAddress as `0x${string}`,
-                    });
+                    const profile = new ethers.Contract(
+                        profileAddress,
+                        FREELANCER_PROFILE_ABI,
+                        provider
+                    );
 
-                    // Read profile data
                     const [name, isKYCVerified] = await Promise.all([
-                        readContract({
-                            contract: profile,
-                            method: "function name() view returns (string)",
-                        }).catch(() => "Unknown"),
-                        readContract({
-                            contract: profile,
-                            method: "function isKYCVerified() view returns (bool)",
-                        }).catch(() => false),
+                        profile.name().catch(() => "Unknown"),
+                        profile.isKYCVerified().catch(() => false),
                     ]);
 
-                    return {
-                        address,
-                        profileAddress,
-                        name: name as string,
-                        isKYCVerified: isKYCVerified as boolean,
-                    };
+                    return { address, profileAddress, name, isKYCVerified };
                 } catch (error) {
                     console.error(`Error fetching data for ${address}:`, error);
                     return {
@@ -90,10 +81,7 @@ export async function GET(req: Request) {
             })
         );
 
-        return NextResponse.json({
-            success: true,
-            freelancers,
-        });
+        return NextResponse.json({ success: true, freelancers });
     } catch (error: any) {
         console.error("Fetch freelancers error:", error);
         return NextResponse.json(

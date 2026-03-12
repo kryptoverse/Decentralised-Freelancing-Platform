@@ -183,7 +183,7 @@ export default function ClientHome() {
             let jobStatus = Number(res[4]);
             const escrowAddress = res[6];
 
-            // For hired jobs, check if escrow is terminal (completed)
+            // For hired jobs, check if escrow is terminal (completed or cancelled)
             if (jobStatus === 2 && escrowAddress && escrowAddress !== ZERO) {
               try {
                 const escrow = getContract({
@@ -192,14 +192,29 @@ export default function ClientHome() {
                   address: escrowAddress as `0x${string}`,
                 });
 
-                const terminal = await readContract({
-                  contract: escrow,
-                  method: "function terminal() view returns (bool)",
-                });
+                const [terminalRaw, cancelReqBy, disputed, delivered] = await Promise.all([
+                  readContract({ contract: escrow, method: "function terminal() view returns (bool)" }),
+                  readContract({ contract: escrow, method: "function cancelRequestedBy() view returns (address)" }).catch(() => ZERO),
+                  readContract({ contract: escrow, method: "function disputed() view returns (bool)" }).catch(() => false),
+                  readContract({ contract: escrow, method: "function delivered() view returns (bool)" }).catch(() => false)
+                ]);
 
-                // If terminal is true, job is actually completed
-                if (terminal) {
-                  jobStatus = 4;
+                if (terminalRaw) {
+                  if (disputed) {
+                    const [escrowBal] = await readContract({
+                      contract: getContract({ client, chain: CHAIN, address: DEPLOYED_CONTRACTS.addresses.MockUSDT }),
+                      method: "function balanceOf(address) view returns (uint256)",
+                      params: [escrowAddress as `0x${string}`],
+                    }).then(v => [v]).catch(() => [0n]);
+
+                    if (BigInt(escrowBal as any) === 0n) {
+                      jobStatus = delivered ? 4 : 3;
+                    } else {
+                      jobStatus = 4;
+                    }
+                  } else {
+                    jobStatus = String(cancelReqBy) !== ZERO ? 3 : 4;
+                  }
                 }
               } catch (err) {
                 console.log("Could not check escrow status:", err);
@@ -428,7 +443,7 @@ export default function ClientHome() {
               icon: Wallet,
               label: "MATIC Balance",
               value: balance
-                ? `${balance.displayValue} ${balance.symbol}`
+                ? `${parseFloat(balance.displayValue).toFixed(4)} ${balance.symbol}`
                 : loadingBalance
                   ? "Fetching..."
                   : "0",
@@ -536,13 +551,15 @@ export default function ClientHome() {
                 <div className="flex-1 min-w-0">
                   <h3 className="text-lg font-semibold break-words">{job.title}</h3>
 
-                  {job.status === 2 || job.status === 4 ? (
+                  {job.status === 2 || job.status === 3 || job.status === 4 || job.status === 5 ? (
                     <div className="mt-1 mb-2">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${job.status === 4
                         ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
-                        : "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                        : job.status === 3 || job.status === 5
+                          ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+                          : "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
                         }`}>
-                        {job.status === 4 ? "Completed" : "Hired"}
+                        {job.status === 4 ? "Completed" : job.status === 3 ? "Cancelled" : job.status === 5 ? "Expired" : "Hired"}
                       </span>
                       {job.hiredFreelancer && job.hiredFreelancer !== "0x0000000000000000000000000000000000000000" && (
                         <p className="text-xs text-muted-foreground mt-1">

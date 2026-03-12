@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getContract, readContract, prepareContractCall, sendTransaction } from "thirdweb";
-import { useActiveAccount } from "thirdweb/react";
+import { smartWallet } from "thirdweb/wallets";
+import { useActiveAccount, useActiveWallet } from "thirdweb/react";
 import { client } from "@/lib/thirdweb-client";
 import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
@@ -33,7 +34,22 @@ interface DirectOffer {
 
 export default function ClientOffersPage() {
     const account = useActiveAccount();
+    const activeWallet = useActiveWallet();
     const router = useRouter();
+
+    /**
+     * Returns a non-sponsored smart account (same address, no paymaster).
+     * Uses the personal EOA from the existing inAppWallet session.
+     */
+    async function getExecutionAccount() {
+        if (!activeWallet) throw new Error("No active wallet found.");
+        const personalAccount = (activeWallet as any).getAdminAccount?.();
+        if (!personalAccount) throw new Error("Could not get personal account from wallet.");
+        const sw = smartWallet({ chain: CHAIN, sponsorGas: false });
+        const execAccount = await sw.connect({ client, personalAccount });
+        console.log("[EXEC] No-gas account:", execAccount.address);
+        return execAccount;
+    }
     const { toast } = useToast();
 
     const [offers, setOffers] = useState<DirectOffer[]>([]);
@@ -138,9 +154,14 @@ export default function ClientOffersPage() {
         try {
             setFunding(offer.jobId);
 
+            // Build a non-sponsored account — bypasses paymaster for createAndFundEscrowForJob
+            // (which deploys a contract internally and needs ~2.67M gas — paymaster rejects it)
+            const execAccount = await getExecutionAccount();
+            const walletAddress = execAccount.address as `0x${string}`;
+
             const budgetVal = BigInt(offer.budgetUSDT);
 
-            // 1. Approve Allowanceto EscrowFactory (Not JobBoard! Factory pulls funds)
+            // 1. Approve EscrowFactory to pull USDT
             const usdc = getContract({
                 client,
                 chain: CHAIN,
@@ -150,16 +171,17 @@ export default function ClientOffersPage() {
             const allowance = await readContract({
                 contract: usdc,
                 method: "function allowance(address owner, address spender) view returns (uint256)",
-                params: [account.address, DEPLOYED_CONTRACTS.addresses.EscrowFactory]
+                params: [walletAddress, DEPLOYED_CONTRACTS.addresses.EscrowFactory]
             });
 
             if (allowance < budgetVal) {
                 const approveTx = prepareContractCall({
                     contract: usdc,
                     method: "function approve(address spender, uint256 amount) returns (bool)",
-                    params: [DEPLOYED_CONTRACTS.addresses.EscrowFactory, budgetVal]
+                    params: [DEPLOYED_CONTRACTS.addresses.EscrowFactory, budgetVal],
+                    gas: 80000n,
                 });
-                await sendTransaction({ transaction: approveTx, account });
+                await sendTransaction({ transaction: approveTx, account: execAccount });
 
                 toast({
                     title: "Approved",
@@ -168,18 +190,14 @@ export default function ClientOffersPage() {
             }
 
             // 2. Call EscrowFactory.createAndFundEscrowForJob
+            //    This deploys a new Escrow contract (CREATE opcode, ~2.67M gas).
+            //    gas: 4M prevents bundler under-estimation from causing a UserOp failure.
             const escrowFactory = getContract({
                 client,
                 chain: CHAIN,
                 address: DEPLOYED_CONTRACTS.addresses.EscrowFactory,
             });
 
-            // We need metadata URI (we can reuse descriptionURI or just empty for now)
-            // Params: jobId, freelancer, amountUSDT, metadataURI, cancelWindow, deliveryDue, reviewWindow, defaultRating
-
-            // Delivery Due Calculation: current time + days? 
-            // Or is it relative? `createAndFundEscrow` takes `deliveryDueTs` (timestamp).
-            // So we need: now + days * 86400.
             const deliveryTs = BigInt(Math.floor(Date.now() / 1000) + (Number(offer.deliveryDays) * 86400));
 
             const tx = prepareContractCall({
@@ -187,17 +205,18 @@ export default function ClientOffersPage() {
                 method: "function createAndFundEscrowForJob(uint256,address,uint256,string,uint64,uint64,uint64,uint8) returns (address)",
                 params: [
                     BigInt(offer.jobId),
-                    offer.freelancer,
+                    offer.freelancer as `0x${string}`,
                     budgetVal,
                     offer.descriptionURI,
-                    BigInt(86400 * 3), // Cancel window: 3 days (default)
+                    BigInt(86400 * 3),
                     deliveryTs,
-                    BigInt(86400 * 3), // Review window: 3 days (default)
-                    5 // Default rating 5
-                ]
+                    BigInt(86400 * 3),
+                    5
+                ],
+                gas: 4000000n,
             });
 
-            await sendTransaction({ transaction: tx, account });
+            await sendTransaction({ transaction: tx, account: execAccount });
 
             toast({
                 title: "Job Funded!",
@@ -224,6 +243,8 @@ export default function ClientOffersPage() {
     const handleCancel = async (jobId: string) => {
         if (!account) return;
         try {
+            const execAccount = await getExecutionAccount();
+
             const jobBoard = getContract({
                 client,
                 chain: CHAIN,
@@ -233,10 +254,11 @@ export default function ClientOffersPage() {
             const tx = prepareContractCall({
                 contract: jobBoard,
                 method: "function cancelDirectOffer(uint256)",
-                params: [BigInt(jobId)]
+                params: [BigInt(jobId)],
+                gas: 150000n,
             });
 
-            await sendTransaction({ transaction: tx, account });
+            await sendTransaction({ transaction: tx, account: execAccount });
             toast({ title: "Offer Cancelled" });
 
             setOffers(prev => prev.map(o => o.jobId === jobId ? { ...o, cancelled: true } : o));

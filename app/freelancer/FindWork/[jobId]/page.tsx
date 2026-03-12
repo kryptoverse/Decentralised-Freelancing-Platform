@@ -361,6 +361,18 @@ export default function JobDetailsPage() {
       return;
     }
 
+    // Validate bid amount and delivery days
+    const parsedBid = Number(bidAmount);
+    const parsedDays = Number(deliveryDays);
+    if (!bidAmount || isNaN(parsedBid) || parsedBid <= 0) {
+      setError("Please enter a valid bid amount (must be greater than 0 USDT).");
+      return;
+    }
+    if (!deliveryDays || isNaN(parsedDays) || parsedDays < 1) {
+      setError("Please enter a valid delivery timeline (at least 1 day).");
+      return;
+    }
+
     try {
       setTxLoading(true);
       setTxMsg(null);

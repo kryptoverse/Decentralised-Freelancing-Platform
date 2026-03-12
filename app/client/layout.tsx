@@ -29,7 +29,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (pathname.includes("/find-freelancer")) setActiveTab("find-freelancer");
     else if (pathname.includes("/orders")) setActiveTab("orders");
-    else if (pathname.includes("/settings")) setActiveTab("settings");
+    else if (pathname.includes("/wallet")) setActiveTab("wallet");
     else setActiveTab("home");
   }, [pathname]);
 

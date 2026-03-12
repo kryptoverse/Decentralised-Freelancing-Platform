@@ -1,8 +1,25 @@
 import { NextResponse } from "next/server";
-import { createThirdwebClient, getContract, prepareContractCall, sendTransaction } from "thirdweb";
-import { privateKeyToAccount } from "thirdweb/wallets";
-import { polygonAmoy } from "thirdweb/chains";
+import { ethers } from "ethers";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
+
+const FREELANCER_FACTORY_ABI = [
+    "function setKYCFor(address freelancer, bool status)",
+];
+
+async function waitForReceipt(
+    provider: ethers.providers.Provider,
+    txHash: string,
+    maxWaitMs = 60000
+) {
+    const pollInterval = 3000;
+    const start = Date.now();
+    while (Date.now() - start < maxWaitMs) {
+        await new Promise((r) => setTimeout(r, pollInterval));
+        const receipt = await provider.getTransactionReceipt(txHash);
+        if (receipt && receipt.blockNumber) return receipt;
+    }
+    throw new Error(`Timed out waiting for tx ${txHash}`);
+}
 
 export async function POST(request: Request) {
     try {
@@ -34,40 +51,35 @@ export async function POST(request: Request) {
             );
         }
 
-        // Create client
-        const client = createThirdwebClient({
-            secretKey: process.env.NEXT_PUBLIC_THIRDWEB_SECRET_KEY as string,
+        const provider = new ethers.providers.StaticJsonRpcProvider(
+            { url: "https://rpc-amoy.polygon.technology/", skipFetchSetup: true },
+            80002
+        );
+        const wallet = new ethers.Wallet(privateKey, provider);
+
+        const factory = new ethers.Contract(
+            DEPLOYED_CONTRACTS.addresses.FreelancerFactory,
+            FREELANCER_FACTORY_ABI,
+            wallet
+        );
+
+        // Send the KYC transaction
+        const gasPrice = await provider.getGasPrice();
+        const gasLimit = await factory.estimateGas
+            .setKYCFor(freelancerAddress, approve)
+            .catch(() => ethers.BigNumber.from(200000));
+
+        const tx = await factory.setKYCFor(freelancerAddress, approve, {
+            gasPrice,
+            gasLimit,
         });
 
-        // Create wallet from private key
-        const account = privateKeyToAccount({
-            client,
-            privateKey: privateKey as `0x${string}`,
-        });
-
-        // Get FreelancerFactory contract
-        const factory = getContract({
-            client,
-            chain: polygonAmoy,
-            address: DEPLOYED_CONTRACTS.addresses.FreelancerFactory,
-        });
-
-        // Prepare transaction to set KYC
-        const transaction = prepareContractCall({
-            contract: factory,
-            method: "function setKYCFor(address freelancer, bool status)",
-            params: [freelancerAddress as `0x${string}`, approve],
-        });
-
-        // Send transaction
-        const result = await sendTransaction({
-            transaction,
-            account,
-        });
+        console.log(`KYC tx submitted: ${tx.hash}`);
+        const receipt = await waitForReceipt(provider, tx.hash);
 
         return NextResponse.json({
             success: true,
-            transactionHash: result.transactionHash,
+            transactionHash: receipt.transactionHash,
             message: approve ? "KYC approved successfully" : "KYC revoked successfully",
         });
     } catch (error: any) {

@@ -31,7 +31,7 @@ export default function FounderLayout({
   useEffect(() => {
     if (pathname.includes("/projects")) setActiveTab("projects");
     else if (pathname.includes("/profile")) setActiveTab("profile");
-    else if (pathname.includes("/settings")) setActiveTab("settings");
+    else if (pathname.includes("/wallet")) setActiveTab("wallet");
     else setActiveTab("home");
   }, [pathname]);
 

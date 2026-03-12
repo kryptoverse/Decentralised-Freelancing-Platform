@@ -21,7 +21,6 @@ export const inAppSmartWallet = inAppWallet({
   },
 });
 
-// 🚀 NEW: NON-SPONSORED SMART WALLET (for money flows like hiring)
 export const inAppSmartWalletNoGas = inAppWallet({
   auth: {
     options: ["google", "email"],
@@ -30,7 +29,19 @@ export const inAppSmartWalletNoGas = inAppWallet({
     mode: "EIP4337",
     smartAccount: {
       chain: polygonAmoy,
-      sponsorGas: false,   // ❌ no gas sponsorship
+      sponsorGas: false,   // Disable normal thirdweb paymaster logic
+      overrides: {
+        // Provide a dummy paymaster that forces "0x" (no paymaster, user pays MATIC)
+        // AND injects a safe 5M gas limit to fix the Out of Gas bug with contract deployments.
+        paymaster: async (userOp) => {
+          return {
+            paymasterAndData: "0x" as `0x${string}`,
+            preVerificationGas: userOp.preVerificationGas,
+            verificationGasLimit: userOp.verificationGasLimit,
+            callGasLimit: 5000000n, // Hardcode 5M gas to prevent EIP-150 out of gas
+          };
+        },
+      },
     },
   },
 });

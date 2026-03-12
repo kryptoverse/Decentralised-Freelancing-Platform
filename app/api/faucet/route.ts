@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
 
         // Create client and wallet
         const client = createThirdwebClient({
-            secretKey: process.env.NEXT_PUBLIC_THIRDWEB_SECRET_KEY || "",
+            clientId: process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID as string,
         });
 
         const faucetWallet = privateKeyToAccount({

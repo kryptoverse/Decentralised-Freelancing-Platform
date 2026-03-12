@@ -3,6 +3,8 @@ import {
   User as UserIcon,
   Settings,
   Home as HomeIcon,
+  TrendingUp,
+  Wallet,
 } from "lucide-react";
 
 export const ROLE_ROUTES = {
@@ -66,10 +68,10 @@ export const ROLE_TABS: Record<
       match: "startsWith",
     },
     {
-      id: "settings",
-      label: "Settings",
-      icon: Settings,
-      path: "/freelancer/Settings", // you can add this route later
+      id: "wallet",
+      label: "Wallet",
+      icon: Wallet,
+      path: "/freelancer/wallet", // you can add this route later
       match: "startsWith",
     },
   ],
@@ -104,10 +106,10 @@ export const ROLE_TABS: Record<
       match: "startsWith",
     },
     {
-      id: "settings",
-      label: "Settings",
-      icon: Settings,
-      path: "/client/Settings", // add this route when ready
+      id: "wallet",
+      label: "Wallet",
+      icon: Wallet,
+      path: "/client/wallet", // add this route when ready
       match: "startsWith",
     },
   ],
@@ -128,34 +130,41 @@ export const ROLE_TABS: Record<
       match: "startsWith",
     },
     {
-      id: "settings",
-      label: "Settings",
-      icon: Settings,
-      path: "/founder/Settings",
+      id: "wallet",
+      label: "Wallet",
+      icon: Wallet,
+      path: "/founder/wallet",
       match: "startsWith",
     },
   ],
 
   investor: [
     {
-      id: "home",
-      label: "Home",
-      icon: HomeIcon,
+      id: "portfolio",
+      label: "My Investments",
+      icon: TrendingUp,
       path: "/investor",
       match: "exact",
+    },
+    {
+      id: "explore",
+      label: "Explore",
+      icon: HomeIcon,
+      path: "/investor/explore",
+      match: "startsWith",
     },
     {
       id: "profile",
       label: "Profile",
       icon: UserIcon,
-      path: "/investor/Profile",
+      path: "/investor/profile",
       match: "startsWith",
     },
     {
-      id: "settings",
-      label: "Settings",
-      icon: Settings,
-      path: "/investor/Settings",
+      id: "wallet",
+      label: "Wallet",
+      icon: Wallet,
+      path: "/investor/wallet",
       match: "startsWith",
     },
   ],

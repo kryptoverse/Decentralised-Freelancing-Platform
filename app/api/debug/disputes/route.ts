@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
         }
 
         // 2. Setup Blockchain Client
-        const secretKey = process.env.NEXT_PUBLIC_THIRDWEB_SECRET_KEY;
+        const secretKey = process.env.THIRDWEB_SECRET_KEY || process.env.NEXT_PUBLIC_THIRDWEB_SECRET_KEY;
         const infuraKey = process.env.INFURA_API_KEY;
 
         if (!secretKey) throw new Error("Missing NEXT_PUBLIC_THIRDWEB_SECRET_KEY");

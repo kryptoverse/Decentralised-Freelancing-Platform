@@ -45,6 +45,15 @@ interface Dispute {
 }
 
 export default function AdminPage() {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [loginError, setLoginError] = useState("");
+
+  // Utility function for copying to clipboard
+  const copyToClipboard = (text: string) => navigator.clipboard.writeText(text);
+
   // KYC Management State
   const [freelancers, setFreelancers] = useState<Freelancer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,6 +75,7 @@ export default function AdminPage() {
   const [loadingDisputes, setLoadingDisputes] = useState(false);
   const [selectedDispute, setSelectedDispute] = useState<Dispute | null>(null);
   const [resolvingDispute, setResolvingDispute] = useState(false);
+  const [customSplit, setCustomSplit] = useState(50);
 
   const fetchFreelancers = async () => {
     try {
@@ -88,9 +98,11 @@ export default function AdminPage() {
   };
 
   useEffect(() => {
-    fetchFreelancers();
-    fetchDisputes();
-  }, []);
+    if (isAuthenticated) {
+      fetchFreelancers();
+      fetchDisputes();
+    }
+  }, [isAuthenticated]);
 
   const fetchDisputes = async () => {
     try {
@@ -254,16 +266,7 @@ export default function AdminPage() {
     }
   };
 
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [loginError, setLoginError] = useState("");
 
-  // Utility function for copying to clipboard
-  const copyToClipboard = (text: string) => navigator.clipboard.writeText(text);
-
-  // Verify session on mount
   useEffect(() => {
     const verifySession = async () => {
       try {
@@ -887,14 +890,42 @@ export default function AdminPage() {
                     <div className="text-xs mt-1">Full refund to client, no payment to freelancer</div>
                   </button>
 
-                  <button
-                    onClick={() => handleResolveDispute("PAYOUT", 5000, 3)}
-                    disabled={resolvingDispute}
-                    className="w-full px-4 py-3 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 transition disabled:opacity-50 text-left"
-                  >
-                    <div className="font-medium">⚖️ Partial Settlement (50/50)</div>
-                    <div className="text-xs mt-1">Split payment: 50% to freelancer (3★), 50% refund to client</div>
-                  </button>
+                  <div className="p-4 rounded-lg border border-amber-500/30 bg-amber-500/5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="font-medium text-amber-500">⚖️ Custom Split Settlement</div>
+                      <div className="text-sm font-bold text-amber-500">{customSplit}% / {100 - customSplit}%</div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <div className="flex justify-between text-xs text-muted-foreground mb-2">
+                          <span>0% Freelancer (Refund)</span>
+                          <span>100% Freelancer (Payout)</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={customSplit}
+                          onChange={(e) => setCustomSplit(Number(e.target.value))}
+                          className="w-full accent-amber-500 h-2 bg-surface rounded-lg appearance-none cursor-pointer"
+                        />
+                      </div>
+
+                      <div className="flex justify-between items-center text-sm border-t border-border/50 pt-3">
+                        <div className="text-amber-400 font-medium">Freelancer gets: {((selectedDispute.budget * customSplit) / 100).toFixed(2)} USDT</div>
+                        <div className="text-foreground-secondary">Client gets: {((selectedDispute.budget * (100 - customSplit)) / 100).toFixed(2)} USDT</div>
+                      </div>
+
+                      <button
+                        onClick={() => handleResolveDispute("PAYOUT", customSplit * 100, Math.max(1, Math.round((customSplit / 100) * 5)))}
+                        disabled={resolvingDispute}
+                        className="w-full px-4 py-2 mt-2 rounded-lg bg-amber-500 text-[#1a1a1a] font-bold hover:bg-amber-400 transition disabled:opacity-50"
+                      >
+                        Execute {customSplit}% Split
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 {resolvingDispute && (

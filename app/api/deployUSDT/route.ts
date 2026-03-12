@@ -1,120 +1,59 @@
-// app/api/deployUSDT/route.ts
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 import { NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
-import type { Abi } from "viem";
+import { exec } from "child_process";
+import util from "util";
 
-import {
-  createThirdwebClient,
-  getContract,
-  prepareContractCall,
-  sendTransaction,
-  readContract,
-} from "thirdweb";
-
-import { deployContract } from "thirdweb/deploys";
-import { polygonAmoy } from "thirdweb/chains";
-import { privateKeyToAccount } from "thirdweb/wallets";
+const execPromise = util.promisify(exec);
 
 export async function POST() {
   try {
-    // ============================================================
-    // INIT
-    // ============================================================
-    const client = createThirdwebClient({
-      secretKey: process.env.NEXT_PUBLIC_THIRDWEB_SECRET_KEY!,
-    });
+    console.log("🚀 Spawning standalone deployUSDT script...");
+    const { stdout, stderr } = await execPromise("node scripts/deployUSDTScript.js", { timeout: 5 * 60 * 1000, maxBuffer: 10 * 1024 * 1024 });
 
-    const account = privateKeyToAccount({
-      client,
-      privateKey: process.env.METAMASK_PRIVATE_KEY as `0x${string}`,
-    });
+    // Parse the output to find __RESULT
+    let result = null;
+    const lines = stdout.split('\n');
+    for (const line of lines) {
+      if (line.includes('__RESULT')) {
+        try {
+          const parsed = JSON.parse(line);
+          if (parsed.__RESULT) {
+            result = parsed.__RESULT;
+          }
+        } catch (e) { }
+      }
+    }
 
-    const deployerAddress = account.address;
-    const chain = polygonAmoy;
-
-    const logs: string[] = [];
-    const log = (msg: string) => {
-      console.log(msg);
-      logs.push(msg);
-    };
-
-    const loadArtifact = (file: string) =>
-      JSON.parse(
-        fs.readFileSync(
-          path.join(process.cwd(), `artifacts/contracts/${file}.json`),
-          "utf8"
-        )
-      );
-
-    log("🚀 Starting TestUSDT Deployment (Polygon Amoy)");
-    log(`👤 Deployer: ${deployerAddress}`);
-
-    // ============================================================
-    // DEPLOY TestUSDT
-    // ============================================================
-    const usdtA = loadArtifact("TestUSDT.sol/MockUSDT");
-
-    log("📦 Deploying TestUSDT...");
-    const usdtAddr = await deployContract({
-      client,
-      chain,
-      account,
-      abi: usdtA.abi as Abi,
-      bytecode: usdtA.bytecode as `0x${string}`,
-    });
-    log(`✅ TestUSDT deployed at: ${usdtAddr}`);
-
-    // ============================================================
-    // CREATE CONTRACT INSTANCE
-    // ============================================================
-    const usdtContract = getContract({
-      client,
-      chain,
-      address: usdtAddr as `0x${string}`,
-    });
-
-    // ============================================================
-    // READ totalSupply()
-    // ============================================================
-    log("💰 Reading totalSupply...");
-
-    const totalSupply = (await readContract({
-      contract: usdtContract,
-      method: "function totalSupply() view returns (uint256)",
-    })) as bigint;
-
-    log(`🔢 Total Supply: ${totalSupply}`);
-
-    // ============================================================
-    // TRANSFER ALL SUPPLY TO DEPLOYER
-    // ============================================================
-    log("💸 Transferring supply to deployer...");
-
-    const transferTx = await prepareContractCall({
-      contract: usdtContract,
-      method: "function transfer(address,uint256)",
-      params: [deployerAddress, totalSupply],
-    });
-
-    await sendTransaction({ account, transaction: transferTx });
-    log("✅ USDT transferred to deployer!");
-
-    // ============================================================
-    // DONE
-    // ============================================================
-    log("🎯 TestUSDT Deployment Complete!");
-
-    return NextResponse.json({
-      success: true,
-      walletAddress: deployerAddress,
-      usdtAddress: usdtAddr,
-      logs,
-    });
+    if (result) {
+      return NextResponse.json(result);
+    } else {
+      console.error("Stderr:", stderr);
+      console.log("Stdout:", stdout);
+      return NextResponse.json({ success: false, error: "Missing structured result from script" });
+    }
   } catch (error: any) {
-    console.error("❌ Deployment failed:", error);
+    console.error("❌ Exec failed:", error.message || error);
+
+    let result = null;
+    if (error.stdout) {
+      const lines = error.stdout.split('\n');
+      for (const line of lines) {
+        if (line.includes('__RESULT')) {
+          try {
+            const parsed = JSON.parse(line);
+            if (parsed.__RESULT) result = parsed.__RESULT;
+          } catch (e) { }
+        }
+      }
+    }
+
+    if (result) {
+      return NextResponse.json(result);
+    }
+
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }

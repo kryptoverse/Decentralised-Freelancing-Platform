@@ -68,7 +68,11 @@ export default function FreelancerHome() {
   const [appliedJobs, setAppliedJobs] = useState<SimpleJob[]>([]);
   const [hiredJobs, setHiredJobs] = useState<SimpleJob[]>([]);
   const [completedJobs, setCompletedJobs] = useState<SimpleJob[]>([]);
+  const [cancelledJobs, setCancelledJobs] = useState<SimpleJob[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(false);
+  const [loadingStats, setLoadingStats] = useState(false);
+  const [disputedCount, setDisputedCount] = useState(0);
+  const [cancelledCount, setCancelledCount] = useState(0);
 
   // Faucet state
   const [faucetLoading, setFaucetLoading] = useState(false);
@@ -140,131 +144,102 @@ export default function FreelancerHome() {
   }, [account?.address]);
 
   // ===== 2) Fetch Profile Data (FreelancerProfile) =====
+  const loadProfile = async (addr: string) => {
+    try {
+      setLoadingStats(true);
+      const factory = getContract({
+        client,
+        chain: CHAIN,
+        address: DEPLOYED_CONTRACTS.addresses.FreelancerFactory as `0x${string}`,
+      });
+
+      const profileAddr = await readContract({
+        contract: factory as any,
+        method: "function freelancerProfile(address) view returns (address)",
+        params: [addr],
+      });
+
+      if (!profileAddr || profileAddr === "0x0000000000000000000000000000000000000000")
+        return;
+
+      const profileContract = getContract({
+        client,
+        chain: CHAIN,
+        address: profileAddr as `0x${string}`,
+      });
+
+      const safeRead = async (method: `function ${string}`) => {
+        try {
+          return await readContract<any, any>({
+            contract: profileContract as any,
+            method,
+          });
+        } catch {
+          console.warn("Missing field on FreelancerProfile:", method);
+          return null;
+        }
+      };
+
+      const [
+        name,
+        bio,
+        totalEarningsRaw,
+        completedJobsRaw,
+        ratingRaw,
+        isKYCVerifiedRaw,
+        totalPointsRaw,
+        levelOnChainRaw,
+        disputedJobsRaw,
+        cancelledJobsRaw,
+      ] = await Promise.all([
+        safeRead("function name() view returns (string)"),
+        safeRead("function bio() view returns (string)"),
+        safeRead("function totalEarnings() view returns (uint256)"),
+        safeRead("function completedJobs() view returns (uint256)"),
+        safeRead("function rating() view returns (uint256)"),
+        safeRead("function isKYCVerified() view returns (bool)"),
+        safeRead("function totalPoints() view returns (uint256)"),
+        safeRead("function level() view returns (uint8)"),
+        safeRead("function disputedJobs() view returns (uint256)"),
+        safeRead("function cancelledJobs() view returns (uint256)"),
+      ]);
+
+      const completedJobs = Number(completedJobsRaw || 0);
+      setDisputedCount(Number(disputedJobsRaw || 0));
+      setCancelledCount(Number(cancelledJobsRaw || 0));
+      let level = 0;
+      if (typeof levelOnChainRaw === "bigint" || typeof levelOnChainRaw === "number") {
+        level = Number(levelOnChainRaw);
+      }
+      const totalPoints = Number(totalPointsRaw || 0);
+      if (level === 0) {
+        if (completedJobs >= 25 && totalPoints >= 120) level = 5;
+        else if (completedJobs >= 20 && totalPoints >= 95) level = 4;
+        else if (completedJobs >= 15 && totalPoints >= 70) level = 3;
+        else if (completedJobs >= 10 && totalPoints >= 45) level = 2;
+        else if (completedJobs >= 5 && totalPoints >= 20) level = 1;
+        else level = 0;
+      }
+      const stars = Math.max(1, level || 0);
+      let ratingPercent = 0;
+      if (ratingRaw != null) ratingPercent = Number(ratingRaw || 0);
+      else if (completedJobs > 0 && totalPoints > 0)
+        ratingPercent = Math.round((totalPoints / (completedJobs * 5)) * 100);
+
+      const totalEarningsNum = totalEarningsRaw != null ? Number(totalEarningsRaw) / 1e6 : 0;
+
+      setProfile({ name: name || "Unnamed", bio: bio || "No bio yet", profileAddress: profileAddr });
+      setStats({ totalEarnings: totalEarningsNum, completedJobs, rating: ratingPercent, isKYCVerified: Boolean(isKYCVerifiedRaw), level, stars });
+    } catch (err) {
+      console.error("Failed to load profile data:", err);
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
   useEffect(() => {
     if (!account?.address) return;
-
-    const loadProfile = async () => {
-      try {
-        const factory = getContract({
-          client,
-          chain: CHAIN,
-          address: DEPLOYED_CONTRACTS.addresses.FreelancerFactory as `0x${string}`,
-        });
-
-        const profileAddr = await readContract({
-          contract: factory as any,
-          method: "function freelancerProfile(address) view returns (address)",
-          params: [account.address],
-        });
-
-        if (!profileAddr || profileAddr === "0x0000000000000000000000000000000000000000")
-          return;
-
-        const profileContract = getContract({
-          client,
-          chain: CHAIN,
-          address: profileAddr as `0x${string}`,
-        });
-
-        const safeRead = async (method: `function ${string}`) => {
-          try {
-            return await readContract<any, any>({
-              contract: profileContract as any,
-              method,
-            });
-          } catch {
-            console.warn("Missing field on FreelancerProfile:", method);
-            return null;
-          }
-        };
-
-        // Try to read all relevant fields. Some may not exist depending on your deployment,
-        // but safeRead() will just return null without breaking anything.
-        const [
-          name,
-          bio,
-          totalEarningsRaw,
-          completedJobsRaw,
-          ratingRaw,
-          isKYCVerifiedRaw,
-          totalPointsRaw,
-          levelOnChainRaw,
-        ] = await Promise.all([
-          safeRead("function name() view returns (string)"),
-          safeRead("function bio() view returns (string)"),
-          // these two may or may not exist depending on your version
-          safeRead("function totalEarnings() view returns (uint256)"),
-          safeRead("function completedJobs() view returns (uint256)"),
-          // optional aggregated rating field
-          safeRead("function rating() view returns (uint256)"),
-          safeRead("function isKYCVerified() view returns (bool)"),
-          // from your posted contract
-          safeRead("function totalPoints() view returns (uint256)"),
-          safeRead("function level() view returns (uint8)"),
-        ]);
-
-        // Completed jobs count
-        const completedJobs = Number(completedJobsRaw || 0);
-
-        // Try to use on-chain level if present, otherwise compute using the same logic as your solidity _computeLevel()
-        let level = 0;
-        if (typeof levelOnChainRaw === "bigint" || typeof levelOnChainRaw === "number") {
-          level = Number(levelOnChainRaw);
-        }
-
-        const totalPoints = Number(totalPointsRaw || 0);
-
-        if (level === 0) {
-          // mirror your Solidity _computeLevel thresholds as a fallback
-          if (completedJobs >= 25 && totalPoints >= 120) level = 5;
-          else if (completedJobs >= 20 && totalPoints >= 95) level = 4;
-          else if (completedJobs >= 15 && totalPoints >= 70) level = 3;
-          else if (completedJobs >= 10 && totalPoints >= 45) level = 2;
-          else if (completedJobs >= 5 && totalPoints >= 20) level = 1;
-          else level = 0;
-        }
-
-        // Stars for UI – at least 1 star for display, but still show underlying level
-        const stars = Math.max(1, level || 0);
-
-        // Job success rate / rating (%)
-        // Priority:
-        // 1) If contract exposes rating(), use that as percentage directly.
-        // 2) Else compute as (totalPoints / (completedJobs * 5)) * 100.
-        let ratingPercent = 0;
-        if (ratingRaw != null) {
-          ratingPercent = Number(ratingRaw || 0);
-        } else if (completedJobs > 0 && totalPoints > 0) {
-          ratingPercent = Math.round((totalPoints / (completedJobs * 5)) * 100);
-        } else {
-          ratingPercent = 0;
-        }
-
-        // Total earnings – if your profile tracks them in USDT (6 decimals),
-        // divide by 1e6. If you later flip to 18 decimals, you can adjust here.
-        const totalEarningsNum =
-          totalEarningsRaw != null ? Number(totalEarningsRaw) / 1e6 : 0;
-
-        setProfile({
-          name: name || "Unnamed",
-          bio: bio || "No bio yet",
-          profileAddress: profileAddr,
-        });
-
-        setStats({
-          totalEarnings: totalEarningsNum,
-          completedJobs,
-          rating: ratingPercent, // 0..100
-          isKYCVerified: Boolean(isKYCVerifiedRaw),
-          level,
-          stars,
-        });
-      } catch (err) {
-        console.error("Failed to load profile data:", err);
-      }
-    };
-
-    loadProfile();
+    loadProfile(account.address);
   }, [account?.address]);
 
   // ===== 3) Fetch Applied & Hired Jobs (Optimized with Promise.all) =====
@@ -343,7 +318,7 @@ export default function FreelancerHome() {
           let jobStatus = Number(status);
           const ZERO = "0x0000000000000000000000000000000000000000";
 
-          // Check escrow terminal status for completed jobs
+          // Check escrow terminal status: distinguish Completed vs Cancelled
           if (jobStatus === 2 && escrowAddr && escrowAddr !== ZERO) {
             try {
               const escrow = getContract({
@@ -352,13 +327,85 @@ export default function FreelancerHome() {
                 address: escrowAddr as `0x${string}`,
               });
 
-              const terminal = await readContract({
-                contract: escrow,
-                method: "function terminal() view returns (bool)",
-              });
+              const [terminalRaw, cancelReqBy] = await Promise.all([
+                readContract({
+                  contract: escrow,
+                  method: "function terminal() view returns (bool)",
+                }),
+                readContract({
+                  contract: escrow,
+                  method: "function cancelRequestedBy() view returns (address)",
+                }).catch(() => ZERO),
+              ]);
 
-              if (terminal) {
-                jobStatus = 4; // Completed
+              if (terminalRaw) {
+                // Read profile's jobInfo to distinguish Completed vs Cancelled
+                // jobKey = keccak256(abi.encode(escrowAddr, client, freelancer))
+                // However, we can check the escrow balance: if 0 and terminal, it was paid.
+                // Simpler: check if escrow's `disputed` was true and then read profile.
+                // We check escrow.client and escrow.freelancer to build the jobKey:
+                const [escrowClient, escrowFreelancer] = await Promise.all([
+                  readContract({ contract: escrow, method: "function client() view returns (address)" }).catch(() => ZERO),
+                  readContract({ contract: escrow, method: "function freelancer() view returns (address)" }).catch(() => ZERO),
+                ]);
+
+                // Check if it was a cancellation (balance goes back to client = Cancelled)
+                // The profile has `cancelledJobs` counter; but simpler: check escrow was disputed
+                const disputed = await readContract({
+                  contract: escrow,
+                  method: "function disputed() view returns (bool)",
+                }).catch(() => false);
+
+                // If disputed and terminal, we need to check profile's job status
+                // Build jobKey: keccak256(abi.encode(address(escrow), client, freelancer))
+                // Actually we check from freelancer profile
+                if (disputed) {
+                  try {
+                    const factory = getContract({
+                      client,
+                      chain: CHAIN,
+                      address: DEPLOYED_CONTRACTS.addresses.FreelancerFactory as `0x${string}`,
+                    });
+                    const profileAddr = await readContract({
+                      contract: factory,
+                      method: "function freelancerProfile(address) view returns (address)",
+                      params: [account!.address],
+                    });
+                    if (profileAddr && profileAddr !== ZERO) {
+                      const profileC = getContract({ client, chain: CHAIN, address: profileAddr as `0x${string}` });
+                      // jobKey is keccak256(abi.encode(escrow, client, freelancer))
+                      // We can't easily compute this off-chain without ethers, so we use
+                      // a workaround: mark as Cancelled if cancelRequestedBy != ZERO AND terminal,
+                      // OR if escrow had a full-refund dispute (USDT balance = 0 + no payout).
+                      // Simplest reliable heuristic: if the cancelled counter in profile is > 0
+                      // AND this job's escrow is terminal + disputed, check USDT balance
+                      const [escrowBal] = await readContract({
+                        contract: getContract({ client, chain: CHAIN, address: DEPLOYED_CONTRACTS.addresses.MockUSDT }),
+                        method: "function balanceOf(address) view returns (uint256)",
+                        params: [escrowAddr as `0x${string}`],
+                      }).then(v => [v]).catch(() => [0n]);
+                      if (BigInt(escrowBal as any) === 0n) {
+                        // Might be Completed (paid) or fully Cancelled (refunded) — both have 0 bal
+                        // Use the delivered status as a proxy: if delivered, likely Approved/Completed
+                        const delivered = await readContract({
+                          contract: escrow,
+                          method: "function delivered() view returns (bool)",
+                        }).catch(() => false);
+                        jobStatus = delivered ? 4 : 3; // 4=Completed, 3=Cancelled
+                      } else {
+                        jobStatus = 4; // still has funds somehow — unusual, treat as pending
+                      }
+                    } else {
+                      jobStatus = 4; // fallback
+                    }
+                  } catch {
+                    jobStatus = 4; // fallback
+                  }
+                } else {
+                  // Not disputed + terminal = normal completion or cancellation
+                  const cancelReqStr = String(cancelReqBy);
+                  jobStatus = cancelReqStr !== ZERO ? 3 : 4; // 3=Cancelled if cancel was requested
+                }
               }
             } catch (err) {
               console.log("Could not check escrow status:", err);
@@ -390,25 +437,35 @@ export default function FreelancerHome() {
       const hired = jobs.filter(
         (j) => j.status === 2 && j.hiredFreelancer?.toLowerCase() === lower
       );
-      const completed = jobs.filter((j) => j.status === 4); // Completed
+      const completed = jobs.filter((j) => j.status === 4); // Completed/Approved
+      const cancelled = jobs.filter((j) => j.status === 3); // Cancelled/Refunded
 
       setAppliedJobs(applied);
       setHiredJobs(hired);
       setCompletedJobs(completed);
+      setCancelledJobs(cancelled);
 
-      // Calculate earnings with platform fee deduction
-      // Net = Budget * (1 - feeBps/10000)
-      const feeMultiplier = (10000 - platformFeeBps) / 10000;
-      const netEarnings = completed.reduce((sum, job) => {
-        const grossUSDT = Number(job.budgetUSDC) / 1e6;
-        return sum + (grossUSDT * feeMultiplier);
-      }, 0);
+      // Only update stats from job list if the on-chain profile values are zero
+      // (on-chain values set by loadProfile() take priority)
+      setStats((prev) => {
+        // Use on-chain completedJobs if already populated; otherwise derive from job list
+        const completedCount = prev.completedJobs > 0 ? prev.completedJobs : completed.length;
 
-      setStats((prev) => ({
-        ...prev,
-        completedJobs: completed.length,
-        totalEarnings: netEarnings,
-      }));
+        // Use on-chain totalEarnings if already populated; otherwise compute from job list
+        let earnings = prev.totalEarnings;
+        if (earnings === 0 && completed.length > 0) {
+          const feeMultiplier = (10000 - platformFeeBps) / 10000;
+          earnings = completed.reduce((sum, job) => {
+            return sum + (Number(job.budgetUSDC) / 1e6) * feeMultiplier;
+          }, 0);
+        }
+
+        return {
+          ...prev,
+          completedJobs: completedCount,
+          totalEarnings: earnings,
+        };
+      });
     } catch (err) {
       console.error("Failed to load applied/hired jobs:", err);
     } finally {
@@ -501,42 +558,66 @@ export default function FreelancerHome() {
       </div>
 
       {/* STATS CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 w-full">
-        {[
-          {
-            icon: DollarSign,
-            label: "Total Earnings",
-            value: `${stats.totalEarnings.toFixed(2)} USDT`,
-          },
-          {
-            icon: Briefcase,
-            label: "Completed Jobs",
-            value: stats.completedJobs.toString(),
-          },
-          {
-            icon: TrendingUp,
-            label: "Job Success Rate",
-            value: stats.rating ? `${stats.rating}%` : "N/A",
-          },
-        ].map((stat, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: i * 0.1 }}
-            className="p-6 rounded-2xl glass-effect border border-border shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+      <div className="space-y-3 w-full">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Stats</h2>
+          <button
+            onClick={() => account?.address && loadProfile(account.address)}
+            disabled={loadingStats}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border hover:bg-surface-secondary transition disabled:opacity-50 text-sm"
+            title="Refresh stats from blockchain"
           >
-            <div className="w-full">
-              <p className="text-sm text-foreground-secondary">
-                {stat.label}
-              </p>
-              <h2 className="text-2xl font-semibold break-words">
-                {stat.value}
-              </h2>
-            </div>
-            <stat.icon className="w-6 h-6 text-primary flex-shrink-0" />
-          </motion.div>
-        ))}
+            <RefreshCw className={`w-4 h-4 ${loadingStats ? "animate-spin" : ""}`} />
+            Refresh Stats
+          </button>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 w-full">
+          {[
+            {
+              icon: DollarSign,
+              label: "Total Earnings",
+              value: `${stats.totalEarnings.toFixed(2)} USDT`,
+            },
+            {
+              icon: Briefcase,
+              label: "Completed Jobs",
+              value: stats.completedJobs.toString(),
+            },
+            {
+              icon: TrendingUp,
+              label: "Job Success Rate",
+              value: stats.rating ? `${stats.rating}%` : "N/A",
+            },
+            {
+              icon: ShieldCheck,
+              label: "Disputed Jobs",
+              value: disputedCount.toString(),
+            },
+            {
+              icon: Briefcase,
+              label: "Cancelled Jobs",
+              value: cancelledCount.toString(),
+            },
+          ].map((stat, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: i * 0.1 }}
+              className="p-6 rounded-2xl glass-effect border border-border shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+            >
+              <div className="w-full">
+                <p className="text-sm text-foreground-secondary">
+                  {stat.label}
+                </p>
+                <h2 className="text-2xl font-semibold break-words">
+                  {stat.value}
+                </h2>
+              </div>
+              <stat.icon className="w-6 h-6 text-primary flex-shrink-0" />
+            </motion.div>
+          ))}
+        </div>
       </div>
 
       {/* WALLET + SMART ACCOUNT */}
@@ -584,7 +665,7 @@ export default function FreelancerHome() {
               <div>
                 <p className="text-sm text-foreground-secondary">MATIC</p>
                 <p className="text-2xl font-bold text-primary">
-                  {balance ? `${balance.displayValue} ${balance.symbol}` : "0"}
+                  {balance ? `${parseFloat(balance.displayValue).toFixed(4)} ${balance.symbol}` : "0"}
                 </p>
               </div>
               <div>
@@ -643,7 +724,7 @@ export default function FreelancerHome() {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
               {/* Applied Jobs */}
               <div className="rounded-2xl p-5 glass-effect border border-border shadow-md">
                 <h3 className="text-lg font-semibold mb-3">Applied (Pending)</h3>
@@ -734,6 +815,57 @@ export default function FreelancerHome() {
                             router.push(`/freelancer/jobs/${job.jobId}`)
                           }
                           className="w-full px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition flex items-center justify-center gap-2 text-sm font-medium"
+                        >
+                          View Job Details
+                          <ArrowRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Cancelled Jobs */}
+              <div className="rounded-2xl p-5 glass-effect border border-border shadow-md">
+                <h3 className="text-lg font-semibold mb-3">Cancelled / Refunded</h3>
+                {cancelledJobs.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No cancelled jobs.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {cancelledJobs.map((job) => (
+                      <div
+                        key={job.jobId}
+                        className="border border-red-500/30 rounded-xl p-4 bg-red-500/5 hover:border-red-500/50 transition-all hover:shadow-md"
+                      >
+                        <div className="flex justify-between items-start gap-4 mb-3">
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-base mb-1 line-clamp-2">
+                              {job.title}
+                            </h4>
+                            <div className="flex items-center gap-2 text-xs mb-2">
+                              <span className="px-2 py-0.5 rounded-md bg-red-500/20 text-red-400 font-medium">
+                                ✕ Cancelled
+                              </span>
+                              <span className="text-muted-foreground">Job #{job.jobId}</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              Client: {job.client.slice(0, 6)}...{job.client.slice(-4)}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-bold text-red-400">
+                              {(Number(job.budgetUSDC) / 1e6).toFixed(2)} USDT
+                            </p>
+                            <p className="text-xs text-muted-foreground">Refunded</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() =>
+                            router.push(`/freelancer/jobs/${job.jobId}`)
+                          }
+                          className="w-full px-4 py-2 rounded-lg bg-red-900/40 text-red-300 hover:bg-red-900/60 transition flex items-center justify-center gap-2 text-sm font-medium"
                         >
                           View Job Details
                           <ArrowRight className="w-4 h-4" />

@@ -29,10 +29,11 @@ export default function InvestorLayout({
 
   // ✅ Detect active tab by route
   useEffect(() => {
-    if (pathname.includes("/investments")) setActiveTab("investments");
-    else if (pathname.includes("/portfolio")) setActiveTab("portfolio");
-    else if (pathname.includes("/settings")) setActiveTab("settings");
-    else setActiveTab("home");
+    const current = pathname.toLowerCase();
+    if (current.includes("/explore")) setActiveTab("explore");
+    else if (current.includes("/profile")) setActiveTab("profile");
+    else if (current.includes("/wallet")) setActiveTab("wallet");
+    else setActiveTab("portfolio");
   }, [pathname]);
 
   const handleLogout = () => console.log("Investor logged out");

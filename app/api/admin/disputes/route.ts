@@ -42,42 +42,53 @@ export async function GET(req: NextRequest) {
             );
         }
 
-        console.log("🔍 Fetching disputes from SUPABASE...");
+        console.log("🔍 Fetching disputes from EscrowFactory on-chain...");
 
-        // 1. Fetch open disputes from Supabase
-        const { data: dbDisputes, error } = await supabase
-            .from('disputes')
-            .select('*')
-            .eq('status', 'OPEN')
-            .order('created_at', { ascending: false });
+        const escrowFactory = getContract({
+            client: infuraClient,
+            chain: polygonAmoyInfura,
+            address: DEPLOYED_CONTRACTS.addresses.EscrowFactory,
+        });
 
-        if (error) throw error;
+        // 1. Fetch open disputes from EscrowFactory
+        const activeDisputes = await readContract({
+            contract: escrowFactory,
+            method: "function getActiveDisputes() view returns ((uint256 jobId, address escrow, address client, address freelancer, string reasonURI, bool resolved)[])",
+            params: [],
+        }) as any[];
 
-        const disputes = [];
+        if (!activeDisputes || activeDisputes.length === 0) {
+            return NextResponse.json({
+                success: true,
+                disputes: [],
+                count: 0,
+                method: "on-chain",
+            });
+        }
+
+        const jobBoard = getContract({
+            client: infuraClient,
+            chain: polygonAmoyInfura,
+            address: DEPLOYED_CONTRACTS.addresses.JobBoard,
+        });
 
         // 2. Hydrate with blockchain data for live status
-        // We do this in parallel for performance
-        const results = await Promise.all(dbDisputes.map(async (record: any) => {
+        const results = await Promise.all(activeDisputes.map(async (record: any, index: number) => {
             try {
-                // Get job details to find escrow address
-                const jobBoard = getContract({
-                    client: infuraClient,
-                    chain: polygonAmoyInfura,
-                    address: DEPLOYED_CONTRACTS.addresses.JobBoard,
-                });
+                const jobId = record.jobId;
+                const escrowAddr = record.escrow;
+                const clientAddr = record.client;
+                const freelancerAddr = record.freelancer;
+                const disputeReasonURI = record.reasonURI;
 
                 const jobData = await readContract({
                     contract: jobBoard,
                     method:
                         "function getJob(uint256) view returns (address,string,string,uint256,uint8,address,address,uint64,uint64,uint64,bytes32[],uint256)",
-                    params: [BigInt(record.job_id)],
+                    params: [jobId],
                 }) as any;
 
-                const [clientAddr, title, descriptionURI, budgetUSDC, status, hiredFreelancer, escrowAddr] = jobData;
-
-                if (!escrowAddr || escrowAddr === "0x0000000000000000000000000000000000000000") {
-                    throw new Error("Job has no escrow address");
-                }
+                const [_, title, descriptionURI, budgetUSDC, status, hiredFreelancer, actualEscrowAddr] = jobData;
 
                 // Check active status on escrow
                 const escrow = getContract({
@@ -94,20 +105,14 @@ export async function GET(req: NextRequest) {
                         readContract({ contract: escrow, method: "function lastDeliveryURI() view returns (string)" }).catch(() => ""),
                     ]);
 
-                // Even if not disputed on-chain yet (edge case), if it's in DB we show it.
-                // But generally we want to confirm it's still active.
-                // If terminal, maybe we should close it in DB? For now just show status.
-
-                // Fetch names (Optional enhancement)
                 let clientName = "Unknown";
                 let freelancerName = "Unknown";
-                // ... (Name fetching logic can be added here if needed, keeping it simple for speed for now)
 
                 // Fetch Dispute Reason content
                 let disputeReason = "No reason provided";
-                if (record.dispute_reason_uri) {
+                if (disputeReasonURI) {
                     try {
-                        const ipfsUrl = record.dispute_reason_uri.replace("ipfs://", "https://ipfs.io/ipfs/");
+                        const ipfsUrl = disputeReasonURI.replace("ipfs://", "https://ipfs.io/ipfs/");
                         const response = await fetch(ipfsUrl);
                         const data = await response.json();
                         disputeReason = data.reason || data.description || JSON.stringify(data);
@@ -125,32 +130,31 @@ export async function GET(req: NextRequest) {
                 }
 
                 return {
-                    jobId: Number(record.job_id),
+                    jobId: Number(jobId),
                     jobTitle: title,
                     escrowAddress: escrowAddr,
                     client: clientAddr,
                     clientName,
-                    freelancer: hiredFreelancer,
+                    freelancer: freelancerAddr,
                     freelancerName,
                     budget: Number(budgetUSDC) / 1e6,
                     disputed,
                     delivered,
                     terminal,
                     lastDeliveryURI,
-                    lastDisputeURI: record.dispute_reason_uri,
+                    lastDisputeURI: disputeReasonURI,
                     disputeReason,
                     jobDescription,
-                    createdAt: new Date(record.created_at).getTime(),
-                    dbId: record.id // Internal DB ID
+                    createdAt: Date.now(), // approximation, we don't store dispute creation time on-chain in this record
+                    dbId: index.toString()
                 };
 
             } catch (err: any) {
-                console.error(`Error hydrating dispute ${record.id}:`, err);
-                // Return fallback data so it's not hidden
+                console.error(`Error hydrating dispute ${index}:`, err);
                 return {
-                    jobId: Number(record.job_id),
-                    jobTitle: `Job #${record.job_id} (Sync Error)`,
-                    escrowAddress: "0x0000000000000000000000000000000000000000",
+                    jobId: Number(record.jobId),
+                    jobTitle: `Job #${record.jobId} (Sync Error)`,
+                    escrowAddress: record.escrow,
                     client: "Unknown",
                     clientName: "Unknown",
                     freelancer: "Unknown",
@@ -160,24 +164,23 @@ export async function GET(req: NextRequest) {
                     delivered: false,
                     terminal: false,
                     lastDeliveryURI: "",
-                    lastDisputeURI: record.dispute_reason_uri,
+                    lastDisputeURI: record.reasonURI,
                     disputeReason: "Failed to sync with blockchain: " + (err.message || "Unknown error"),
                     jobDescription: "Blockchain sync failed",
-                    createdAt: new Date(record.created_at).getTime(),
-                    dbId: record.id,
+                    createdAt: Date.now(),
+                    dbId: index.toString(),
                     isError: true
                 };
             }
         }));
 
-        // Filter out nulls
         const validDisputes = results.filter((d: any) => d !== null);
 
         return NextResponse.json({
             success: true,
             disputes: validDisputes,
             count: validDisputes.length,
-            method: "supabase",
+            method: "on-chain",
         });
     } catch (error: any) {
         console.error("Error fetching disputes:", error);

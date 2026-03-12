@@ -8,7 +8,10 @@ export const DEPLOYED_CONTRACTS = deployed as {
     | "FreelancerFactory"
     | "ClientFactory"
     | "EscrowFactory"
-    | "JobBoard",
+    | "JobBoard"
+    | "FundraiseFactory"
+    | "CompanyRegistry"
+    | "InvestorRegistry",
     string
   >;
   roles: {

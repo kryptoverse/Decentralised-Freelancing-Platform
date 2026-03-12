@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { getContract, readContract } from "thirdweb";
 import { useActiveAccount } from "thirdweb/react";
+import { Star } from "lucide-react";
 
 import { client } from "@/lib/thirdweb-client";
 import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
+import { ipfsToHttp } from "@/utils/ipfs";
 
 export default function FindFreelancerPage() {
   const account = useActiveAccount();
@@ -25,6 +27,7 @@ export default function FindFreelancerPage() {
       totalPoints: number;
       isKYCVerified: boolean;
       level: number;
+      profileData?: any;
     }[]
   >([]);
 
@@ -131,6 +134,17 @@ export default function FindFreelancerPage() {
                   )
                   : 0;
 
+              // Fetch profile metadata from IPFS if it exists
+              let profileData = null;
+              if (profileURI && (profileURI as string).trim() !== "") {
+                try {
+                  const res = await fetch(ipfsToHttp(profileURI as string));
+                  profileData = await res.json();
+                } catch (e) {
+                  console.warn("Could not fetch profile metadata for", wallet);
+                }
+              }
+
               return {
                 address: wallet,
                 name,
@@ -141,6 +155,7 @@ export default function FindFreelancerPage() {
                 totalPoints: Number(totalPoints),
                 isKYCVerified: Boolean(isKYCVerified),
                 level: Number(level),
+                profileData,
               };
             } catch (err) {
               console.warn("Failed to load freelancer:", wallet, err);
@@ -208,73 +223,97 @@ export default function FindFreelancerPage() {
           {freelancers.map((f, i) => (
             <motion.div
               key={f.address}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: i * 0.05 }}
-              className="rounded-2xl glass-effect border border-border p-6 shadow-md hover:shadow-lg transition group"
+              className="group relative rounded-2xl bg-card border border-border/40 p-5 hover:border-border transition-all duration-300 flex flex-col"
             >
-              {/* Avatar + Name */}
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-14 h-14 rounded-full bg-gradient-primary flex items-center justify-center text-sm font-semibold text-white">
-                  {f.name?.[0]?.toUpperCase() || "F"}
+              <div className="flex gap-4">
+                {/* Avatar */}
+                <div className="relative shrink-0">
+                  <div className="w-14 h-14 rounded-full overflow-hidden bg-muted border border-border/50 flex items-center justify-center">
+                    {f.profileData?.profileImage ? (
+                      <img
+                        src={ipfsToHttp(f.profileData.profileImage)}
+                        alt={f.name || "Freelancer Avatar"}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-xl font-semibold text-muted-foreground">
+                        {f.name?.[0]?.toUpperCase() || "F"}
+                      </span>
+                    )}
+                  </div>
+                  {f.isKYCVerified && (
+                    <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-0.5" title="KYC Verified">
+                      <div className="bg-green-500/20 text-green-500 rounded-full p-1">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <h2 className="font-semibold text-lg">
-                    {f.name || "Unnamed Freelancer"}
-                  </h2>
-                  <p className="text-xs text-muted-foreground">
-                    {f.address.slice(0, 6)}...{f.address.slice(-4)}
-                  </p>
+
+                {/* Header Info */}
+                <div className="flex-1 min-w-0 pt-1">
+                  <div className="flex justify-between items-start gap-2">
+                    <h2 className="text-base font-semibold text-foreground truncate">
+                      {f.name || "Anonymous"}
+                    </h2>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-full whitespace-nowrap">
+                      <Star className="w-3 h-3 fill-yellow-500 text-yellow-500" />
+                      <span className="font-medium text-foreground">{f.rating}%</span>
+                      <span className="opacity-50 mx-1">•</span>
+                      <span>Lvl {f.level}</span>
+                    </div>
+                  </div>
+                  {f.profileData?.headline ? (
+                    <p className="text-xs text-primary font-medium mt-0.5 truncate pr-2">
+                      {f.profileData.headline}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground font-mono mt-0.5 truncate">
+                      {f.address.slice(0, 6)}...{f.address.slice(-4)}
+                    </p>
+                  )}
                 </div>
               </div>
 
               {/* Bio */}
-              <p className="text-sm text-foreground-secondary line-clamp-3 mb-3">
-                {f.bio || "No bio available."}
+              <p className="text-sm text-muted-foreground line-clamp-2 mt-4 flex-1">
+                {f.bio || "Available for freelance work."}
               </p>
 
-              {/* Profile URI */}
-              {f.profileURI && (
-                <p className="text-xs text-muted-foreground truncate mb-3">
-                  <span className="font-medium">Profile Data:</span>{" "}
-                  <a
-                    href={
-                      f.profileURI.startsWith("ipfs://")
-                        ? f.profileURI.replace("ipfs://", "https://ipfs.io/ipfs/")
-                        : f.profileURI
-                    }
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary hover:underline"
-                  >
-                    View on IPFS
-                  </a>
-                </p>
+              {/* Skills (if available) */}
+              {f.profileData?.skills && f.profileData.skills.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-4">
+                  {f.profileData.skills.slice(0, 3).map((skill: string, idx: number) => (
+                    <span key={idx} className="text-[10px] bg-muted/50 px-2 py-0.5 rounded text-foreground-secondary truncate max-w-[100px]">
+                      {skill}
+                    </span>
+                  ))}
+                  {f.profileData.skills.length > 3 && (
+                    <span className="text-[10px] bg-muted/50 px-1.5 py-0.5 rounded text-muted-foreground">
+                      +{f.profileData.skills.length - 3}
+                    </span>
+                  )}
+                </div>
               )}
 
-              {/* Stats */}
-              <div className="text-xs flex justify-between mb-3 text-muted-foreground">
-                <span>{f.completedJobs} jobs</span>
-                <span>{f.rating}% rating</span>
-                <span>Lvl {f.level}</span>
-              </div>
-
-              {/* Footer */}
-              <div className="flex items-center justify-between mt-4">
-                <span
-                  className={`text-xs px-2 py-1 rounded-full ${f.isKYCVerified
-                      ? "bg-green-500/20 text-green-500"
-                      : "bg-yellow-500/20 text-yellow-500"
-                    }`}
-                >
-                  {f.isKYCVerified ? "KYC Verified" : "Not Verified"}
-                </span>
-
+              {/* Footer / Action */}
+              <div className="mt-5 flex items-center justify-between pt-4 border-t border-border/40">
+                <div className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">{f.completedJobs}</span> jobs completed
+                </div>
                 <button
                   onClick={() => router.push(`/freelancer/${f.address}`)}
-                  className="px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-sm hover:opacity-90 transition"
+                  className="text-sm font-medium text-primary hover:text-primary/80 transition-colors flex items-center gap-1 group/btn"
                 >
                   View Profile
+                  <svg className="w-4 h-4 group-hover/btn:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                  </svg>
                 </button>
               </div>
             </motion.div>

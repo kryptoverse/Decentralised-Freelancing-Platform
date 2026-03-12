@@ -3,7 +3,7 @@ import { createThirdwebClient, getContract, readContract } from "thirdweb";
 import { defineChain } from "thirdweb/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { ethers } from "ethers";
-import { supabase } from "@/lib/supabase";
+
 
 // Check keys and setup robust RPC
 const secretKey = process.env.NEXT_PUBLIC_THIRDWEB_SECRET_KEY;

@@ -67,7 +67,7 @@ export default function Home() {
       {/* FIXED NAVBAR */}
       <nav className="fixed top-0 left-0 w-full z-50 bg-pastel-light/95 backdrop-blur-md border-b border-soft-divider/30 px-6 py-4 flex items-center justify-between">
         {/* Logo */}
-        <div className="text-lg font-serif italic text-brand-dark" style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif' }}>FYP</div>
+        <div className="text-lg font-serif italic text-brand-dark" style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif' }}>WORQS</div>
 
         {/* Navigation Links */}
         <div className="hidden md:flex items-center gap-8 text-sm text-brand-primary">

@@ -88,7 +88,7 @@ export function Sidebar({
         <div className="mb-8 pt-8 md:pt-0 flex items-center justify-between">
           {!isCollapsed && (
             <div>
-              <h1 className="text-2xl font-bold gradient-text">FYP</h1>
+              <h1 className="text-2xl font-bold gradient-text">WORQS</h1>
               <p className="text-xs text-foreground-secondary">Web3 Platform</p>
             </div>
           )}

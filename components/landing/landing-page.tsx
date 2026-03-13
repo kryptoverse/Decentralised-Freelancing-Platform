@@ -16,10 +16,13 @@ export function LandingPage({ onGetStarted }: LandingPageProps) {
         className="w-full max-w-2xl"
       >
         <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-4">
-          Welcome to <span className="gradient-text">FYP</span>
+          Welcome to <span className="gradient-text">WORQS</span>
         </h1>
         <p className="text-sm sm:text-base md:text-lg text-foreground-secondary max-w-xl mx-auto mb-8">
-          Web3 platform connecting freelancers, founders, and investors.
+          <span className="font-bold">WORQS</span> turns <span className="text-primary font-semibold">Work</span> into value, 
+          builds <span className="text-primary font-semibold">Reputation</span> on-chain, 
+          delivers <span className="text-primary font-semibold">QuickPay</span> instantly, 
+          and distributes <span className="text-primary font-semibold">Ownership</span> through <span className="text-primary font-semibold">Shares</span>.
         </p>
         <button
           onClick={onGetStarted}

@@ -1,4 +1,6 @@
-# KryptoChainGames - Web3 Freelancing & Dual-Funding DApp
+# WORQS - Web3 Freelancing & Dual-Funding DApp
+
+WORQS turns **Work** into value, builds **Reputation** on-chain, delivers **QuickPay** instantly, and distributes **Ownership** through **Shares**.
 
 ## Overview
 Welcome to the future of decentralized work and investing. 
@@ -83,7 +85,7 @@ We specifically bypassed the gas sponsorship (paymaster) exclusively for the `ha
 
 ## ⚖️ On-Chain Dispute System
 
-To ensure complete transparency and decentralization, KryptoChainGames features a fully on-chain dispute resolution engine.
+To ensure complete transparency and decentralization, WORQS features a fully on-chain dispute resolution engine.
 
 ### How it Works:
 1. **Raising a Dispute:** 

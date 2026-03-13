@@ -24,7 +24,7 @@ export function HeroSection({ onGetStarted }: HeroSectionProps) {
           transition={{ duration: 0.6 }}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/60 backdrop-blur-sm border border-soft-divider/50 mb-8 shadow-sm"
         >
-          <span className="text-xs font-medium text-brand-primary tracking-wide uppercase">Transforming the future of work with Web3</span>
+          <span className="text-xs font-medium text-brand-primary tracking-wide uppercase">work it own it</span>
         </motion.div>
 
         {/* Main Headline - Serif Font */}
@@ -44,11 +44,12 @@ export function HeroSection({ onGetStarted }: HeroSectionProps) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.2 }}
-          className="text-base sm:text-lg md:text-xl text-text-secondary mb-12 max-w-3xl mx-auto px-2 leading-relaxed"
+          className="text-base sm:text-lg md:text-xl text-text-secondary mb-12 max-w-4xl mx-auto px-2 leading-relaxed"
         >
-          FYP connects talent, capital, and AI through blockchain simplicity.
-          <br />
-          Manage your equity, hire top talent, and build with transparency.
+          <span className="font-bold text-brand-dark">WORQS</span> turns <span className="text-[#163832] font-semibold underline decoration-brand-primary/30">Work</span> into value, 
+          builds <span className="text-[#163832] font-semibold underline decoration-brand-primary/30">Reputation</span> on-chain, 
+          delivers <span className="text-[#163832] font-semibold underline decoration-brand-primary/30">QuickPay</span> instantly, 
+          and distributes <span className="text-[#163832] font-semibold underline decoration-brand-primary/30">Ownership</span> through <span className="text-[#163832] font-semibold underline decoration-brand-primary/30">Shares</span>.
         </motion.p>
 
         {/* CTA Buttons */}

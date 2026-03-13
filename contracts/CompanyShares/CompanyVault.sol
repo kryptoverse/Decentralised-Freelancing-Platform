@@ -39,6 +39,7 @@ contract CompanyVault is Ownable2Step, ReentrancyGuard {
     uint96 public constant MIN_REVENUE_SHARE_BPS = 1000; // 10% of Revenue (Floor)
     uint96 public constant EXPENSE_CAP_BPS = 7000;       // 70% of Revenue (Cap)
     uint96 public constant PROFIT_SHARE_BPS = 4000;      // 40% of Net Profit
+    uint256 public constant SOLO_CLAIM_COOLDOWN = 30 days;
 
     // Withdrawal limits for Raised Funds
     uint96 public immutable raisedWithdrawBps;
@@ -47,6 +48,8 @@ contract CompanyVault is Ownable2Step, ReentrancyGuard {
     address public sale;
     address public distributor;
     address public profile;
+    uint256 public lastSoloClaimTimestamp;
+
     bool private saleLocked;
     bool private distributorLocked;
     bool private profileLocked;
@@ -68,6 +71,7 @@ contract CompanyVault is Ownable2Step, ReentrancyGuard {
     // New Events
     event ExpenseSubmitted(uint256 claimed, uint256 accepted);
     event PeriodClosed(uint256 revenue, uint256 expenses, uint256 investorPayout, uint256 ownerPayout);
+    event MonthlySoloClaimed(address indexed owner, uint256 amount);
 
     error OnlySale();
     error OnlyRevenueDepositor();
@@ -77,6 +81,7 @@ contract CompanyVault is Ownable2Step, ReentrancyGuard {
     error ExceedsWithdrawable();
     error InsufficientBalance();
     error DistributorNotSet();
+    error TooEarly();
 
     /// @notice Initialize the vault
     /// @param _paymentToken Stablecoin address (e.g., USDT)
@@ -242,6 +247,21 @@ contract CompanyVault is Ownable2Step, ReentrancyGuard {
         
         periodRevenue = 0;
         periodExpenses = 0;
+    }
+
+    /// @notice Claim revenue from one job specifically for the owner (Monthly Benefit)
+    /// @dev Excludes the amount from future period distribution
+    /// @param amount Amount to claim (should correspond to the job payout)
+    function claimMonthlySoloJob(uint256 amount) external onlyOwner nonReentrant {
+        if (lastSoloClaimTimestamp > 0 && block.timestamp < lastSoloClaimTimestamp + SOLO_CLAIM_COOLDOWN) revert TooEarly();
+        if (amount == 0) revert InvalidAmount();
+        if (amount > periodRevenue) revert ExceedsWithdrawable();
+
+        periodRevenue -= amount;
+        lastSoloClaimTimestamp = block.timestamp;
+
+        paymentToken.safeTransfer(owner(), amount);
+        emit MonthlySoloClaimed(owner(), amount);
     }
 
     /// @notice Calculate withdrawable raised funds

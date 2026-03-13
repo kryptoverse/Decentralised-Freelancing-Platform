@@ -19,6 +19,8 @@ import {
   RefreshCw,
   CheckCircle2,
   Zap,
+  ShieldCheck,
+  Info,
 } from "lucide-react";
 
 import DisputeModal from "@/components/modals/DisputeModal";
@@ -84,6 +86,7 @@ interface EscrowData {
   lastDisputeURI: string;
   lastDeliveryURI: string;
   deliveryHistory: Delivery[];
+  platformFeeBps: number;
 }
 
 /* ============================================================
@@ -422,6 +425,11 @@ export default function FreelancerJobDetailPage() {
             }).catch(() => []), // Fallback to empty array for old escrows
           ]);
 
+          const lastDeliveryURI = await readContract({
+            contract: escrowC,
+            method: "function lastDeliveryURI() view returns (string)",
+          }).catch(() => "");
+
           setEscrowData({
             escrowAddr: escrow,
             cancelEnd,
@@ -431,16 +439,17 @@ export default function FreelancerJobDetailPage() {
             disputed,
             terminal,
             cancelRequestedBy,
-            lastDisputeURI: typeof lastDisputeURI === 'string' ? lastDisputeURI : '',
-            lastDeliveryURI: typeof lastDisputeURI === 'string' ? (await readContract({
-              contract: escrowC,
-              method: "function lastDeliveryURI() view returns (string)",
-            }).catch(() => '')) as string : '',
+            lastDisputeURI: String(lastDisputeURI || ""),
+            lastDeliveryURI: String(lastDeliveryURI || ""),
             deliveryHistory: (deliveryHistory as any[]).map((d: any) => ({
               uri: d[0],
               timestamp: d[1],
               version: d[2],
             })),
+            platformFeeBps: await readContract({
+              contract: escrowC,
+              method: "function platformFeeBps() view returns (uint16)",
+            }).then(n => Number(n)).catch(() => 0),
           });
 
           // ── Load fundraise if linked ──────────────────────
@@ -979,33 +988,62 @@ export default function FreelancerJobDetailPage() {
                       const tgtRaw = parseFloat(frForm.targetUSDT);
                       const profitPct = parseFloat(frForm.profitShare);
                       if (isNaN(tgtRaw) || isNaN(profitPct)) return null;
-                      const isValid = tgtRaw > 0 && tgtRaw <= jobAmountUSDT;
-                      const netProfit = jobAmountUSDT > tgtRaw ? jobAmountUSDT - tgtRaw : 0;
-                      const invShare = netProfit * (profitPct / 100);
-                      const yourEarnings = netProfit - invShare;
+                      
+                      const platformFee = (jobAmountUSDT * (escrowData.platformFeeBps || 0)) / 10000;
+                      const netJobAmount = jobAmountUSDT - platformFee;
+                      const isValid = tgtRaw > 0 && tgtRaw <= netJobAmount;
+                      
+                      const investorProfit = netJobAmount > tgtRaw ? (netJobAmount - tgtRaw) * (profitPct / 100) : 0;
+                      const freelancerEarnings = netJobAmount - tgtRaw - investorProfit;
+
                       return (
-                        <div className={`text-xs p-4 rounded-xl border space-y-2 ${isValid ? "bg-surface border-primary/20" : "bg-red-500/10 border-red-500/30"}`}>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <p className="text-muted-foreground">Job Reward</p>
-                              <p className="font-medium">{jobAmountUSDT} USDT</p>
+                        <div className={`text-xs p-5 rounded-2xl border space-y-4 shadow-inner ${isValid ? "bg-surface border-primary/20" : "bg-red-500/10 border-red-500/30"}`}>
+                          <div className="space-y-3">
+                            <div className="flex justify-between items-center pb-2 border-b border-border/50">
+                              <span className="text-muted-foreground">Original Bid:</span>
+                              <span className="font-bold">{jobAmountUSDT.toFixed(2)} USDT</span>
                             </div>
-                            <div>
-                              <p className="text-muted-foreground">Your Target</p>
-                              <p className={`font-medium ${isValid ? "" : "text-red-400"}`}>{frForm.targetUSDT} USDT{!isValid && " ⚠ max allowed is job reward"}</p>
+                            <div className="flex justify-between items-center text-red-400/80">
+                              <span className="flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5" /> Platform Fee ({(escrowData.platformFeeBps / 100).toFixed(1)}%):</span>
+                              <span className="font-medium">-{platformFee.toFixed(2)} USDT</span>
                             </div>
-                            {isValid && <>
-                              <div>
-                                <p className="text-muted-foreground">Investors Get</p>
-                                <p className="font-medium text-emerald-400">{(tgtRaw + invShare).toFixed(2)} USDT</p>
-                              </div>
-                              <div className="col-span-2 p-2 bg-primary/10 rounded-lg">
-                                <p className="text-muted-foreground">Your Projected Earnings</p>
-                                <p className="font-bold text-base text-primary">{yourEarnings.toFixed(2)} USDT</p>
-                              </div>
-                            </>}
+                            <div className="flex justify-between items-center text-primary font-bold pt-1">
+                              <span>Net Escrow Payout:</span>
+                              <span>{netJobAmount.toFixed(2)} USDT</span>
+                            </div>
+                            
+                            <div className="h-2" />
+                            
+                            <div className="flex justify-between items-center px-3 py-2 bg-primary/5 rounded-xl border border-primary/10">
+                              <span className="text-muted-foreground group relative">
+                                Investor Principal:
+                                <Info className="w-3 h-3 inline ml-1 opacity-50 cursor-help" />
+                              </span>
+                              <span className={`font-bold ${isValid ? "text-emerald-400" : "text-red-400"}`}>
+                                {tgtRaw.toFixed(2)} USDT
+                                {!isValid && tgtRaw > 0 && " ⚠ exceeds payout"}
+                              </span>
+                            </div>
+
+                            {isValid && (
+                              <>
+                                <div className="flex justify-between items-center px-3 py-2 bg-emerald-500/5 rounded-xl border border-emerald-500/10">
+                                  <span className="text-muted-foreground">Total Pool Return:</span>
+                                  <span className="font-bold text-emerald-400">{(tgtRaw + investorProfit).toFixed(2)} USDT</span>
+                                </div>
+                                <div className="flex justify-between items-center p-4 bg-primary text-white rounded-2xl shadow-lg shadow-primary/20">
+                                  <div className="space-y-0.5">
+                                    <p className="text-[10px] uppercase font-bold opacity-80 letter tracking-widest">Final Freelancer Earnings</p>
+                                    <p className="text-xl font-black">{freelancerEarnings.toFixed(2)} USDT</p>
+                                  </div>
+                                  <TrendingUp className="w-8 h-8 opacity-20" />
+                                </div>
+                                <p className="text-[10px] text-amber-400/80 italic text-center px-2 pt-1 uppercase font-bold tracking-tighter">
+                                  <Zap className="w-3 h-3 inline mr-1" /> Investors receive principal + {profitPct}% of net profit
+                                </p>
+                              </>
+                            )}
                           </div>
-                          {isValid && <p className="text-amber-400 flex items-center gap-1"><Zap className="w-3 h-3" /> Requires 2 transactions: deploy + link to escrow</p>}
                         </div>
                       );
                     })()}

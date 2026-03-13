@@ -13,7 +13,7 @@ export function AIAssistantChat({ isOpen, onToggle }: AIAssistantChatProps) {
   const [messages, setMessages] = useState([
     {
       id: 1,
-      text: "Hello! I'm your FYP AI Assistant. I can help you write better proposals, analyze startups, and automate your workflow. What can I help you with today?",
+      text: "Hello! I'm your WORQS AI Assistant. I can help you write better proposals, analyze startups, and automate your workflow. What can I help you with today?",
       sender: "ai",
       timestamp: new Date(),
     },

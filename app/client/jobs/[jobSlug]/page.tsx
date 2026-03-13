@@ -846,8 +846,8 @@ export default function JobAnalyticsPage() {
           disputed,
           terminal,
           cancelRequestedBy,
-          lastDeliveryURI: typeof lastDeliveryURI === 'string' ? lastDeliveryURI : '',
-          lastDisputeURI: typeof lastDisputeURI === 'string' ? lastDisputeURI : '',
+          lastDeliveryURI: String(lastDeliveryURI || ""),
+          lastDisputeURI: String(lastDisputeURI || ""),
           deliveryHistory,
         };
 

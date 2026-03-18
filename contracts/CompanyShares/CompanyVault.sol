@@ -43,6 +43,7 @@ contract CompanyVault is Ownable2Step, ReentrancyGuard {
 
     // Withdrawal limits for Raised Funds
     uint96 public immutable raisedWithdrawBps;
+    address public immutable registry;
 
     // Contract addresses (set once)
     address public sale;
@@ -52,7 +53,6 @@ contract CompanyVault is Ownable2Step, ReentrancyGuard {
 
     bool private saleLocked;
     bool private distributorLocked;
-    bool private profileLocked;
 
     // Revenue depositor whitelist
     mapping(address => bool) public isRevenueDepositor;
@@ -82,6 +82,7 @@ contract CompanyVault is Ownable2Step, ReentrancyGuard {
     error InsufficientBalance();
     error DistributorNotSet();
     error TooEarly();
+    error Unauthorized();
 
     /// @notice Initialize the vault
     /// @param _paymentToken Stablecoin address (e.g., USDT)
@@ -90,14 +91,17 @@ contract CompanyVault is Ownable2Step, ReentrancyGuard {
     constructor(
         address _paymentToken,
         address companyOwner,
-        uint96 _raisedWithdrawBps
+        uint96 _raisedWithdrawBps,
+        address _registry
     ) Ownable(companyOwner) {
         if (_paymentToken == address(0)) revert InvalidAddress();
         if (companyOwner == address(0)) revert InvalidAddress();
         if (_raisedWithdrawBps > 10000) revert InvalidAmount();
+        if (_registry == address(0)) revert InvalidAddress();
 
         paymentToken = IERC20(_paymentToken);
         raisedWithdrawBps = _raisedWithdrawBps;
+        registry = _registry;
     }
 
     /// @notice Set the sale contract address (one-time only)
@@ -120,13 +124,12 @@ contract CompanyVault is Ownable2Step, ReentrancyGuard {
         emit DistributorSet(_distributor);
     }
 
-    /// @notice Set the freelancer profile address (one-time only)
-    function setProfile(address _profile) external onlyOwner {
+    /// @notice Set the freelancer profile address
+    function setProfile(address _profile) external {
+        if (msg.sender != owner() && msg.sender != registry) revert Unauthorized();
         if (_profile == address(0)) revert InvalidAddress();
-        if (profileLocked) revert AlreadySet();
         
         profile = _profile;
-        profileLocked = true;
         emit ProfileSet(_profile);
     }
 

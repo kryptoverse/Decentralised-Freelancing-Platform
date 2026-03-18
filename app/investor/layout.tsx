@@ -45,7 +45,10 @@ export default function InvestorLayout({
 
   return (
     <WalletSessionGuard>
-      <div className="flex h-screen">
+      <div
+        className="flex h-screen w-full overflow-hidden"
+        style={{ '--sidebar-w': isCollapsed ? '5rem' : '16rem' } as React.CSSProperties}
+      >
         {/* Sidebar */}
         <Sidebar
           userRole={userRole}
@@ -59,8 +62,8 @@ export default function InvestorLayout({
 
         {/* Main content */}
         <div
-          className={`flex-1 flex flex-col transition-all duration-300 ${
-            isCollapsed ? "ml-[5rem]" : "ml-[16rem]"
+          className={`flex-1 flex flex-col transition-all duration-300 w-full h-full overflow-hidden ${
+            isCollapsed ? "sm:ml-[5rem]" : "sm:ml-[16rem]"
           }`}
         >
           {/* Top Navbar */}
@@ -71,7 +74,7 @@ export default function InvestorLayout({
           />
 
           {/* Page Content */}
-          <main className="flex-1 p-8 overflow-y-auto space-y-8">
+          <main id="investor-main" className="relative flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto w-full max-w-full overflow-x-hidden space-y-8">
             {children}
           </main>
         </div>

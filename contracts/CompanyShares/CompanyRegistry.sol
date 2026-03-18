@@ -116,15 +116,16 @@ contract CompanyRegistry is Ownable2Step {
     /// @param symbol Share token symbol
     /// @param metadataURI IPFS/URL metadata for frontend display
     /// @param sector The sector or category of the company
+    /// @param smartWalletAddress Optional Smart Wallet address to link the company vault to
     /// @return companyId The unique identifier for the created company
     function createCompany(
         string calldata name,
         string calldata symbol,
         string calldata metadataURI,
-        string calldata sector
+        string calldata sector,
+        address smartWalletAddress
     ) external returns (uint256 companyId) {
         if (ownerToCompanyId[msg.sender] != 0) revert OwnerAlreadyHasCompany();
-        if (freelancerFactory.freelancerProfile(msg.sender) == address(0)) revert NoFreelancerProfile();
         if (bytes(name).length == 0 || bytes(symbol).length == 0) revert EmptyNameOrSymbol();
         if (bytes(metadataURI).length > 512) revert MetadataURITooLong();
 
@@ -158,11 +159,18 @@ contract CompanyRegistry is Ownable2Step {
         CompanyVault vault = new CompanyVault(
             address(paymentToken),
             address(this), // Registry owns initially
-            10000 // raisedWithdrawBps = 100%
+            10000, // raisedWithdrawBps = 100%
+            address(this) // Registry address for setting profile later
         );
 
-        address profileAddr = freelancerFactory.freelancerProfile(msg.sender);
-        vault.setProfile(profileAddr);
+        // If user submitted their Smart Wallet address, look up its profile and link the vault
+        address profileAddr = address(0);
+        if (smartWalletAddress != address(0)) {
+            profileAddr = freelancerFactory.freelancerProfile(smartWalletAddress);
+            if (profileAddr != address(0)) {
+                vault.setProfile(profileAddr);
+            }
+        }
 
         // Wire distributor with vault
         distributor.setVault(address(vault));
@@ -212,8 +220,10 @@ contract CompanyRegistry is Ownable2Step {
         ownerToCompanyId[msg.sender] = companyId;
         tokenToCompanyId[address(token)] = companyId;
 
-        // Link vault to freelancer profile
-        freelancerFactory.linkVaultToProfile(msg.sender, address(vault));
+        // Auto-link vault to freelancer profile IF the user passed a valid smart wallet
+        if (smartWalletAddress != address(0) && freelancerFactory.freelancerProfile(smartWalletAddress) != address(0)) {
+            freelancerFactory.linkVaultToProfile(smartWalletAddress, address(vault));
+        }
 
         emit CompanyCreated(
             companyId,
@@ -239,5 +249,24 @@ contract CompanyRegistry is Ownable2Step {
     /// @return Total company count
     function getCompanyCount() external view returns (uint256) {
         return totalCompanies;
+    }
+
+    /// @notice Link an existing company vault to a freelancer profile AFTER creation
+    /// @dev Used if the EOA created the company before the Smart Wallet registered a profile
+    /// @param smartWalletAddress The Smart Wallet address that owns the freelancer profile
+    function linkFreelancerProfile(address smartWalletAddress) external {
+        uint256 companyId = ownerToCompanyId[msg.sender];
+        if (companyId == 0) revert CompanyNotFound();
+
+        address profileAddr = freelancerFactory.freelancerProfile(smartWalletAddress);
+        if (profileAddr == address(0)) revert NoFreelancerProfile();
+
+        address vault = companies[companyId].vault;
+        
+        // Link Vault to Profile in the Factory
+        freelancerFactory.linkVaultToProfile(smartWalletAddress, vault);
+
+        // Tell the Vault about the Profile
+        CompanyVault(vault).setProfile(profileAddr);
     }
 }

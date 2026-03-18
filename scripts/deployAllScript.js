@@ -122,7 +122,8 @@ async function main() {
         const fundraiseFactory = await deployContract(
             new ethers.ContractFactory(funA.abi, funA.bytecode, wallet),
             ethers.constants.AddressZero,
-            investorRegistryAddr
+            investorRegistryAddr,
+            companyRegistryAddr
         );
         const fundraiseFactoryAddr = fundraiseFactory.address;
         log(`✅ FundraiseFactory deployed at: ${fundraiseFactoryAddr}`);

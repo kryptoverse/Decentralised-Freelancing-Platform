@@ -21,7 +21,7 @@ export function HomeTab({ userRole, onRoleChange }: HomeTabProps) {
 
   const containerVariants = {
     hidden: { opacity: 0 },
-    visible: { 
+    visible: {
       opacity: 1,
       transition: { staggerChildren: 0.1 }
     }
@@ -40,7 +40,7 @@ export function HomeTab({ userRole, onRoleChange }: HomeTabProps) {
     <div className="w-full h-full flex flex-col justify-center py-10 px-4 md:px-8">
       <div className="w-full max-w-7xl mx-auto">
         {/* Header */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7 }}
@@ -51,7 +51,7 @@ export function HomeTab({ userRole, onRoleChange }: HomeTabProps) {
             <span>Select your portal</span>
           </div>
           <h1 className="text-4xl md:text-5xl lg:text-5xl font-bold tracking-tight text-foreground mb-4">
-            The simplest and easiest<br/>
+            The simplest and easiest<br />
             platform to craft your future
           </h1>
           <p className="text-foreground-secondary text-lg md:text-xl max-w-2xl">
@@ -60,7 +60,7 @@ export function HomeTab({ userRole, onRoleChange }: HomeTabProps) {
         </motion.div>
 
         {/* 4 Cards on the same line on desktop */}
-        <motion.div 
+        <motion.div
           variants={containerVariants}
           initial="hidden"
           animate="visible"
@@ -77,7 +77,7 @@ export function HomeTab({ userRole, onRoleChange }: HomeTabProps) {
           >
             {/* Subtle Gradient overlay on hover */}
             <div className="absolute inset-0 bg-gradient-to-t from-transparent to-[#7DE981]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-            
+
             <div className="relative z-10 h-full p-6 flex flex-col justify-between">
               <div className="flex justify-between items-start">
                 <div className="p-4 rounded-xl bg-[#1A261E] text-[#7DE981] group-hover:bg-[#7DE981]/20 transition-colors duration-300 shadow-sm">
@@ -88,7 +88,7 @@ export function HomeTab({ userRole, onRoleChange }: HomeTabProps) {
                   <ArrowUpRight className="w-5 h-5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                 </div>
               </div>
-              
+
               <div>
                 <h3 className="text-2xl font-bold text-foreground mb-2 tracking-tight group-hover:text-[#7DE981] transition-colors">Find Work</h3>
                 <p className="text-foreground-secondary text-sm leading-relaxed">Discover high-paying Web3 projects, build your on-chain reputation, and get paid securely.</p>
@@ -105,7 +105,7 @@ export function HomeTab({ userRole, onRoleChange }: HomeTabProps) {
             className="relative rounded-3xl overflow-hidden group text-left border border-border hover:border-[#7DE981]/60 bg-black/5 dark:bg-black/40 backdrop-blur-sm transition-all duration-300 shadow-sm hover:shadow-lg"
           >
             <div className="absolute inset-0 bg-gradient-to-t from-transparent to-[#7DE981]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-            
+
             <div className="relative z-10 h-full p-6 flex flex-col justify-between">
               <div className="flex justify-between items-start">
                 <div className="p-4 rounded-xl bg-[#1A261E] text-[#7DE981] group-hover:bg-[#7DE981]/20 transition-colors duration-300 shadow-sm">
@@ -115,7 +115,7 @@ export function HomeTab({ userRole, onRoleChange }: HomeTabProps) {
                   <ArrowUpRight className="w-5 h-5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                 </div>
               </div>
-              
+
               <div>
                 <h3 className="text-2xl font-bold text-foreground mb-2 tracking-tight group-hover:text-[#7DE981] transition-colors">Hire Talent</h3>
                 <p className="text-foreground-secondary text-sm leading-relaxed">Tap into a global network of verified Web3 experts managed via smart escrow contracts.</p>
@@ -132,7 +132,7 @@ export function HomeTab({ userRole, onRoleChange }: HomeTabProps) {
             className="relative rounded-3xl overflow-hidden group text-left border border-border hover:border-[#7DE981]/60 bg-black/5 dark:bg-black/40 backdrop-blur-sm transition-all duration-300 shadow-sm hover:shadow-lg"
           >
             <div className="absolute inset-0 bg-gradient-to-t from-transparent to-[#7DE981]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-            
+
             <div className="relative z-10 h-full p-6 flex flex-col justify-between">
               <div className="flex justify-between items-start">
                 <div className="p-4 rounded-xl bg-[#1A261E] text-[#7DE981] group-hover:bg-[#7DE981]/20 transition-colors duration-300 shadow-sm">
@@ -142,7 +142,7 @@ export function HomeTab({ userRole, onRoleChange }: HomeTabProps) {
                   <ArrowUpRight className="w-5 h-5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                 </div>
               </div>
-              
+
               <div>
                 <h3 className="text-2xl font-bold text-foreground mb-2 tracking-tight group-hover:text-[#7DE981] transition-colors">Raise Capital</h3>
                 <p className="text-foreground-secondary text-sm leading-relaxed">Launch your startup, pitch to our network of investors, and secure funding efficiently.</p>
@@ -159,7 +159,7 @@ export function HomeTab({ userRole, onRoleChange }: HomeTabProps) {
             className="relative rounded-3xl overflow-hidden group text-left border border-border hover:border-[#7DE981]/60 bg-black/5 dark:bg-black/40 backdrop-blur-sm transition-all duration-300 shadow-sm hover:shadow-lg"
           >
             <div className="absolute inset-0 bg-gradient-to-t from-transparent to-[#7DE981]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-            
+
             <div className="relative z-10 h-full p-6 flex flex-col justify-between">
               <div className="flex justify-between items-start">
                 <div className="p-4 rounded-xl bg-[#1A261E] text-[#7DE981] group-hover:bg-[#7DE981]/20 transition-colors duration-300 shadow-sm">
@@ -169,7 +169,7 @@ export function HomeTab({ userRole, onRoleChange }: HomeTabProps) {
                   <ArrowUpRight className="w-5 h-5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                 </div>
               </div>
-              
+
               <div>
                 <h3 className="text-2xl font-bold text-foreground mb-2 tracking-tight group-hover:text-[#7DE981] transition-colors">Invest</h3>
                 <p className="text-foreground-secondary text-sm leading-relaxed">Discover vetted Web3 startups and top-tier talent. Earn equitable returns securely.</p>

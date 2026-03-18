@@ -100,7 +100,7 @@ export function TopNavbar({ userRole, onLogout, onRoleChange }: TopNavbarProps) 
   // UI
   // --------------------------------------------------
   return (
-    <nav className="border-b border-border glass-effect-dark sticky top-0 z-10">
+    <nav id="top-navbar" className="border-b border-border glass-effect-dark sticky top-0 z-10">
       <div className="px-6 md:px-8 py-4 flex items-center justify-between">
         {/* Left: Wallet */}
         <div className="relative flex items-center gap-3">

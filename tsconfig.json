@@ -1,12 +1,12 @@
 {
   "compilerOptions": {
-    /* ✅ Target ES2020 so BigInt (0n) works */
-    "target": "ES2020",
+    /* ✅ Target ES2021 so modern features like String.replaceAll() and BigInt work */
+    "target": "ES2021",
     /* ✅ Include modern JavaScript & browser libs */
     "lib": [
       "DOM",
       "DOM.Iterable",
-      "ES2020"
+      "ES2021"
     ],
     /* ✅ Support JS + TS */
     "allowJs": true,

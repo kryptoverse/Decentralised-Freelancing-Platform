@@ -8,6 +8,16 @@ export function WalletSessionGuard({ children }: { children: React.ReactNode }) 
   const account = useActiveAccount();
   const router = useRouter();
   const [checking, setChecking] = useState(true);
+  // Determine if this is a public path that doesn't REQUIRE a wallet
+  const [isPublicPath, setIsPublicPath] = useState(false);
+
+  useEffect(() => {
+    // This effect runs only once on mount to determine if the current path is public.
+    // It needs to be inside useEffect to safely access `window`.
+    if (typeof window !== "undefined") {
+      setIsPublicPath(/^\/founder\/Company\/\d+$/i.test(window.location.pathname));
+    }
+  }, []);
 
   useEffect(() => {
     // Give autoConnect a little time to restore the session
@@ -19,10 +29,15 @@ export function WalletSessionGuard({ children }: { children: React.ReactNode }) 
   }, []);
 
   useEffect(() => {
-    if (!checking && !account) {
-      router.push("/"); 
+    if (!checking && !account && !isPublicPath) {
+      router.push("/");
     }
-  }, [checking, account, router]);
+  }, [checking, account, router, isPublicPath]);
+
+  // If it's a public path, we show the content even during checking or if no account is found
+  if (isPublicPath) {
+    return <>{children}</>;
+  }
 
   if (checking) {
     return (

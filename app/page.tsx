@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { useActiveAccount } from "thirdweb/react";
 import { HeroSection } from "@/components/landing/hero-section";
 import { FeaturesSection } from "@/components/landing/features-section";
 import { FooterSection } from "@/components/landing/footer-section";
@@ -19,7 +20,8 @@ import {
 } from "lucide-react";
 
 export default function Home() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const account = useActiveAccount();
+  const isLoggedIn = !!account;
   const [userRole, setUserRole] = useState<
     "freelancer" | "client" | "founder" | "investor" | null
   >(null);
@@ -32,13 +34,13 @@ export default function Home() {
   };
 
   const handleLogin = () => {
-    setIsLoggedIn(true);
+    // setIsLoggedIn(true); // Handled by useActiveAccount
     setShowLoginModal(false);
     setUserRole(null);
   };
 
   const handleLogout = () => {
-    setIsLoggedIn(false);
+    // setIsLoggedIn(false); // Handled by useActiveAccount
     setUserRole(null);
     setShowLoginModal(false);
   };

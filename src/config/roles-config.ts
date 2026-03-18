@@ -148,9 +148,16 @@ export const ROLE_TABS: Record<
     },
     {
       id: "explore",
-      label: "Explore",
+      label: "Explore Jobs",
       icon: HomeIcon,
       path: "/investor/explore",
+      match: "startsWith",
+    },
+    {
+      id: "explore-companies",
+      label: "Companies",
+      icon: Briefcase,
+      path: "/investor/companies",
       match: "startsWith",
     },
     {

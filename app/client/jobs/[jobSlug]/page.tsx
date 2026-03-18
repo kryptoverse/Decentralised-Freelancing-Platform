@@ -176,11 +176,13 @@ function ReviewModal({
   onClose,
   onConfirm,
   loading,
+  anticipatedDestination,
 }: {
   open: boolean;
   onClose: () => void;
   onConfirm: (rating: number) => Promise<void>;
   loading: boolean;
+  anticipatedDestination?: string;
 }) {
   const [rating, setRating] = useState<number>(5);
   const [note, setNote] = useState("");
@@ -242,6 +244,21 @@ function ReviewModal({
               placeholder="What went well? Anything to improve?"
             />
           </div>
+
+          {anticipatedDestination && (
+            <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-xl flex items-start gap-3">
+              <div className="mt-0.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-1">Funds Release Destination</p>
+                <p className="text-xs text-emerald-500/80 mb-1">When approved, funds will automatically route to:</p>
+                <a href={`https://amoy.polygonscan.com/address/${anticipatedDestination}`} target="_blank" rel="noopener noreferrer" className="text-sm font-mono text-emerald-300 hover:underline break-all">
+                  {anticipatedDestination}
+                </a>
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end gap-3">
             <button
@@ -346,6 +363,7 @@ export default function JobAnalyticsPage() {
     title: string;
     message: string;
   }>({ open: false, title: "", message: "" });
+  const [destinationAddress, setDestinationAddress] = useState<string>("");
 
   /** SUCCESS MODAL */
   const [successOpen, setSuccessOpen] = useState(false);
@@ -837,6 +855,33 @@ export default function JobAnalyticsPage() {
           }
         }
 
+        // --- Fetch Destination Address ---
+        // Try to figure out where the vault routes to. Read the freelancer profile -> vault
+        let destAddr = job?.hiredFreelancer || "";
+        try {
+          if (job?.hiredFreelancer) {
+            const profileC = getContract({ client, chain: CHAIN, address: DEPLOYED_CONTRACTS.addresses.FreelancerFactory as any });
+            const pAddr = await readContract({
+              contract: profileC,
+              method: "function freelancerProfile(address) view returns (address)",
+              params: [job.hiredFreelancer]
+            }) as string;
+            if (pAddr && pAddr !== "0x0000000000000000000000000000000000000000") {
+               const vaultC = getContract({ client, chain: CHAIN, address: pAddr as any });
+               const vAddr = await readContract({
+                 contract: vaultC,
+                 method: "function companyVault() view returns (address)",
+                 params: []
+               }) as string;
+               if (vAddr && vAddr !== "0x0000000000000000000000000000000000000000") {
+                  destAddr = vAddr;
+               }
+            }
+          }
+        } catch(e) {}
+        setDestinationAddress(destAddr);
+        // ---------------------------------
+
         const data: EscrowData = {
           escrowAddr: assuredEscrowAddr,
           cancelEnd,
@@ -864,8 +909,8 @@ export default function JobAnalyticsPage() {
         } else if (deliveryHistory.length > 0) {
           // Use latest delivery for quick access
           const latest = deliveryHistory[deliveryHistory.length - 1];
-          data.deliveryLink = latest.deliveryLink;
-          data.deliveryNotes = latest.notes;
+          data.deliveryLink = latest.deliveryLink || "";
+          data.deliveryNotes = latest.notes || "";
         }
 
         if (isMounted) {
@@ -1041,7 +1086,7 @@ export default function JobAnalyticsPage() {
     <main className="max-w-5xl mx-auto p-4 md:p-6 space-y-6 lg:space-y-8">
       {/* Modals placed here */}
       <HireSuccessModal open={successOpen} freelancer={successInfo?.freelancer} amount={successInfo?.amount} onClose={() => setSuccessOpen(false)} />
-      <ReviewModal open={reviewOpen} onClose={() => setReviewOpen(false)} onConfirm={handleApproveWork} loading={reviewLoading} />
+      <ReviewModal open={reviewOpen} onClose={() => setReviewOpen(false)} onConfirm={handleApproveWork} loading={reviewLoading} anticipatedDestination={destinationAddress} />
       <Modal open={errorModal.open} onClose={() => setErrorModal({ open: false, title: "", message: "" })} title={errorModal.title || "Notice"}>
         <p className="whitespace-pre-line text-sm text-muted-foreground">{errorModal.message}</p>
         <button onClick={() => setErrorModal({ open: false, title: "", message: "" })} className="mt-4 w-full py-2 flex justify-center rounded-xl bg-primary text-primary-foreground font-semibold hover:opacity-90 transition">Okay</button>

@@ -45,7 +45,20 @@ export default function ClientOffersPage() {
         if (!activeWallet) throw new Error("No active wallet found.");
         const personalAccount = (activeWallet as any).getAdminAccount?.();
         if (!personalAccount) throw new Error("Could not get personal account from wallet.");
-        const sw = smartWallet({ chain: CHAIN, sponsorGas: false });
+        
+        // Ensure same factory as inAppWallet
+        const sw = smartWallet({ 
+            chain: CHAIN, 
+            sponsorGas: false,
+            factoryAddress: "0x85e23b94e7F5E9cC1fF78BCe78cfb15B81f0DF00",
+            overrides: {
+                paymaster: async (userOp) => {
+                    // Forcefully override bundler estimation
+                    (userOp as any).callGasLimit = 8000000n;
+                    return { paymasterAndData: "0x" };
+                }
+            }
+        });
         const execAccount = await sw.connect({ client, personalAccount });
         console.log("[EXEC] No-gas account:", execAccount.address);
         return execAccount;

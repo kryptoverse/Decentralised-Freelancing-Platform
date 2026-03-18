@@ -444,14 +444,14 @@ export default function InvestorBrowsePage() {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-3xl font-bold gradient-text">Job Fundraises</h1>
-          <p className="text-muted-foreground text-sm mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold gradient-text">Job Fundraises</h1>
+          <p className="text-muted-foreground text-xs sm:text-sm mt-1">
             Invest in verified freelancer jobs. Your principal is protected by locked escrow — earn profit when the job completes.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button onClick={refresh} disabled={refreshing}
             className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border hover:bg-surface-secondary transition-colors text-sm">
             <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
@@ -471,12 +471,12 @@ export default function InvestorBrowsePage() {
           { label: "Profit Earned", value: `$${formatUSDT(totalProfit)}`, icon: Target },
           { label: "My Investments", value: fundraises.filter(f => f.myDeposit > 0n).length, icon: TrendingUp },
         ].map(s => (
-          <div key={s.label} className="glass-effect rounded-xl p-4 border border-border">
+          <div key={s.label} className="glass-effect rounded-lg sm:rounded-xl p-3 sm:p-4 border border-border">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-muted-foreground">{s.label}</span>
-              <s.icon className={`w-4 h-4 ${s.label === 'Profit Earned' && totalProfit > 0n ? 'text-emerald-400' : 'text-primary'}`} />
+              <span className="text-[10px] sm:text-xs text-muted-foreground leading-tight">{s.label}</span>
+              <s.icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${s.label === 'Profit Earned' && totalProfit > 0n ? 'text-emerald-400' : 'text-primary'}`} />
             </div>
-            <p className={`text-2xl font-bold truncate ${s.label === 'Profit Earned' && totalProfit > 0n ? 'text-emerald-400' : ''}`}>{s.value}</p>
+            <p className={`text-lg sm:text-2xl font-bold truncate ${s.label === 'Profit Earned' && totalProfit > 0n ? 'text-emerald-400' : ''}`}>{s.value}</p>
           </div>
         ))}
       </div>

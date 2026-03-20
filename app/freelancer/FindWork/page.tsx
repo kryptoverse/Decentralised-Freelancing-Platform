@@ -9,7 +9,7 @@ import { client } from "@/lib/thirdweb-client";
 import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { ipfsToHttp } from "@/utils/ipfs";
-import { Briefcase, Clock, DollarSign, Loader2 } from "lucide-react";
+import { Briefcase, Clock, DollarSign, Loader2, ShieldAlert } from "lucide-react";
 import { useChatContext, defaultContext } from "@/components/chat/ChatContext";
 
 interface Job {
@@ -32,12 +32,17 @@ export default function FindWorkPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<any>(null);
+  const [hasProfile, setHasProfile] = useState<boolean | null>(null);
   const { setChatContext } = useChatContext();
 
   useEffect(() => {
     if (!account) return;
 
     const fetchJobs = async () => {
+      if (hasProfile === false) {
+        setLoading(false);
+        return;
+      }
       try {
         setLoading(true);
         setError(null);
@@ -163,7 +168,9 @@ export default function FindWorkPage() {
       }
     };
 
-    fetchJobs();
+    if (hasProfile !== false) {
+      fetchJobs();
+    }
 
     // Fetch user profile for AI context
     const fetchProfile = async () => {
@@ -181,7 +188,10 @@ export default function FindWorkPage() {
           params: [account.address],
         });
 
-        if (profileAddr && profileAddr !== "0x0000000000000000000000000000000000000000") {
+        const ZERO = "0x0000000000000000000000000000000000000000";
+
+        if (profileAddr && profileAddr !== ZERO) {
+          setHasProfile(true);
           const profileContract = getContract({
             client,
             chain: CHAIN,
@@ -195,8 +205,11 @@ export default function FindWorkPage() {
           ]);
 
           setProfile({ name, bio, skills });
+        } else {
+          setHasProfile(false);
         }
       } catch (err) {
+        setHasProfile(false);
         console.error("Failed to fetch profile for AI context:", err);
       }
     };
@@ -206,7 +219,7 @@ export default function FindWorkPage() {
     return () => {
       setChatContext(defaultContext);
     };
-  }, [account, setChatContext]);
+  }, [account, setChatContext, hasProfile]);
 
   /* ------------------------------------
       AI CONTEXT INJECTION
@@ -359,6 +372,45 @@ YOUR PROFILE CONTEXT:
               </motion.div>
             );
           })}
+        </div>
+      )}
+
+      {/* Profile Check Modal */}
+      {hasProfile === false && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-background border border-border p-8 rounded-2xl w-full max-w-md space-y-6 text-center shadow-2xl"
+          >
+            <div className="flex justify-center">
+              <div className="p-4 bg-primary/10 rounded-full">
+                <ShieldAlert className="w-12 h-12 text-primary" />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h2 className="text-2xl font-bold">Profile Required</h2>
+              <p className="text-foreground-secondary leading-relaxed">
+                You need to create a freelancer profile before you can browse and apply for jobs. This helps clients know who they are working with.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 pt-4">
+              <button
+                onClick={() => router.push("/freelancer/Profile")}
+                className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-bold hover:opacity-90 transition shadow-lg shadow-primary/20"
+              >
+                Create Your Profile
+              </button>
+              <button
+                onClick={() => router.push("/freelancer")}
+                className="w-full py-3 bg-surface border border-border text-foreground rounded-xl font-medium hover:bg-surface-secondary transition"
+              >
+                Back to Dashboard
+              </button>
+            </div>
+          </motion.div>
         </div>
       )}
     </main>

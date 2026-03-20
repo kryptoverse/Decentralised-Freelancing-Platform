@@ -96,6 +96,7 @@ export default function JobDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [txMsg, setTxMsg] = useState<string | null>(null);
   const [showKYCModal, setShowKYCModal] = useState(false);
+  const [showProfileRequiredModal, setShowProfileRequiredModal] = useState(false);
 
   const numericJobId = useMemo(() => {
     try {
@@ -168,11 +169,13 @@ export default function JobDetailsPage() {
         } else {
           setHasFreelancerProfile(false);
           setIsKYCVerified(false);
+          setShowProfileRequiredModal(true);
         }
       } catch (e) {
         console.error("Profile check failed:", e);
         setHasFreelancerProfile(false);
         setIsKYCVerified(false);
+        setShowProfileRequiredModal(true);
       }
     }
 
@@ -776,6 +779,44 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
               </button>
             </div>
           </div>
+        </div>
+      )}
+      {/* PROFILE REQUIRED MODAL */}
+      {showProfileRequiredModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-background border border-border p-8 rounded-2xl w-full max-w-md space-y-6 text-center shadow-2xl"
+          >
+            <div className="flex justify-center">
+              <div className="p-4 bg-primary/10 rounded-full">
+                <ShieldAlert className="w-12 h-12 text-primary" />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h2 className="text-2xl font-bold">Profile Required</h2>
+              <p className="text-foreground-secondary leading-relaxed">
+                You need to create a freelancer profile before you can view job details and submit proposals.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 pt-4">
+              <button
+                onClick={() => router.push("/freelancer/Profile")}
+                className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-bold hover:opacity-90 transition shadow-lg shadow-primary/20"
+              >
+                Create Your Profile
+              </button>
+              <button
+                onClick={() => router.push("/freelancer/FindWork")}
+                className="w-full py-3 bg-surface border border-border text-foreground rounded-xl font-medium hover:bg-surface-secondary transition"
+              >
+                Back to Jobs
+              </button>
+            </div>
+          </motion.div>
         </div>
       )}
     </main>

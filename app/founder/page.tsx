@@ -23,6 +23,7 @@ import { client } from "@/lib/thirdweb-client";
 import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { useIPFSUpload } from "@/hooks/useIPFSUpload";
+import { useChatContext } from "@/components/chat/ChatContext";
 
 // --- Types ---
 
@@ -462,6 +463,33 @@ export default function FounderDashboard() {
   const [activeTab, setActiveTab] = useState<TabId>("home");
   const [selectedInvestor, setSelectedInvestor] = useState<InvestorData | null>(null);
   const [showStartRound, setShowStartRound] = useState(false);
+  
+  const { setChatContext } = useChatContext();
+
+  useEffect(() => {
+    if (!company) {
+       setChatContext((prev) => {
+         const base = prev.split('--- CURRENT USER CONTEXT ---')[0].trim();
+         return base + '\n\n--- CURRENT USER CONTEXT ---\nRole: Founder\nStatus: Has not yet incorporated an entity on-chain.';
+       });
+       return;
+    }
+    const ctx = `--- CURRENT USER CONTEXT ---
+Role: Founder
+Company Name: ${company.meta?.name || "Unknown"}
+Sector: ${company.sector}
+Vault Balance: ${fmtUSDT(analytics?.vaultBalance) || "0.00"} USDT
+Total Revenue: ${fmtUSDT(analytics?.vaultStatus?.totalRevenue) || "0.00"} USDT
+Total Raised: ${fmtUSDT(analytics?.vaultStatus?.raisedTotal) || "0.00"} USDT
+Total Expenses: ${fmtUSDT(analytics?.vaultStatus?.totalExpenses) || "0.00"} USDT
+Owner Withdrawable (Profit): ${fmtUSDT(analytics?.vaultStatus?.ownerWithdrawable) || "0.00"} USDT
+Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
+
+    setChatContext((prev) => {
+      const base = prev.split('--- CURRENT USER CONTEXT ---')[0].trim();
+      return base + '\n\n' + ctx;
+    });
+  }, [company, analytics, setChatContext]);
 
   const [maticBal, setMaticBal] = useState<{ displayValue: string; symbol: string } | null>(null);
   const [usdtBal, setUsdtBal] = useState<string | null>(null);

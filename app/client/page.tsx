@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useActiveAccount } from "thirdweb/react";
-import { Wallet, FileText, Plus, Briefcase, Copy, CheckCheck, RefreshCw } from "lucide-react";
+import { Wallet, FileText, Plus, Briefcase, Copy, CheckCheck, RefreshCw, ArrowRight } from "lucide-react";
 import { getWalletBalance } from "thirdweb/wallets";
 import { polygonAmoy } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb-client";
@@ -12,6 +12,7 @@ import { PostJobForm } from "@/components/client/post-job-form";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { getContract, readContract } from "thirdweb";
 import { CHAIN } from "@/lib/chains";
+import { useChatContext, defaultContext } from "@/components/chat/ChatContext";
 
 /* --------------------------------------------------
     HELPER: Create slug like "2-unreal-engine-dev"
@@ -26,6 +27,7 @@ function slugify(title: string) {
 export default function ClientHome() {
   const router = useRouter();
   const account = useActiveAccount();
+  const { setChatContext } = useChatContext();
 
   // Smart Wallet (4337)
   const ZERO = "0x0000000000000000000000000000000000000000";
@@ -301,6 +303,34 @@ export default function ClientHome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [account, smartAddress]);
 
+  /* ------------------------------------
+      AI CONTEXT INJECTION
+  ------------------------------------ */
+  useEffect(() => {
+    if (account && smartAddress && !smartAddress.startsWith("0x0000")) {
+      const contextData = `
+--- CURRENT USER CONTEXT ---
+Role: Client
+Name: ${profile?.name || "Unnamed Client"}
+Wallet Address: ${smartAddress}
+Bio: ${profile?.bio || "No bio set"}
+Total Jobs Posted: ${profile?.totalJobsPosted || 0}
+Total Jobs Completed: ${profile?.totalJobsCompleted || 0}
+Current Job Stats:
+- Open Jobs: ${jobs.filter(j => j.status === 1).length}
+- Hired Jobs (In Progress): ${jobs.filter(j => j.status === 2).length}
+- Completed Jobs: ${jobs.filter(j => j.status === 4).length}
+- Cancelled/Expired: ${jobs.filter(j => j.status === 3 || j.status === 5).length}
+Wallet Balances: MATIC: ${balance?.displayValue} ${balance?.symbol}, USDT: ${usdtBalance} USDT
+`;
+      setChatContext(defaultContext + "\n\n" + contextData);
+    }
+
+    return () => {
+      setChatContext(defaultContext);
+    };
+  }, [account, smartAddress, profile, jobs, balance, usdtBalance, setChatContext]);
+
   const refreshBalances = () => {
     fetchBalance();
     fetchUSDTBalance();
@@ -391,9 +421,64 @@ export default function ClientHome() {
 
 
 
-        {/* HEADER */}
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div className="w-full sm:w-auto">
+        {/* ===== MOBILE HERO (hidden on md+) ===== */}
+        <div className="block md:hidden">
+          <div className="rounded-2xl p-4 border border-border shadow-lg"
+            style={{ background: "linear-gradient(135deg, hsl(var(--primary)/0.15) 0%, hsl(var(--primary)/0.04) 100%)" }}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-primary/20 border-2 border-primary/40 flex-shrink-0 flex items-center justify-center text-xl font-bold text-primary">
+                {(profile?.name || "C").charAt(0).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h1 className="text-base font-bold truncate">
+                  {profile ? `Welcome, ${profile.name} 👋` : "Welcome, Client 👋"}
+                </h1>
+                <p className="text-xs text-muted-foreground truncate">
+                  {profile?.bio || "Complete your profile to unlock all features."}
+                </p>
+              </div>
+            </div>
+            {/* Balances */}
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <div className="rounded-xl bg-black/25 p-3">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">MATIC</p>
+                <p className="text-sm font-bold text-primary truncate">
+                  {balance ? parseFloat(balance.displayValue).toFixed(3) : "0"}
+                </p>
+              </div>
+              <div className="rounded-xl bg-black/25 p-3">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">USDT</p>
+                <p className="text-sm font-bold text-primary truncate">
+                  {usdtBalance !== null ? `${usdtBalance}` : "—"}
+                </p>
+              </div>
+            </div>
+            {/* Actions */}
+            <div className="flex gap-2">
+              <button onClick={handlePostJobClick}
+                className="flex-1 py-2.5 rounded-xl bg-primary text-primary-foreground text-xs font-semibold flex items-center justify-center gap-1">
+                <Plus className="w-3.5 h-3.5" /> Post Job
+              </button>
+              <button onClick={requestTestTokens} disabled={faucetLoading}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-semibold disabled:opacity-50">
+                {faucetLoading ? "Requesting..." : "🚰 Test Tokens"}
+              </button>
+              <button onClick={refreshBalances} disabled={loadingBalance}
+                className="p-2.5 rounded-xl border border-border bg-black/20 disabled:opacity-50">
+                <RefreshCw className={`w-4 h-4 text-primary ${loadingBalance ? "animate-spin" : ""}`} />
+              </button>
+            </div>
+            {faucetMessage && (
+              <p className={`text-[11px] mt-2 ${faucetMessage.type === "success" ? "text-green-400" : "text-red-400"}`}>
+                {faucetMessage.text}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* ===== DESKTOP HEADER (hidden on mobile) ===== */}
+        <div className="hidden md:flex items-center justify-between flex-wrap gap-4">
+          <div>
             <h1 className="text-3xl font-bold break-words">
               {profile ? `Welcome, ${profile.name} 👋` : "Welcome, Client 👋"}
             </h1>
@@ -401,31 +486,23 @@ export default function ClientHome() {
               {profile?.bio || "Complete your profile to unlock all features."}
             </p>
           </div>
-
-          <button
-            onClick={handlePostJobClick}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground hover:opacity-90 w-full sm:w-auto"
-          >
-            <Plus className="w-4 h-4" />
-            Post Job
+          <button onClick={handlePostJobClick}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground hover:opacity-90">
+            <Plus className="w-4 h-4" /> Post Job
           </button>
         </div>
 
-        {/* STATS HEADER */}
-        <div className="flex items-center justify-between">
+        {/* STATS HEADER (desktop only – mobile shows balances in hero) */}
+        <div className="hidden md:flex items-center justify-between">
           <h2 className="text-xl font-bold">Overview</h2>
-          <button
-            onClick={refreshBalances}
-            disabled={loadingBalance}
-            className="flex items-center gap-2 text-sm text-primary hover:underline disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 ${loadingBalance ? "animate-spin" : ""}`} />
-            Refresh Balances
+          <button onClick={refreshBalances} disabled={loadingBalance}
+            className="flex items-center gap-2 text-sm text-primary hover:underline disabled:opacity-50">
+            <RefreshCw className={`w-4 h-4 ${loadingBalance ? "animate-spin" : ""}`} /> Refresh Balances
           </button>
         </div>
 
         {/* STATS */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
           {[
             {
               icon: Briefcase,
@@ -462,38 +539,28 @@ export default function ClientHome() {
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: i * 0.1 }}
-              className="p-6 rounded-2xl glass-effect border shadow-md flex items-center justify-between"
+              className="p-4 md:p-6 rounded-2xl glass-effect border shadow-md flex items-center justify-between"
             >
               <div>
-                <p className="text-sm text-muted-foreground">{stat.label}</p>
-                <h2 className="text-2xl font-semibold">{stat.value}</h2>
+                <p className="text-xs md:text-sm text-muted-foreground">{stat.label}</p>
+                <h2 className="text-xl md:text-2xl font-semibold">{stat.value}</h2>
               </div>
-              <stat.icon className="w-6 h-6 text-primary" />
+              <stat.icon className="w-5 h-5 md:w-6 md:h-6 text-primary" />
             </motion.div>
           ))}
         </div>
 
-        {/* FAUCET BUTTON */}
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.5 }}
-          className="p-6 rounded-2xl glass-effect border shadow-md"
-        >
+        {/* FAUCET (desktop only – faucet accessible on mobile via hero card) */}
+        <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.5 }}
+          className="hidden md:block p-6 rounded-2xl glass-effect border shadow-md">
           <h3 className="text-lg font-semibold mb-3">Test Tokens Faucet</h3>
-          <p className="text-sm text-muted-foreground mb-4">
-            Get test tokens to try out the platform
-          </p>
-          <button
-            onClick={requestTestTokens}
-            disabled={faucetLoading}
-            className="w-full px-4 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium hover:opacity-90 transition disabled:opacity-50"
-          >
-            {faucetLoading ? 'Requesting...' : '🚰 Get Test Tokens (0.5 MATIC + 500 USDT)'}
+          <p className="text-sm text-muted-foreground mb-4">Get test tokens to try out the platform</p>
+          <button onClick={requestTestTokens} disabled={faucetLoading}
+            className="w-full px-4 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium hover:opacity-90 transition disabled:opacity-50">
+            {faucetLoading ? "Requesting..." : "🚰 Get Test Tokens (0.5 MATIC + 500 USDT)"}
           </button>
-
           {faucetMessage && (
-            <p className={`text-xs mt-2 ${faucetMessage.type === 'success' ? 'text-green-500' : 'text-red-500'}`}>
+            <p className={`text-xs mt-2 ${faucetMessage.type === "success" ? "text-green-500" : "text-red-500"}`}>
               {faucetMessage.text}
             </p>
           )}
@@ -513,8 +580,28 @@ export default function ClientHome() {
             </button>
           </div>
 
-          {/* Tabs */}
-          <div className="flex overflow-x-auto gap-4 border-b pb-2 scrollbar-hide">
+          {/* Tabs - Pill style for mobile, standard for desktop */}
+          <div className="flex md:hidden overflow-x-auto gap-2 pb-2 scrollbar-hide">
+            {[
+              { id: "open", label: "Open" },
+              { id: "hired", label: "In Progress" },
+              { id: "completed", label: "Completed" },
+              { id: "cancelled", label: "Cancelled" },
+            ].map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setSelectedTab(t.id)}
+                className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-all ${selectedTab === t.id
+                  ? "bg-primary text-primary-foreground shadow-md"
+                  : "bg-surface-secondary border border-border text-muted-foreground"
+                  }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="hidden md:flex overflow-x-auto gap-4 border-b pb-2 scrollbar-hide">
             {[
               { id: "open", label: "Open" },
               { id: "hired", label: "In Progress" },
@@ -524,7 +611,7 @@ export default function ClientHome() {
               <button
                 key={t.id}
                 onClick={() => setSelectedTab(t.id)}
-                className={`pb-2 text-sm font-medium ${selectedTab === t.id
+                className={`pb-2 text-sm font-medium transition-colors ${selectedTab === t.id
                   ? "text-primary border-b-2 border-primary"
                   : "text-muted-foreground hover:text-foreground"
                   }`}
@@ -543,50 +630,59 @@ export default function ClientHome() {
             {filtered.map((job, idx) => (
               <motion.div
                 key={idx}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: idx * 0.05 }}
-                className="border rounded-xl p-6 glass-effect flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                className="group border border-border/50 rounded-2xl p-4 glass-effect hover:border-primary/50 transition-all flex flex-col gap-4 shadow-sm"
               >
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-lg font-semibold break-words">{job.title}</h3>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-base font-bold leading-snug group-hover:text-primary transition-colors line-clamp-2">
+                      {job.title}
+                    </h3>
 
-                  {job.status === 2 || job.status === 3 || job.status === 4 || job.status === 5 ? (
-                    <div className="mt-1 mb-2">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${job.status === 4
-                        ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
-                        : job.status === 3 || job.status === 5
-                          ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
-                          : "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
-                        }`}>
-                        {job.status === 4 ? "Completed" : job.status === 3 ? "Cancelled" : job.status === 5 ? "Expired" : "Hired"}
+                    <div className="mt-2 flex flex-wrap gap-2 items-center">
+                      <span className="text-[11px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
+                        Budget: {(job.budgetUSDC / 1e6).toFixed(0)} USDT
                       </span>
-                      {job.hiredFreelancer && job.hiredFreelancer !== "0x0000000000000000000000000000000000000000" && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Freelancer: {job.hiredFreelancer.slice(0, 6)}...{job.hiredFreelancer.slice(-4)}
-                        </p>
+                      {job.status === 2 || job.status === 3 || job.status === 4 || job.status === 5 ? (
+                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${job.status === 4
+                          ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                          : job.status === 3 || job.status === 5
+                            ? "bg-red-500/10 text-red-400 border-red-500/20"
+                            : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                          }`}>
+                          {job.status === 4 ? "Completed" : job.status === 3 ? "Cancelled" : job.status === 5 ? "Expired" : "Hired"}
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-medium text-muted-foreground bg-black/20 px-2 py-0.5 rounded-full">
+                          {job.applicants} applicants
+                        </span>
                       )}
                     </div>
-                  ) : (
-                    <p className="text-muted-foreground text-sm">
-                      Applicants: {job.applicants}
-                    </p>
-                  )}
 
-                  <p className="text-muted-foreground text-sm text-primary font-medium">
-                    Budget: {(job.budgetUSDC / 1e6).toFixed(2)} USDT
-                  </p>
+                    {job.hiredFreelancer && job.hiredFreelancer !== "0x0000000000000000000000000000000000000000" && (
+                      <p className="text-[11px] text-muted-foreground mt-2 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        With: {job.hiredFreelancer.slice(0, 6)}...{job.hiredFreelancer.slice(-4)}
+                      </p>
+                    )}
+                  </div>
                 </div>
 
-                <button
-                  onClick={() => {
-                    const slug = slugify(job.title);
-                    router.push(`/client/jobs/${job.id}-${slug}`);
-                  }}
-                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 w-full sm:w-auto"
-                >
-                  View Analytics
-                </button>
+                <div className="mt-auto pt-2 border-t border-border/30 flex items-center justify-between">
+                  {/* Status/Time (optional) */}
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold italic">Client View</span>
+                  <button
+                    onClick={() => {
+                      const slug = slugify(job.title);
+                      router.push(`/client/jobs/${job.id}-${slug}`);
+                    }}
+                    className="flex items-center gap-1 text-xs font-bold text-primary hover:underline group-hover:gap-2 transition-all"
+                  >
+                    Manage Job <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </motion.div>
             ))}
           </div>

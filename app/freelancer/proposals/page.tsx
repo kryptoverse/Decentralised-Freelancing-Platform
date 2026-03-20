@@ -197,17 +197,17 @@ export default function FreelancerProposalsPage() {
     const archived = offers.filter(o => o.rejected || o.cancelled || o.jobStatus === 3 || o.jobStatus === 5);
 
     return (
-        <div className="p-8 max-w-6xl mx-auto space-y-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold">Direct Proposals</h1>
-            </div>
+    <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-6">
+        <div className="flex justify-between items-center">
+            <h1 className="text-2xl md:text-3xl font-bold">Direct Proposals</h1>
+        </div>
 
             <Tabs defaultValue="pending" className="w-full">
-                <TabsList>
-                    <TabsTrigger value="pending">Received Proposals ({pending.length})</TabsTrigger>
-                    <TabsTrigger value="waiting">Waiting for Funding ({waitingFunding.length})</TabsTrigger>
-                    <TabsTrigger value="active">Active/Completed Jobs</TabsTrigger>
-                    <TabsTrigger value="archived">Archived</TabsTrigger>
+                <TabsList className="flex w-full overflow-x-auto gap-1 h-auto p-1 flex-nowrap justify-start">
+                    <TabsTrigger value="pending" className="flex-shrink-0 text-xs md:text-sm">Received ({pending.length})</TabsTrigger>
+                    <TabsTrigger value="waiting" className="flex-shrink-0 text-xs md:text-sm">Waiting ({waitingFunding.length})</TabsTrigger>
+                    <TabsTrigger value="active" className="flex-shrink-0 text-xs md:text-sm">Active</TabsTrigger>
+                    <TabsTrigger value="archived" className="flex-shrink-0 text-xs md:text-sm">Archived</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="pending" className="space-y-4 pt-4">
@@ -316,14 +316,14 @@ function ProposalCard({
     return (
         <Card className="border-border">
             <CardHeader>
-                <div className="flex justify-between items-start">
-                    <div>
-                        <CardTitle>{offer.title}</CardTitle>
-                        <CardDescription className="mt-1">
-                            From Client: <span className="font-mono text-xs">{offer.client}</span>
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
+                    <div className="flex-1 min-w-0">
+                        <CardTitle className="text-base md:text-lg break-words">{offer.title}</CardTitle>
+                        <CardDescription className="mt-1 text-xs break-all">
+                            From: <span className="font-mono">{offer.client.slice(0,6)}...{offer.client.slice(-4)}</span>
                         </CardDescription>
                     </div>
-                    <Badge variant="outline" className={statusColor}>
+                    <Badge variant="outline" className={`${statusColor} flex-shrink-0 self-start text-xs`}>
                         {statusText}
                     </Badge>
                 </div>

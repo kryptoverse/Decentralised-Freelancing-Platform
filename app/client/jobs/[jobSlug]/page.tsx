@@ -34,6 +34,7 @@ import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { ipfsToHttp } from "@/utils/ipfs";
 import { useIPFSUpload } from "@/hooks/useIPFSUpload";
+import { useChatContext, defaultContext } from "@/components/chat/ChatContext";
 
 import HireSuccessModal from "@/components/client/HireSuccessModal";
 import DisputeModal from "@/components/modals/DisputeModal";
@@ -963,6 +964,8 @@ export default function JobAnalyticsPage() {
       });
 
       setReviewOpen(false);
+      setEscrowData((prev) => prev ? { ...prev, terminal: true, disputed: false } : prev);
+      // Wait for React to update the state, router.refresh() handles the rest quietly
       router.refresh();
     } catch (err) {
       alert(getFriendlyError(err));
@@ -1085,7 +1088,7 @@ export default function JobAnalyticsPage() {
   return (
     <main className="max-w-5xl mx-auto p-4 md:p-6 space-y-6 lg:space-y-8">
       {/* Modals placed here */}
-      <HireSuccessModal open={successOpen} freelancer={successInfo?.freelancer} amount={successInfo?.amount} onClose={() => setSuccessOpen(false)} />
+      <HireSuccessModal open={successOpen} freelancer={successInfo?.freelancer} amount={successInfo?.amount} onClose={() => setSuccessOpen(false)} onContinue={() => router.push('/client')} />
       <ReviewModal open={reviewOpen} onClose={() => setReviewOpen(false)} onConfirm={handleApproveWork} loading={reviewLoading} anticipatedDestination={destinationAddress} />
       <Modal open={errorModal.open} onClose={() => setErrorModal({ open: false, title: "", message: "" })} title={errorModal.title || "Notice"}>
         <p className="whitespace-pre-line text-sm text-muted-foreground">{errorModal.message}</p>

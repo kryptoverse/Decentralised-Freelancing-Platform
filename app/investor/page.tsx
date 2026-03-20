@@ -13,6 +13,7 @@ import { client } from "@/lib/thirdweb-client";
 import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { CompanyPreviewModal } from "@/components/investor/CompanyPreviewModal";
+import { useChatContext } from "@/components/chat/ChatContext";
 
 /* ─── Types ─────────────────────────────────────────────── */
 interface MyInvestment {
@@ -63,6 +64,7 @@ const getGatewayUrl = (uri: string) => {
 export default function InvestorPortfolioPage() {
     const account = useActiveAccount();
     const activeWallet = useActiveWallet();
+    const { setChatContext } = useChatContext();
 
     const [activeTab, setActiveTab] = useState<"jobs" | "companies">("jobs");
     const [jobInvestments, setJobInvestments] = useState<MyInvestment[]>([]);
@@ -296,6 +298,20 @@ export default function InvestorPortfolioPage() {
 
     const totalClaimable = jobInvestments.reduce((s, i) => s + i.claimable, 0n); 
     const now = BigInt(Math.floor(Date.now() / 1000));
+
+    useEffect(() => {
+        const ctx = `--- CURRENT USER CONTEXT ---
+Role: Investor
+Total Invested: ${fmt(totalInvested)} USDT
+Realized Profits: ${fmt(totalRealizedProfitJobs + totalClaimedComps)} USDT
+Pending Returns: ${fmt(totalClaimable)} USDT
+Active Jobs Invested In: ${jobInvestments.filter(i => !i.isResolved).length}
+Company Shares Owned: ${companyInvestments.length}`;
+        setChatContext((prev) => {
+            const base = prev.split('--- CURRENT USER CONTEXT ---')[0].trim();
+            return base + '\n\n' + ctx;
+        });
+    }, [totalInvested, totalRealizedProfitJobs, totalClaimedComps, totalClaimable, jobInvestments, companyInvestments, setChatContext]);
 
     return (
         <>

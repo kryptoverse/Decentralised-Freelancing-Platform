@@ -297,16 +297,16 @@ export default function ClientOffersPage() {
     // User asked for "My Offers".
 
     return (
-        <div className="p-8 max-w-6xl mx-auto space-y-6">
+        <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-6">
             <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold">My Sent Offers</h1>
+                <h1 className="text-2xl md:text-3xl font-bold">Sent Offers</h1>
             </div>
 
             <Tabs defaultValue="accepted" className="w-full">
-                <TabsList>
-                    <TabsTrigger value="accepted">Accepted (Action Required)</TabsTrigger>
-                    <TabsTrigger value="pending">Pending</TabsTrigger>
-                    <TabsTrigger value="history">History</TabsTrigger>
+                <TabsList className="flex w-full overflow-x-auto gap-1 h-auto p-1 flex-nowrap justify-start">
+                    <TabsTrigger value="accepted" className="flex-shrink-0 text-xs md:text-sm">Accepted ({accepted.length})</TabsTrigger>
+                    <TabsTrigger value="pending" className="flex-shrink-0 text-xs md:text-sm">Pending ({pending.length})</TabsTrigger>
+                    <TabsTrigger value="history" className="flex-shrink-0 text-xs md:text-sm">History</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="accepted" className="space-y-4 pt-4">
@@ -375,14 +375,14 @@ function OfferCard({
     return (
         <Card>
             <CardHeader>
-                <div className="flex justify-between items-start">
-                    <div>
-                        <CardTitle>{offer.title}</CardTitle>
-                        <CardDescription className="mt-1">
-                            To: <span className="font-mono text-xs">{offer.freelancer}</span>
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
+                    <div className="flex-1 min-w-0">
+                        <CardTitle className="text-base md:text-lg break-words">{offer.title}</CardTitle>
+                        <CardDescription className="mt-1 text-xs break-all">
+                            To: <span className="font-mono">{offer.freelancer.slice(0,6)}...{offer.freelancer.slice(-4)}</span>
                         </CardDescription>
                     </div>
-                    <Badge variant="outline" className={statusColor}>
+                    <Badge variant="outline" className={`${statusColor} flex-shrink-0 self-start text-xs`}>
                         {statusText}
                     </Badge>
                 </div>

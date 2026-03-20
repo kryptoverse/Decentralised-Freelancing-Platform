@@ -347,55 +347,74 @@ export default function FreelancerProfilePage() {
   const portfolio = merged.portfolio ?? [];
 
   return (
-    <section className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-10">
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-        <h1 className="text-3xl font-bold text-center md:text-left w-full">
-          My Freelancer Profile
-        </h1>
+    <section className="max-w-5xl mx-auto px-3 sm:px-6 py-4 md:py-6 space-y-6 md:space-y-10">
 
-        <div className="flex flex-row gap-3 w-full md:w-auto justify-center md:justify-end">
+      {/* ===== MOBILE PROFILE HEADER (hidden on md+) ===== */}
+      <div className="block md:hidden">
+        <div className="rounded-2xl p-4 border border-border"
+          style={{ background: "linear-gradient(135deg, hsl(var(--primary)/0.12) 0%, hsl(var(--primary)/0.03) 100%)" }}>
+          <div className="flex items-center gap-3">
+            {merged.profileImage ? (
+              <img src={ipfsToHttp(merged.profileImage)} className="w-16 h-16 rounded-full object-cover border-2 border-primary/40 flex-shrink-0" alt="Profile" />
+            ) : (
+              <div className="w-16 h-16 rounded-full bg-primary/20 border-2 border-primary/40 flex-shrink-0 flex items-center justify-center text-2xl font-bold text-primary">
+                {merged.name?.charAt(0)?.toUpperCase() || "?"}
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <h2 className="text-lg font-bold truncate">{merged.name}</h2>
+              {merged.headline && <p className="text-xs text-foreground-secondary truncate">{merged.headline}</p>}
+              <div className="flex items-center gap-1 mt-1">
+                {Array.from({ length: stats.stars }).map((_, i) => (
+                  <Star key={i} className="w-3 h-3 text-yellow-400 fill-yellow-400" />
+                ))}
+                <span className="text-xs text-muted-foreground ml-1">Lv.{stats.level}</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-2 mt-3">
+            <button onClick={() => setMode("edit")} className="flex-1 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold">Edit Profile</button>
+            <button onClick={() => router.push(`/freelancer/${account.address}`)} className="flex-1 py-2 rounded-xl border border-border bg-surface text-xs font-medium">Public View</button>
+          </div>
+          <div className="flex gap-2 mt-2">
+            <button onClick={handleCopyWallet} className="flex-1 py-1.5 rounded-lg border border-border bg-surface-secondary text-xs flex items-center justify-center gap-1">
+              {copiedWallet ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />} Wallet
+            </button>
+            <button onClick={handleCopyPublicLink} className="flex-1 py-1.5 rounded-lg border border-border bg-surface-secondary text-xs flex items-center justify-center gap-1">
+              {copiedPublicLink ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />} Link
+            </button>
+            {profile?.profileAddress && (
+              <button onClick={handleCopyProfileAddress} className="flex-1 py-1.5 rounded-lg border border-border bg-surface-secondary text-xs flex items-center justify-center gap-1">
+                {copiedProfileAddr ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />} Contract
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ===== DESKTOP HEADER (hidden on mobile) ===== */}
+      <div className="hidden md:flex md:flex-row items-center justify-between gap-4">
+        <h1 className="text-3xl font-bold">My Freelancer Profile</h1>
+        <div className="flex flex-row gap-3">
           <button
             onClick={() => router.push(`/freelancer/${account.address}`)}
-            className="
-              px-5 py-2.5 rounded-full border border-border 
-              bg-surface hover:bg-surface-secondary 
-              text-sm font-medium transition flex items-center gap-2
-            "
+            className="px-5 py-2.5 rounded-full border border-border bg-surface hover:bg-surface-secondary text-sm font-medium transition flex items-center gap-2"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
               <polyline points="15 3 21 3 21 9"></polyline>
               <line x1="10" y1="14" x2="21" y2="3"></line>
             </svg>
             View Public Profile
           </button>
-
-          <button
-            onClick={() => setMode("edit")}
-            className="
-              px-5 py-2.5 rounded-full 
-              bg-primary text-primary-foreground 
-              hover:opacity-90 text-sm font-medium transition
-            "
-          >
+          <button onClick={() => setMode("edit")} className="px-5 py-2.5 rounded-full bg-primary text-primary-foreground hover:opacity-90 text-sm font-medium transition">
             Edit Profile
           </button>
         </div>
       </div>
 
-      {/* PROFILE HEADER SECTION */}
-      <div className="flex flex-col items-center text-center space-y-4">
+      {/* PROFILE HEADER SECTION (desktop avatar section - hidden on mobile) */}
+      <div className="hidden md:flex flex-col items-center text-center space-y-4">
         {/* IMAGE */}
         {merged.profileImage ? (
           <img
@@ -408,78 +427,28 @@ export default function FreelancerProfilePage() {
             {merged.name?.charAt(0)?.toUpperCase() || "?"}
           </div>
         )}
-
-        {/* NAME */}
         <h2 className="text-3xl font-bold">{merged.name}</h2>
-
-        {/* HEADLINE */}
         {merged.headline && (
-          <p className="text-lg text-foreground-secondary max-w-xs">
-            {merged.headline}
-          </p>
+          <p className="text-lg text-foreground-secondary max-w-xs">{merged.headline}</p>
         )}
-
-        {/* ADDRESSES */}
         <p className="text-xs text-muted-foreground break-all">
           Wallet: {account.address.slice(0, 6)}...{account.address.slice(-4)}
         </p>
-
         {profile?.profileAddress && (
           <p className="text-xs text-muted-foreground break-all">
-            Contract: {profile.profileAddress.slice(0, 10)}...
-            {profile.profileAddress.slice(-6)}
+            Contract: {profile.profileAddress.slice(0, 10)}...{profile.profileAddress.slice(-6)}
           </p>
         )}
-
-        {/* COPY BUTTONS */}
         <div className="flex flex-wrap justify-center gap-3 mt-2">
-          <button
-            onClick={handleCopyWallet}
-            className="
-              px-3 py-1.5 rounded-full border border-border 
-              bg-surface-secondary hover:bg-surface transition 
-              text-xs flex items-center gap-2
-            "
-          >
-            {copiedWallet ? (
-              <Check className="w-4 h-4 text-green-400" />
-            ) : (
-              <Copy className="w-4 h-4" />
-            )}
-            Copy wallet
+          <button onClick={handleCopyWallet} className="px-3 py-1.5 rounded-full border border-border bg-surface-secondary hover:bg-surface transition text-xs flex items-center gap-2">
+            {copiedWallet ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />} Copy wallet
           </button>
-
-          <button
-            onClick={handleCopyPublicLink}
-            className="
-              px-3 py-1.5 rounded-full border border-border 
-              bg-surface-secondary hover:bg-surface transition 
-              text-xs flex items-center gap-2
-            "
-          >
-            {copiedPublicLink ? (
-              <Check className="w-4 h-4 text-green-400" />
-            ) : (
-              <Copy className="w-4 h-4" />
-            )}
-            Copy public URL
+          <button onClick={handleCopyPublicLink} className="px-3 py-1.5 rounded-full border border-border bg-surface-secondary hover:bg-surface transition text-xs flex items-center gap-2">
+            {copiedPublicLink ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />} Copy public URL
           </button>
-
           {profile?.profileAddress && (
-            <button
-              onClick={handleCopyProfileAddress}
-              className="
-                px-3 py-1.5 rounded-full border border-border 
-                bg-surface-secondary hover:bg-surface transition 
-                text-xs flex items-center gap-2
-              "
-            >
-              {copiedProfileAddr ? (
-                <Check className="w-4 h-4 text-green-400" />
-              ) : (
-                <Copy className="w-4 h-4" />
-              )}
-              Copy contract
+            <button onClick={handleCopyProfileAddress} className="px-3 py-1.5 rounded-full border border-border bg-surface-secondary hover:bg-surface transition text-xs flex items-center gap-2">
+              {copiedProfileAddr ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />} Copy contract
             </button>
           )}
         </div>
@@ -496,10 +465,10 @@ export default function FreelancerProfilePage() {
             title="Refresh stats"
           >
             <RefreshCw className={`w-4 h-4 ${loadingStats ? 'animate-spin' : ''}`} />
-            Refresh Stats
+            <span className="hidden sm:inline">Refresh Stats</span>
           </button>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
           <div className="p-5 rounded-xl glass-effect border border-border shadow-sm">
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm text-foreground-secondary">Total Earnings</p>

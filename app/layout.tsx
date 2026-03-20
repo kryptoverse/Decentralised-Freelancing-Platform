@@ -5,6 +5,8 @@ import "./globals.css";
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThirdwebProvider } from "thirdweb/react";
+import { ChatProvider } from "@/components/chat/ChatContext";
+import { GlobalChatBot } from "@/components/chat/GlobalChatBot";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -24,7 +26,10 @@ export default function RootLayout({
       <body className={inter.className}>
         <ThirdwebProvider>
           <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-            {children}
+            <ChatProvider>
+              {children}
+              <GlobalChatBot />
+            </ChatProvider>
           </ThemeProvider>
         </ThirdwebProvider>
       </body>

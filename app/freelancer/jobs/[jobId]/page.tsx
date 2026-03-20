@@ -23,6 +23,8 @@ import {
   Info,
 } from "lucide-react";
 
+import { useChatContext, defaultContext } from "@/components/chat/ChatContext";
+
 import DisputeModal from "@/components/modals/DisputeModal";
 import DisputeInfoPanel from "@/components/disputes/DisputeInfoPanel";
 
@@ -211,6 +213,7 @@ export default function FreelancerJobDetailPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [isKYCVerified, setIsKYCVerified] = useState<boolean | null>(null);
   const [showKYCModal, setShowKYCModal] = useState(false);
+  const [freelancerProfile, setFreelancerProfile] = useState<any>(null);
 
   const [deliverModal, setDeliverModal] = useState(false);
   const [cancelModal, setCancelModal] = useState(false);
@@ -233,6 +236,8 @@ export default function FreelancerJobDetailPage() {
   const [frStep, setFrStep] = useState<"idle" | "creating" | "linking" | "done" | "error">("idle");
   const [frError, setFrError] = useState("");
   const [frTxLoading, setFrTxLoading] = useState("");
+
+  const { setChatContext } = useChatContext();
 
   const jobId = useMemo(() => {
     try {
@@ -278,6 +283,15 @@ export default function FreelancerJobDetailPage() {
               method: "function isKYCVerified() view returns (bool)",
             });
             setIsKYCVerified(Boolean(kycStatus));
+
+            // Fetch metadata for AI context
+            const [name, bio, skillsRaw] = await Promise.all([
+              readContract({ contract: profileContract, method: "function name() view returns (string)" }),
+              readContract({ contract: profileContract, method: "function bio() view returns (string)" }),
+              readContract({ contract: profileContract, method: "function skills() view returns (string[])" }).catch(() => []),
+            ]);
+
+            setFreelancerProfile({ name, bio, skills: skillsRaw });
 
             // If KYC is not verified, show modal and stop loading
             if (!kycStatus) {
@@ -492,7 +506,44 @@ export default function FreelancerJobDetailPage() {
     }
 
     load();
-  }, [walletAccount.address, jobId]);
+
+    return () => {
+      setChatContext(defaultContext);
+    };
+  }, [walletAccount.address, jobId, setChatContext]);
+
+  /* ============================================================
+     AI CONTEXT INJECTION
+  ============================================================ */
+  useEffect(() => {
+    if (job) {
+      const jobContext = `
+CURRENT HIRED JOB CONTEXT:
+- Job ID: ${job.jobId}
+- Title: ${job.title}
+- Description: ${description}
+- Budget: ${Number(job.budgetUSDC) / 1e6} USDT
+- Status: ${JOB_STATUS[job.status as keyof typeof JOB_STATUS] || "Unknown"}
+- Client: ${job.client}
+- Tags: ${job.tags.join(", ")}
+${proposal ? `- Your Original Proposal: ${proposal.proposalText}` : ""}
+${escrowData ? `- Escrow Address: ${escrowData.escrowAddr}\n- Escrow Status: ${escrowData.delivered ? "Work Delivered" : "Awaiting Delivery"}, ${escrowData.disputed ? "Disputed" : "No active dispute"}` : ""}
+`;
+
+      let userContext = "";
+      if (freelancerProfile) {
+        userContext = `
+YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
+- Name: ${freelancerProfile.name}
+- Bio: ${freelancerProfile.bio}
+- Skills: ${freelancerProfile.skills?.join(", ") || "None listed"}
+- KYC Verified: ${isKYCVerified ? "Yes" : "No"}
+`;
+      }
+
+      setChatContext(defaultContext + "\n\n" + jobContext + "\n" + userContext);
+    }
+  }, [job, description, proposal, escrowData, freelancerProfile, isKYCVerified, setChatContext]);
 
   /* ============================================================
      ACTION HELPERS
@@ -597,6 +648,27 @@ export default function FreelancerJobDetailPage() {
       await sendTransaction({ account: walletAccount, transaction: tx });
 
       setDeliverModal(false);
+      
+      // OPTIMISTIC UPDATE: Instantly reveal delivery history without a slow RPC refresh
+      setEscrowData((prev) => {
+        if (!prev) return prev;
+        const newVersion = prev.deliveryHistory.length + 1;
+        return {
+          ...prev,
+          delivered: true,
+          deliveryHistory: [
+            ...prev.deliveryHistory,
+            {
+              uri: metadataUri,
+              timestamp: BigInt(Math.floor(Date.now() / 1000)),
+              version: BigInt(newVersion),
+              deliveryLink: deliverLink,
+              notes: deliverNotes
+            }
+          ]
+        };
+      });
+      
       router.refresh();
     } catch (err) {
       console.error("submitDelivery error:", err);

@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
+import { useChatContext, defaultContext } from "@/components/chat/ChatContext";
 
 // ... (Metadata interface)
 
@@ -65,6 +66,7 @@ export default function PublicFreelancerProfile() {
   const { toast } = useToast();
   const account = useActiveAccount();
   const router = useRouter();
+  const { setChatContext } = useChatContext();
 
   // Hire Modal State
   const [isHireModalOpen, setIsHireModalOpen] = useState(false);
@@ -225,6 +227,33 @@ export default function PublicFreelancerProfile() {
 
     fetchPublicProfile();
   }, [address]);
+
+  /* ============================================================
+     AI CONTEXT INJECTION
+  ============================================================ */
+  useEffect(() => {
+    if (metadata) {
+      const freelancerContext = `
+CURRENT FREELANCER CONTEXT:
+- Name: ${metadata.name}
+- Headline: ${metadata.headline || "N/A"}
+- Bio: ${metadata.bio}
+- Wallet: ${address}
+- Completed Jobs: ${stats.completedJobs}
+- Success Rate: ${stats.rating}%
+- Rating: ${stats.stars} stars
+- Level: ${stats.level}
+- Skills: ${metadata.skills?.join(", ") || "None listed"}
+- Experience: ${metadata.experience?.map(e => `${e.title} at ${e.company} (${e.duration})`).join("; ") || "None listed"}
+- Education: ${metadata.education?.map(e => `${e.degree} from ${e.institution}`).join("; ") || "None listed"}
+`;
+      setChatContext(defaultContext + "\n\n" + freelancerContext);
+    }
+
+    return () => {
+      setChatContext(defaultContext);
+    };
+  }, [metadata, stats, address, setChatContext]);
 
   if (loading) {
     return (

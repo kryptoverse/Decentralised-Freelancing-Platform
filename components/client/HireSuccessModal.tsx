@@ -7,6 +7,7 @@ export default function HireSuccessModal({
   onClose,
   freelancer,
   amount,
+  onContinue,
 }: any) {
   if (!open) return null;
 
@@ -38,7 +39,7 @@ export default function HireSuccessModal({
 
           <button
             className="w-full py-2 rounded-xl bg-primary text-white hover:opacity-80"
-            onClick={onClose}
+            onClick={onContinue || onClose}
           >
             Continue
           </button>

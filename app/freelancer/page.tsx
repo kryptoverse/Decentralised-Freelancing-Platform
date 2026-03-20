@@ -23,6 +23,7 @@ import { polygonAmoy } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { CHAIN } from "@/lib/chains";
+import { useChatContext } from "@/components/chat/ChatContext";
 
 // -----------------------------
 // Types for Jobs
@@ -49,6 +50,7 @@ const JOB_STATUS_LABEL: Record<number, string> = {
 export default function FreelancerHome() {
   const router = useRouter();
   const account = useActiveAccount();
+  const { setChatContext } = useChatContext();
 
   const [balance, setBalance] = useState<{ displayValue: string; symbol: string } | null>(null);
   const [usdtBalance, setUsdtBalance] = useState<string | null>(null);
@@ -73,6 +75,7 @@ export default function FreelancerHome() {
   const [loadingStats, setLoadingStats] = useState(false);
   const [disputedCount, setDisputedCount] = useState(0);
   const [cancelledCount, setCancelledCount] = useState(0);
+  const [mobileJobTab, setMobileJobTab] = useState<"hired" | "applied" | "completed" | "cancelled">("hired");
 
   // Faucet state
   const [faucetLoading, setFaucetLoading] = useState(false);
@@ -510,6 +513,30 @@ export default function FreelancerHome() {
     }
   };
 
+  useEffect(() => {
+    if (!account) return;
+    const contextData = `
+--- CURRENT USER CONTEXT ---
+Role: Freelancer
+Name: ${profile?.name || "Unnamed"}
+Wallet Address: ${account.address}
+Level: ${stats.level} (${stats.stars} Stars)
+KYC Verified: ${stats.isKYCVerified ? "Yes" : "No"}
+Job Success Rate (Rating): ${stats.rating}%
+Total Earnings: ${stats.totalEarnings.toFixed(2)} USDT
+Completed Jobs: ${stats.completedJobs}
+Disputed Jobs: ${disputedCount}
+Cancelled Jobs: ${cancelledCount}
+Wallet Balances: MATIC: ${balance?.displayValue} ${balance?.symbol}, USDT: ${usdtBalance} USDT
+Pending/Applied Jobs: ${appliedJobs.length}
+Hired (Active) Jobs: ${hiredJobs.length}
+    `;
+    setChatContext((prev) => {
+      const base = prev.split('--- CURRENT USER CONTEXT ---')[0].trim();
+      return base + '\n\n' + contextData;
+    });
+  }, [account, profile, stats, disputedCount, cancelledCount, balance, usdtBalance, appliedJobs.length, hiredJobs.length, setChatContext]);
+
   if (!account)
     return (
       <div className="p-4 md:p-8">
@@ -518,14 +545,97 @@ export default function FreelancerHome() {
     );
 
   return (
-    <main className="flex-1 p-4 md:p-8 overflow-y-auto space-y-8">
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 w-full">
+    <main className="flex-1 p-4 md:p-8 overflow-y-auto space-y-6 md:space-y-8">
+
+      {/* ===== MOBILE HERO (hidden on md+) ===== */}
+      <div className="block md:hidden">
+        <div className="rounded-2xl p-4 border border-border shadow-lg"
+          style={{ background: "linear-gradient(135deg, hsl(var(--primary)/0.15) 0%, hsl(var(--primary)/0.04) 100%)" }}>
+
+          {/* Avatar + name row */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-12 h-12 rounded-full bg-primary/20 border-2 border-primary/40 flex-shrink-0 flex items-center justify-center text-xl font-bold text-primary">
+              {profile?.name?.charAt(0)?.toUpperCase() || "F"}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-base font-bold truncate">Welcome, {profile?.name || "Freelancer"} 👋</h1>
+              <div className="flex items-center gap-2 mt-0.5">
+                {stats.isKYCVerified ? (
+                  <span className="flex items-center gap-1 text-xs text-green-400 font-medium">
+                    <ShieldCheck className="w-3 h-3" /> KYC ✓
+                  </span>
+                ) : (
+                  <span className="text-xs text-yellow-400">KYC Pending</span>
+                )}
+                <span className="text-xs text-muted-foreground">Lv.{stats.level}</span>
+                <span className="flex">
+                  {Array.from({ length: stats.stars }).map((_, i) => (
+                    <Star key={i} className="w-3 h-3 text-yellow-400 fill-yellow-400" />
+                  ))}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={() => router.push("/freelancer/Profile")}
+              className="flex-shrink-0 p-2 rounded-full bg-primary text-primary-foreground"
+            >
+              <User className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Balances */}
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <div className="rounded-xl bg-black/25 p-3">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">MATIC</p>
+              {loadingBalance ? (
+                <div className="h-5 w-14 bg-white/10 rounded animate-pulse" />
+              ) : (
+                <p className="text-sm font-bold text-primary truncate">
+                  {balance ? parseFloat(balance.displayValue).toFixed(3) : "0"}
+                </p>
+              )}
+            </div>
+            <div className="rounded-xl bg-black/25 p-3">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">USDT</p>
+              {loadingBalance ? (
+                <div className="h-5 w-14 bg-white/10 rounded animate-pulse" />
+              ) : (
+                <p className="text-sm font-bold text-primary truncate">{usdtBalance ?? "0"} USDT</p>
+              )}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-2">
+            <button
+              onClick={requestTestTokens}
+              disabled={faucetLoading}
+              className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-semibold disabled:opacity-50"
+            >
+              {faucetLoading ? "Requesting..." : "🚰 Get Test Tokens"}
+            </button>
+            <button
+              onClick={fetchBalance}
+              disabled={loadingBalance}
+              className="p-2.5 rounded-xl border border-border bg-black/20 disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 text-primary ${loadingBalance ? "animate-spin" : ""}`} />
+            </button>
+          </div>
+          {faucetMessage && (
+            <p className={`text-[11px] mt-2 ${faucetMessage.type === "success" ? "text-green-400" : "text-red-400"}`}>
+              {faucetMessage.text}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* ===== DESKTOP HEADER (hidden on mobile) ===== */}
+      <div className="hidden md:flex md:flex-row items-center justify-between gap-4 w-full">
         <div className="w-full">
           <h1 className="text-2xl md:text-3xl font-bold text-foreground break-words">
             Welcome Back, {profile?.name || "Freelancer"} 👋
           </h1>
-
           <div className="flex flex-wrap items-center gap-2 mt-2 text-sm text-muted-foreground">
             {stats.isKYCVerified ? (
               <span className="flex items-center gap-1 text-green-500">
@@ -534,20 +644,14 @@ export default function FreelancerHome() {
             ) : (
               <span className="text-yellow-400">KYC Pending</span>
             )}
-
             <span className="ml-2">Level {stats.level}</span>
-
             <span className="flex ml-1">
               {Array.from({ length: stats.stars }).map((_, i) => (
-                <Star
-                  key={i}
-                  className="w-4 h-4 text-yellow-400 fill-yellow-400"
-                />
+                <Star key={i} className="w-4 h-4 text-yellow-400 fill-yellow-400" />
               ))}
             </span>
           </div>
         </div>
-
         <button
           onClick={() => router.push("/freelancer/Profile")}
           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition w-full md:w-auto justify-center"
@@ -571,7 +675,7 @@ export default function FreelancerHome() {
             Refresh Stats
           </button>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 w-full">
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4 w-full">
           {[
             {
               icon: DollarSign,
@@ -604,127 +708,168 @@ export default function FreelancerHome() {
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: i * 0.1 }}
-              className="p-6 rounded-2xl glass-effect border border-border shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+              className="p-3 md:p-6 rounded-2xl glass-effect border border-border shadow-md flex flex-col items-start justify-between gap-2"
             >
-              <div className="w-full">
-                <p className="text-sm text-foreground-secondary">
-                  {stat.label}
-                </p>
-                <h2 className="text-2xl font-semibold break-words">
-                  {stat.value}
-                </h2>
+              <div className="flex items-center justify-between w-full">
+                <p className="text-xs md:text-sm text-foreground-secondary">{stat.label}</p>
+                <stat.icon className="w-4 h-4 md:w-6 md:h-6 text-primary flex-shrink-0" />
               </div>
-              <stat.icon className="w-6 h-6 text-primary flex-shrink-0" />
+              <h2 className="text-lg md:text-2xl font-semibold break-words">{stat.value}</h2>
             </motion.div>
           ))}
         </div>
       </div>
 
-      {/* WALLET + SMART ACCOUNT */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="rounded-2xl p-6 glass-effect border border-border shadow-md break-words"
-        >
-          <h2 className="text-xl font-bold mb-3 flex items-center gap-2">
-            <Wallet className="w-5 h-5 text-primary" />
-            Smart Account
+      {/* WALLET BALANCE (desktop only — mobile shows balance in hero card above) */}
+      <motion.div
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="hidden md:block rounded-2xl p-6 glass-effect border border-border shadow-md break-words"
+      >
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-xl font-bold flex items-center gap-2">
+            <Wallet className="w-5 h-5 text-primary" /> Wallet Balance
           </h2>
-          <p className="text-sm text-foreground-secondary">
-            {`${account.address.slice(0, 6)}...${account.address.slice(-4)}`}
-          </p>
-          <p className="text-[10px] text-foreground-secondary break-all mt-1">
-            {account.address}
-          </p>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-          className="rounded-2xl p-6 glass-effect border border-border shadow-md break-words"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xl font-bold">Wallet Balance</h2>
-            <button
-              onClick={fetchBalance}
-              disabled={loadingBalance}
-              className="p-2 rounded-lg hover:bg-primary/10 transition-colors disabled:opacity-50"
-              title="Refresh balance"
-            >
-              <RefreshCw className={`w-5 h-5 text-primary ${loadingBalance ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
-
-          {loadingBalance ? (
-            <p className="text-foreground-secondary">Fetching balance…</p>
-          ) : (
-            <div className="space-y-3">
-              <div>
-                <p className="text-sm text-foreground-secondary">MATIC</p>
-                <p className="text-2xl font-bold text-primary">
-                  {balance ? `${parseFloat(balance.displayValue).toFixed(4)} ${balance.symbol}` : "0"}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-foreground-secondary">USDT</p>
-                <p className="text-2xl font-bold text-primary">
-                  {usdtBalance !== null ? `${usdtBalance} USDT` : "0"}
-                </p>
-              </div>
-
-              {/* Faucet Button */}
-              <div className="mt-4 pt-4 border-t border-border">
-                <button
-                  onClick={requestTestTokens}
-                  disabled={faucetLoading}
-                  className="w-full px-4 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium hover:opacity-90 transition disabled:opacity-50"
-                >
-                  {faucetLoading ? 'Requesting...' : '🚰 Get Test Tokens (0.5 MATIC + 500 USDT)'}
-                </button>
-
-                {faucetMessage && (
-                  <p className={`text-xs mt-2 ${faucetMessage.type === 'success' ? 'text-green-500' : 'text-red-500'}`}>
-                    {faucetMessage.text}
-                  </p>
-                )}
-              </div>
+          <button
+            onClick={fetchBalance}
+            disabled={loadingBalance}
+            className="p-2 rounded-lg hover:bg-primary/10 transition-colors disabled:opacity-50"
+            title="Refresh balance"
+          >
+            <RefreshCw className={`w-5 h-5 text-primary ${loadingBalance ? "animate-spin" : ""}`} />
+          </button>
+        </div>
+        {loadingBalance ? (
+          <p className="text-foreground-secondary">Fetching balance…</p>
+        ) : (
+          <div className="flex gap-8">
+            <div>
+              <p className="text-sm text-foreground-secondary">MATIC</p>
+              <p className="text-2xl font-bold text-primary">
+                {balance ? `${parseFloat(balance.displayValue).toFixed(4)} ${balance.symbol}` : "0"}
+              </p>
             </div>
-          )}
-        </motion.div>
-      </div>
+            <div>
+              <p className="text-sm text-foreground-secondary">USDT</p>
+              <p className="text-2xl font-bold text-primary">
+                {usdtBalance !== null ? `${usdtBalance} USDT` : "0"}
+              </p>
+            </div>
+            <div className="ml-auto flex flex-col justify-end">
+              <button
+                onClick={requestTestTokens}
+                disabled={faucetLoading}
+                className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium hover:opacity-90 transition disabled:opacity-50 text-sm"
+              >
+                {faucetLoading ? "Requesting..." : "🚰 Get Test Tokens (0.5 MATIC + 500 USDT)"}
+              </button>
+              {faucetMessage && (
+                <p className={`text-xs mt-1 ${faucetMessage.type === "success" ? "text-green-500" : "text-red-500"}`}>
+                  {faucetMessage.text}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </motion.div>
 
       {/* ================================
           APPLIED & HIRED JOBS
       ================================= */}
       <section className="space-y-6">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <FileText className="w-5 h-5 text-primary" />
-            Your Jobs
-          </h2>
-        </div>
-
         {loadingJobs ? (
           <p className="text-sm text-muted-foreground">Loading jobs…</p>
         ) : (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold">My Jobs</h2>
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <FileText className="w-5 h-5 text-primary" />
+                <span className="hidden md:inline">Your Jobs</span>
+                <span className="md:hidden">My Jobs</span>
+              </h2>
               <button
                 onClick={loadJobs}
                 disabled={loadingJobs}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border hover:bg-surface-secondary transition disabled:opacity-50"
+                className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-lg border border-border hover:bg-surface-secondary transition disabled:opacity-50 text-sm md:text-base"
                 title="Refresh jobs"
               >
                 <RefreshCw className={`w-4 h-4 ${loadingJobs ? "animate-spin" : ""}`} />
-                Refresh
+                <span className="hidden sm:inline">Refresh</span>
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+            {/* ===== MOBILE: Tab Switcher (0 to 767px) ===== */}
+            <div className="block md:hidden space-y-3">
+              <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                {(["hired", "applied", "completed", "cancelled"] as const).map((tab) => {
+                  const counts = { hired: hiredJobs.length, applied: appliedJobs.length, completed: completedJobs.length, cancelled: cancelledJobs.length };
+                  const labels = { hired: "Active", applied: "Applied", completed: "Done", cancelled: "Cancelled" };
+                  const activeStyle = { hired: "bg-emerald-500 text-white", applied: "bg-primary text-primary-foreground", completed: "bg-blue-500 text-white", cancelled: "bg-red-500 text-white" };
+                  const isActive = mobileJobTab === tab;
+                  return (
+                    <button key={tab} onClick={() => setMobileJobTab(tab)}
+                      className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${isActive ? activeStyle[tab] : "border border-border text-muted-foreground"}`}>
+                      {labels[tab]}
+                      <span className={`rounded-full px-1.5 text-[10px] font-bold ${isActive ? "bg-white/25" : "bg-border"}`}>{counts[tab]}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Tab content */}
+              {mobileJobTab === "hired" && (hiredJobs.length === 0
+                ? <p className="text-sm text-muted-foreground py-6 text-center">No active jobs yet.</p>
+                : hiredJobs.map(job => (
+                  <div key={job.jobId} className="border border-emerald-500/30 rounded-xl p-4 bg-emerald-500/5">
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex-1 min-w-0 mr-3"><h4 className="font-semibold text-sm line-clamp-2">{job.title}</h4><p className="text-xs text-muted-foreground mt-0.5">#{job.jobId} · {job.client.slice(0,6)}...{job.client.slice(-4)}</p></div>
+                      <span className="text-sm font-bold text-emerald-400 flex-shrink-0">{(Number(job.budgetUSDC)/1e6).toFixed(2)} USDT</span>
+                    </div>
+                    <button onClick={() => router.push(`/freelancer/jobs/${job.jobId}`)} className="w-full py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold flex items-center justify-center gap-1">View Details <ArrowRight className="w-3 h-3" /></button>
+                  </div>
+                ))
+              )}
+              {mobileJobTab === "applied" && (appliedJobs.length === 0
+                ? <p className="text-sm text-muted-foreground py-6 text-center">No pending applications.</p>
+                : appliedJobs.map(job => (
+                  <div key={job.jobId} className="border border-border rounded-xl p-4 bg-surface-secondary">
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex-1 min-w-0 mr-3"><h4 className="font-semibold text-sm line-clamp-2">{job.title}</h4><p className="text-xs text-muted-foreground mt-0.5">Job #{job.jobId}</p></div>
+                      <span className="text-sm font-bold text-primary flex-shrink-0">{(Number(job.budgetUSDC)/1e6).toFixed(2)} USDT</span>
+                    </div>
+                    <button onClick={() => router.push(`/freelancer/jobs/${job.jobId}`)} className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold flex items-center justify-center gap-1">View Details <ArrowRight className="w-3 h-3" /></button>
+                  </div>
+                ))
+              )}
+              {mobileJobTab === "completed" && (completedJobs.length === 0
+                ? <p className="text-sm text-muted-foreground py-6 text-center">No completed jobs yet.</p>
+                : completedJobs.map(job => (
+                  <div key={job.jobId} className="border border-blue-500/30 rounded-xl p-4 bg-blue-500/5">
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex-1 min-w-0 mr-3"><h4 className="font-semibold text-sm line-clamp-2">{job.title}</h4><p className="text-xs text-muted-foreground mt-0.5">#{job.jobId} · {job.client.slice(0,6)}...{job.client.slice(-4)}</p></div>
+                      <span className="text-sm font-bold text-blue-400 flex-shrink-0">{(Number(job.budgetUSDC)/1e6).toFixed(2)} USDT</span>
+                    </div>
+                    <button onClick={() => router.push(`/freelancer/jobs/${job.jobId}`)} className="w-full py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold flex items-center justify-center gap-1">View Details <ArrowRight className="w-3 h-3" /></button>
+                  </div>
+                ))
+              )}
+              {mobileJobTab === "cancelled" && (cancelledJobs.length === 0
+                ? <p className="text-sm text-muted-foreground py-6 text-center">No cancelled jobs.</p>
+                : cancelledJobs.map(job => (
+                  <div key={job.jobId} className="border border-red-500/30 rounded-xl p-4 bg-red-500/5">
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex-1 min-w-0 mr-3"><h4 className="font-semibold text-sm line-clamp-2">{job.title}</h4><p className="text-xs text-muted-foreground mt-0.5">#{job.jobId} · {job.client.slice(0,6)}...{job.client.slice(-4)}</p></div>
+                      <span className="text-sm font-bold text-red-400 flex-shrink-0">{(Number(job.budgetUSDC)/1e6).toFixed(2)} USDT</span>
+                    </div>
+                    <button onClick={() => router.push(`/freelancer/jobs/${job.jobId}`)} className="w-full py-2 rounded-lg bg-red-900/40 text-red-300 text-xs font-semibold flex items-center justify-center gap-1">View Details <ArrowRight className="w-3 h-3" /></button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* ===== DESKTOP: 4-column grid (768px+) ===== */}
+            <div className="hidden md:block">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
               {/* Applied Jobs */}
               <div className="rounded-2xl p-5 glass-effect border border-border shadow-md">
                 <h3 className="text-lg font-semibold mb-3">Applied (Pending)</h3>
@@ -926,10 +1071,11 @@ export default function FreelancerHome() {
                   </div>
                 )}
               </div>
+                </div>
+              </div>
             </div>
-          </div>
-        )}
-      </section>
+          )}
+        </section>
     </main>
   );
 }

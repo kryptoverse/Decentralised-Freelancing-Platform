@@ -16,6 +16,7 @@ import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { ipfsToHttp } from "@/utils/ipfs";
 import { useIPFSUpload } from "@/hooks/useIPFSUpload";
+import { useChatContext, defaultContext } from "@/components/chat/ChatContext";
 
 import {
   ArrowLeft,
@@ -70,6 +71,7 @@ export default function JobDetailsPage() {
   const router = useRouter();
   const account = useActiveAccount();
   const { uploadMetadata } = useIPFSUpload();
+  const { setChatContext } = useChatContext();
 
   // PROPOSAL STATE
   const [showProposalModal, setShowProposalModal] = useState(false);
@@ -84,6 +86,7 @@ export default function JobDetailsPage() {
   const [isKYCVerified, setIsKYCVerified] = useState<boolean | null>(null);
 
   const [job, setJob] = useState<JobDetails | null>(null);
+  const [freelancerProfile, setFreelancerProfile] = useState<any>(null);
   const [applicants, setApplicants] = useState<Applicant[]>([]);
   const [applicantCount, setApplicantCount] = useState<number | null>(null);
   const [hasApplied, setHasApplied] = useState(false);
@@ -137,18 +140,27 @@ export default function JobDetailsPage() {
             address: profileAddr as `0x${string}`,
           });
 
-          try {
-            const kycStatus = await readContract({
-              contract: profileContract,
-              method: "function isKYCVerified() view returns (bool)",
-            });
-            setIsKYCVerified(Boolean(kycStatus));
+            try {
+              const kycStatus = await readContract({
+                contract: profileContract,
+                method: "function isKYCVerified() view returns (bool)",
+              });
+              setIsKYCVerified(Boolean(kycStatus));
 
-            // If KYC is not verified, show modal
-            if (!kycStatus) {
-              setShowKYCModal(true);
-            }
-          } catch (e) {
+              // Fetch metadata for AI context
+              const [name, bio, skillsRaw] = await Promise.all([
+                readContract({ contract: profileContract, method: "function name() view returns (string)" }),
+                readContract({ contract: profileContract, method: "function bio() view returns (string)" }),
+                readContract({ contract: profileContract, method: "function skills() view returns (string[])" }).catch(() => []),
+              ]);
+
+              setFreelancerProfile({ name, bio, skills: skillsRaw });
+
+              // If KYC is not verified, show modal
+              if (!kycStatus) {
+                setShowKYCModal(true);
+              }
+            } catch (e) {
             console.error("KYC check failed:", e);
             setIsKYCVerified(false);
             setShowKYCModal(true);
@@ -319,15 +331,17 @@ export default function JobDetailsPage() {
 
         setHasApplied(applied);
       } catch (err: any) {
-        console.error(err);
-        setError(err.message || "Failed to load job");
       } finally {
         setLoading(false);
       }
     };
 
     loadData();
-  }, [account, numericJobId]);
+
+    return () => {
+      setChatContext(defaultContext);
+    };
+  }, [account, numericJobId, setChatContext]);
 
   // EXPIRED?
   const isExpired =
@@ -341,6 +355,40 @@ export default function JobDetailsPage() {
         (Number(job.expiresAt) - Date.now() / 1000) / (60 * 60 * 24)
       )
       : null;
+
+  /* ------------------------------------------------
+     AI CONTEXT INJECTION
+  ------------------------------------------------ */
+  useEffect(() => {
+    if (job) {
+      const jobContext = `
+CURRENT JOB CONTEXT (BROWSING):
+- Job ID: ${job.jobId}
+- Title: ${job.title}
+- Description: ${job.description}
+- Budget: ${(Number(job.budgetUSDC) / 1e6).toFixed(2)} USDT
+- Status: ${JOB_STATUS_LABELS[job.status]?.label || "Unknown"}
+- Client: ${job.client}
+- Tags: ${job.tags.join(", ")}
+- Applicants: ${applicantCount ?? 0}
+- Your Status: ${hasApplied ? "Already Applied" : "Not Applied Yet"}
+- Expiry: ${isExpired ? "Expired" : `${daysLeft} days left`}
+`;
+
+      let userContext = "";
+      if (freelancerProfile) {
+        userContext = `
+YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
+- Name: ${freelancerProfile.name}
+- Bio: ${freelancerProfile.bio}
+- Skills: ${freelancerProfile.skills?.join(", ") || "None listed"}
+- KYC Verified: ${isKYCVerified ? "Yes" : "No"}
+`;
+      }
+
+      setChatContext(defaultContext + "\n\n" + jobContext + "\n" + userContext);
+    }
+  }, [job, applicantCount, hasApplied, isExpired, daysLeft, freelancerProfile, isKYCVerified, setChatContext]);
 
   const canApply =
     !!account && !!job && job.status === 1 && !isExpired && !hasApplied;

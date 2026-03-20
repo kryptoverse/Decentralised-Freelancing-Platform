@@ -10,6 +10,7 @@ import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { ipfsToHttp } from "@/utils/ipfs";
 import { Briefcase, Clock, DollarSign, Loader2 } from "lucide-react";
+import { useChatContext, defaultContext } from "@/components/chat/ChatContext";
 
 interface Job {
   jobId: number;
@@ -30,6 +31,8 @@ export default function FindWorkPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [profile, setProfile] = useState<any>(null);
+  const { setChatContext } = useChatContext();
 
   useEffect(() => {
     if (!account) return;
@@ -161,7 +164,70 @@ export default function FindWorkPage() {
     };
 
     fetchJobs();
-  }, [account]);
+
+    // Fetch user profile for AI context
+    const fetchProfile = async () => {
+      if (!account) return;
+      try {
+        const factory = getContract({
+          client,
+          chain: CHAIN,
+          address: DEPLOYED_CONTRACTS.addresses.FreelancerFactory,
+        });
+
+        const profileAddr = await readContract({
+          contract: factory,
+          method: "function freelancerProfile(address) view returns (address)",
+          params: [account.address],
+        });
+
+        if (profileAddr && profileAddr !== "0x0000000000000000000000000000000000000000") {
+          const profileContract = getContract({
+            client,
+            chain: CHAIN,
+            address: profileAddr as `0x${string}`,
+          });
+
+          const [name, bio, skills] = await Promise.all([
+            readContract({ contract: profileContract, method: "function name() view returns (string)" }),
+            readContract({ contract: profileContract, method: "function bio() view returns (string)" }),
+            readContract({ contract: profileContract, method: "function skills() view returns (string[])" }).catch(() => []),
+          ]);
+
+          setProfile({ name, bio, skills });
+        }
+      } catch (err) {
+        console.error("Failed to fetch profile for AI context:", err);
+      }
+    };
+
+    fetchProfile();
+
+    return () => {
+      setChatContext(defaultContext);
+    };
+  }, [account, setChatContext]);
+
+  /* ------------------------------------
+      AI CONTEXT INJECTION
+  ------------------------------------ */
+  useEffect(() => {
+    let context = `
+CURRENT PAGE: Find Work (Job Browsing)
+- Viewing ${jobs.length} open jobs.
+`;
+
+    if (profile) {
+      context += `
+YOUR PROFILE CONTEXT:
+- Name: ${profile.name}
+- Bio: ${profile.bio}
+- Skills: ${profile.skills?.join(", ") || "None listed"}
+`;
+    }
+
+    setChatContext(defaultContext + "\n\n" + context);
+  }, [jobs, profile, setChatContext]);
 
   if (!account) {
     return (

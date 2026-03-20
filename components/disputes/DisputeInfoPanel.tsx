@@ -13,6 +13,8 @@ interface DisputeInfoPanelProps {
     lastDeliveryURI?: string;  // IPFS uri of latest delivery
     /** Pass 'freelancer' or 'client' to highlight which side YOU are */
     viewerRole?: "freelancer" | "client";
+    totalBudget?: bigint;
+    escrowAddress?: string;
 }
 
 export default function DisputeInfoPanel({
@@ -23,9 +25,12 @@ export default function DisputeInfoPanel({
     delivered,
     lastDeliveryURI,
     viewerRole,
+    totalBudget,
+    escrowAddress,
 }: DisputeInfoPanelProps) {
     const [reason, setReason] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+    const [payoutBps, setPayoutBps] = useState<number | null>(null);
 
     useEffect(() => {
         if (!lastDisputeURI) return;
@@ -46,6 +51,36 @@ export default function DisputeInfoPanel({
 
         fetchReason();
     }, [lastDisputeURI]);
+
+    useEffect(() => {
+        if (!terminal || !escrowAddress) return;
+
+        const fetchPayout = async () => {
+            try {
+                const { getContract, readContract } = await import("thirdweb");
+                const { client } = await import("@/lib/thirdweb-client");
+                const { CHAIN } = await import("@/lib/chains");
+                
+                const contract = getContract({
+                    client,
+                    chain: CHAIN,
+                    address: escrowAddress as `0x${string}`,
+                });
+
+                const bps = await readContract({
+                    contract,
+                    method: "function payoutBps() view returns (uint256)",
+                    params: [],
+                }) as bigint;
+
+                setPayoutBps(Number(bps));
+            } catch (err) {
+                console.error("Failed to fetch payoutBps:", err);
+            }
+        };
+
+        fetchPayout();
+    }, [terminal, escrowAddress]);
 
     const resolved = terminal;
     const borderColor = resolved ? "border-green-500/30" : "border-red-500/40";
@@ -146,7 +181,26 @@ export default function DisputeInfoPanel({
                     : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
                 }`}>
                 {resolved
-                    ? <><CheckCircle2 className="w-4 h-4 shrink-0" /> Admin decision finalized. The escrow has been settled.</>
+                    ? (
+                        <div className="w-full space-y-2">
+                            <div className="flex items-center gap-2">
+                                <CheckCircle2 className="w-4 h-4 shrink-0" /> 
+                                <span>Admin decision finalized. The escrow has been settled.</span>
+                            </div>
+                            {payoutBps !== null && totalBudget && (
+                                <div className="mt-2 pt-2 border-t border-green-500/20 grid grid-cols-2 gap-4">
+                                    <div>
+                                        <p className="text-[10px] uppercase opacity-70">Freelancer Earned</p>
+                                        <p className="text-sm font-bold">{(Number(totalBudget) * payoutBps / 10000 / 1e6).toFixed(2)} USDT</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] uppercase opacity-70">Client Refunded</p>
+                                        <p className="text-sm font-bold">{(Number(totalBudget) * (10000 - payoutBps) / 10000 / 1e6).toFixed(2)} USDT</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )
                     : <><Clock className="w-4 h-4 shrink-0" /> Awaiting admin review. No action required from you at this time.</>
                 }
             </div>

@@ -223,6 +223,7 @@ export default function FreelancerJobDetailPage() {
   const [deliverNotes, setDeliverNotes] = useState("");
   const [deliverLoading, setDeliverLoading] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
+  const [disputeLoading, setDisputeLoading] = useState(false);
 
   // ── Fundraise state ──────────────────────────────────
   const [fundraiseAddr, setFundraiseAddr] = useState<string | null>(null);
@@ -682,6 +683,7 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
     if (!escrowData) return;
 
     try {
+      setDisputeLoading(true);
       const uri = await uploadJSON({ reason });
 
       const escrow = getContract({
@@ -708,6 +710,8 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
         alert(getFriendlyError(err));
       }
       throw err; // Re-throw to let modal handle error state
+    } finally {
+      setDisputeLoading(false);
     }
   }
 
@@ -1362,8 +1366,11 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
                   )}
 
                 {!escrowData.terminal && !escrowData.disputed && (
-                  <button onClick={() => setDisputeModal(true)}
-                    className="w-full px-4 py-2.5 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition text-sm font-medium">
+                  <button 
+                    onClick={() => setDisputeModal(true)}
+                    disabled={disputeLoading}
+                    className="w-full px-4 py-2.5 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition text-sm font-medium disabled:opacity-50"
+                  >
                     Raise Dispute
                   </button>
                 )}
@@ -1397,6 +1404,7 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
         open={disputeModal}
         onClose={() => setDisputeModal(false)}
         onSubmit={raiseDispute}
+        loading={disputeLoading}
       />
 
       {showKYCModal && (

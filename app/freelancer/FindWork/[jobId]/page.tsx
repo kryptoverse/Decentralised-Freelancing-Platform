@@ -28,6 +28,7 @@ import {
   AlertCircle,
   CheckCircle2,
   ShieldAlert,
+  Sparkles,
 } from "lucide-react";
 
 type JobStatus = 0 | 1 | 2 | 3 | 4 | 5;
@@ -78,6 +79,7 @@ export default function JobDetailsPage() {
   const [proposalText, setProposalText] = useState("");
   const [bidAmount, setBidAmount] = useState("");
   const [deliveryDays, setDeliveryDays] = useState("");
+  const [isGeneratingProposal, setIsGeneratingProposal] = useState(false);
 
   // FREELANCER PROFILE STATUS
   const [hasFreelancerProfile, setHasFreelancerProfile] = useState<
@@ -393,8 +395,13 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
     }
   }, [job, applicantCount, hasApplied, isExpired, daysLeft, freelancerProfile, isKYCVerified, setChatContext]);
 
+  const isOwner = useMemo(() => {
+    if (!account || !job) return false;
+    return account.address.toLowerCase() === job.client.toLowerCase();
+  }, [account, job]);
+
   const canApply =
-    !!account && !!job && job.status === 1 && !isExpired && !hasApplied;
+    !!account && !!job && job.status === 1 && !isExpired && !hasApplied && !isOwner;
 
   const canWithdraw =
     !!account && !!job && job.status === 1 && hasApplied;
@@ -473,6 +480,67 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
   };
 
   /* ------------------------------------------------
+     AI PROPOSAL GENERATOR
+  ------------------------------------------------ */
+  const handleGenerateProposal = async () => {
+    if (!job) return;
+    setIsGeneratingProposal(true);
+    setProposalText("");
+
+    const systemPrompt = `You are a professional freelance proposal writer.
+Write clear, concise, and compelling job proposals in plain text only.
+DO NOT use any markdown formatting: no asterisks (*), no hashes (#), no dashes for bullets, no underscores, no backticks.
+Write in natural paragraphs. Be professional and direct.
+Structure the proposal as: brief intro showing understanding of the job, relevant experience/skills, proposed approach, and a closing call to action.
+Keep the proposal between 150-250 words.`;
+
+    const userMessage = `Write a job application proposal for me based on the following:
+
+JOB TITLE: ${job.title}
+JOB DESCRIPTION: ${job.description}
+BUDGET: ${(Number(job.budgetUSDC) / 1e6).toFixed(2)} USDT
+REQUIRED SKILLS: ${job.tags.join(", ")}
+
+MY PROFILE:
+Name: ${freelancerProfile?.name || "Freelancer"}
+Bio: ${freelancerProfile?.bio || "Experienced professional"}
+Skills: ${freelancerProfile?.skills?.join(", ") || "General skills"}
+KYC Verified: ${isKYCVerified ? "Yes" : "No"}`;
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [{ id: "1", role: "user", content: userMessage }],
+          systemContext: systemPrompt,
+        }),
+      });
+
+      if (!res.ok) throw new Error("AI request failed");
+
+      const reader = res.body?.getReader();
+      if (!reader) return;
+
+      const decoder = new TextDecoder();
+      let generated = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        generated += chunk;
+        setProposalText(generated);
+      }
+    } catch (err) {
+      console.error("Proposal generation failed:", err);
+      setError("Failed to generate proposal. Please try again or write manually.");
+    } finally {
+      setIsGeneratingProposal(false);
+    }
+  };
+
+  /* ------------------------------------------------
      WITHDRAW
   ------------------------------------------------ */
   const handleWithdraw = async () => {
@@ -533,55 +601,56 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
   const statusMeta = JOB_STATUS_LABELS[job.status];
 
   return (
-    <main className="max-w-4xl mx-auto p-4 md:p-8 space-y-6">
+    <main className="max-w-5xl mx-auto p-4 md:p-8 space-y-6">
       <button
         onClick={() => router.back()}
-        className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white"
+        className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
-        <ArrowLeft className="w-4 h-4" /> Back
+        <ArrowLeft className="w-4 h-4" /> Back to Jobs
       </button>
 
-      {/* HEADER */}
-      <section className="glass-effect border rounded-2xl p-6 space-y-4">
-        <h1 className="text-2xl md:text-3xl font-bold">{job.title}</h1>
-
-        <div className="text-sm text-gray-400 flex flex-wrap gap-4">
-          <span>
-            Client: {job.client.slice(0, 6)}...
-            {job.client.slice(-4)}
-          </span>
-          <span>
-            Posted:{" "}
-            {new Date(Number(job.createdAt) * 1000).toLocaleString()}
-          </span>
-          <span
-            className={`px-3 py-1 rounded-full text-xs ${statusMeta.colorClass}`}
-          >
+      {/* ── HEADER CARD ── */}
+      <section className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-primary/8 via-background to-background p-6 md:p-8 space-y-5 shadow-lg">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground leading-tight flex-1">
+            {job.title}
+          </h1>
+          <span className={`shrink-0 px-3 py-1 rounded-full text-xs font-semibold ${statusMeta.colorClass}`}>
             {statusMeta.label}
           </span>
         </div>
 
-        <div className="flex items-center gap-3 mt-2">
-          <DollarSign className="w-4 h-4 text-primary" />
-          <span className="font-semibold text-white">
-            {(Number(job.budgetUSDC) / 1e6).toFixed(2)} USDT
-          </span>
+        <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground">
+          <span>Client:{" "}<span className="font-mono text-foreground">{job.client.slice(0, 6)}…{job.client.slice(-4)}</span></span>
+          <span>Posted: {new Date(Number(job.createdAt) * 1000).toLocaleString()}</span>
+        </div>
 
+        <div className="flex flex-wrap gap-3 items-center">
+          <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 font-semibold text-sm">
+            <DollarSign className="w-4 h-4" />
+            {(Number(job.budgetUSDC) / 1e6).toFixed(2)} USDT
+          </div>
           {job.expiresAt > 0n && (
-            <div className="flex items-center gap-1 text-gray-400">
+            <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium ${
+              isExpired
+                ? "bg-red-500/15 border border-red-500/25 text-red-400"
+                : "bg-amber-500/15 border border-amber-500/25 text-amber-400"
+            }`}>
               <Clock className="w-4 h-4" />
-              {isExpired ? "Expired" : `${daysLeft} days left`}
+              {isExpired ? "Expired" : `${daysLeft} day${daysLeft !== 1 ? "s" : ""} left`}
+            </div>
+          )}
+          {hasApplied && (
+            <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-500/15 border border-blue-500/25 text-blue-400 text-sm font-medium">
+              <CheckCircle2 className="w-4 h-4" /> Applied
             </div>
           )}
         </div>
 
         {job.tags.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-3">
+          <div className="flex flex-wrap gap-2">
             {job.tags.map((tag, idx) => (
-              <span
-                key={idx}
-                className="px-2 py-1 text-xs bg-primary/10 border border-primary/30 rounded-full text-primary"
-              >
+              <span key={idx} className="px-3 py-1 text-xs bg-primary/15 border border-primary/30 rounded-full text-primary font-medium">
                 {tag}
               </span>
             ))}
@@ -589,99 +658,106 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
         )}
       </section>
 
-      {/* GRID */}
-      <section className="grid gap-6 md:grid-cols-[2fr,1fr]">
+      {/* ── BODY GRID ── */}
+      <section className="grid gap-6 lg:grid-cols-[1fr,300px] items-start">
+
+        {/* LEFT — Description */}
         <motion.div
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="glass-effect border rounded-2xl p-6 space-y-4"
+          transition={{ duration: 0.3 }}
+          className="rounded-2xl border border-border bg-card shadow-sm"
         >
-          <h2 className="text-lg font-semibold">Description</h2>
-          <p className="text-sm text-gray-300 whitespace-pre-wrap">
-            {job.description}
-          </p>
+          <div className="px-6 py-4 border-b border-border">
+            <h2 className="text-base font-semibold text-foreground">Job Description</h2>
+          </div>
+          <div className="p-6">
+            <p className="text-sm md:text-[15px] text-foreground leading-relaxed whitespace-pre-wrap">
+              {job.description || "No description provided."}
+            </p>
+          </div>
         </motion.div>
 
-        {/* APPLY + APPLICANTS PANEL */}
+        {/* RIGHT — Sticky panel */}
         <motion.div
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="space-y-6"
+          transition={{ duration: 0.3, delay: 0.05 }}
+          className="flex flex-col gap-4 lg:sticky lg:top-4"
         >
-          <div className="glass-effect border rounded-2xl p-6 space-y-4">
-            <h2 className="text-lg font-semibold">Apply to this Job</h2>
+          {/* Apply card */}
+          <div className="rounded-2xl border border-border bg-card shadow-sm p-5 space-y-4">
+            <h2 className="text-base font-semibold text-foreground">Apply to this Job</h2>
 
             {txMsg && (
-              <div className="text-green-400 p-3 bg-green-500/10 border border-green-400/20 rounded-lg text-sm flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4" /> {txMsg}
+              <div className="text-green-400 p-3 bg-green-500/10 border border-green-400/20 rounded-xl text-sm flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0" /> {txMsg}
               </div>
             )}
             {error && (
-              <div className="text-red-400 p-3 bg-red-500/10 border border-red-400/20 rounded-lg text-sm flex items-center gap-2">
-                <AlertCircle className="w-4 h-4" /> {error}
+              <div className="text-red-400 p-3 bg-red-500/10 border border-red-400/20 rounded-xl text-sm flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" /> {error}
+              </div>
+            )}
+            {isOwner && (
+              <div className="text-amber-400 p-3 bg-amber-500/10 border border-amber-400/20 rounded-xl text-xs flex items-start gap-2">
+                <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>You are the <strong>client</strong> who posted this job. You cannot apply as a freelancer to your own project.</span>
               </div>
             )}
 
-            {/* Freelancer has NO profile */}
             {canApply && hasFreelancerProfile === false && (
               <button
                 onClick={() => router.push("/freelancer/Profile")}
-                className="w-full py-2 rounded-lg bg-primary text-white"
+                className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition"
               >
-                Create Freelancer Profile to Apply
+                Create Profile to Apply
               </button>
             )}
 
-            {/* CAN APPLY */}
             {canApply && hasFreelancerProfile && (
               <button
                 onClick={() => setShowProposalModal(true)}
                 disabled={txLoading}
-                className="w-full py-2 rounded-lg bg-primary text-white flex justify-center"
+                className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition shadow-md shadow-primary/20 flex items-center justify-center gap-2"
               >
-                Write Proposal
+                ✍️ Write Proposal
               </button>
             )}
 
-            {/* CAN WITHDRAW */}
+            {!canApply && !canWithdraw && !hasApplied && job.status !== 1 && (
+              <p className="text-xs text-muted-foreground text-center">
+                This job is no longer accepting applications.
+              </p>
+            )}
+
             {canWithdraw && (
               <button
                 onClick={handleWithdraw}
                 disabled={txLoading}
-                className="w-full py-2 rounded-lg border text-white border-gray-600"
+                className="w-full py-2.5 rounded-xl border border-border text-foreground text-sm font-medium hover:bg-surface-secondary transition"
               >
-                Withdraw Application
+                {txLoading ? "Withdrawing…" : "Withdraw Application"}
               </button>
             )}
           </div>
 
-          {/* APPLICANTS */}
-          <div className="glass-effect border rounded-2xl p-6 space-y-3">
-            <h2 className="text-sm font-semibold flex items-center gap-2">
-              <Users className="w-4 h-4" /> Applicants
+          {/* Applicants card */}
+          <div className="rounded-2xl border border-border bg-card shadow-sm p-5 space-y-3">
+            <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+              <Users className="w-4 h-4 text-primary" /> Applicants
             </h2>
-            <p className="text-xs text-gray-400">
-              {applicantCount ?? "0"} total
+            <p className="text-xs text-muted-foreground">
+              <span className="text-foreground font-semibold">{applicantCount ?? 0}</span> total
             </p>
-
             {applicants.length === 0 ? (
-              <p className="text-xs text-gray-500">No applicants yet.</p>
+              <p className="text-xs text-muted-foreground italic">No applicants yet.</p>
             ) : (
-              <ul className="space-y-2 text-xs">
+              <ul className="space-y-2">
                 {applicants.map((a, idx) => (
-                  <li
-                    key={idx}
-                    className="border rounded-lg px-3 py-2 flex justify-between text-gray-300"
-                  >
-                    <span>
-                      {a.freelancer.slice(0, 6)}...
-                      {a.freelancer.slice(-4)}
-                    </span>
-                    <span className="text-[10px] text-gray-500">
-                      {new Date(
-                        Number(a.appliedAt) * 1000
-                      ).toLocaleDateString()}
-                    </span>
+                  <li key={idx} className="border border-border rounded-xl px-3 py-2 flex justify-between text-xs">
+                    <span className="font-mono text-foreground">{a.freelancer.slice(0, 6)}…{a.freelancer.slice(-4)}</span>
+                    <span className="text-muted-foreground">{new Date(Number(a.appliedAt) * 1000).toLocaleDateString()}</span>
                   </li>
                 ))}
               </ul>
@@ -692,91 +768,138 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
 
       {/* PROPOSAL MODAL */}
       {showProposalModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-background border p-6 rounded-xl w-full max-w-lg space-y-4">
-            <h2 className="text-xl font-semibold">Submit Proposal</h2>
-
-            <textarea
-              className="w-full p-3 rounded-lg border bg-background"
-              rows={6}
-              placeholder="Write your proposal..."
-              value={proposalText}
-              onChange={(e) => setProposalText(e.target.value)}
-            />
-
-            <div>
-              <label className="text-sm font-medium">Bid Amount (USDT)</label>
-              <input
-                type="number"
-                className="mt-1 w-full p-3 border rounded-lg bg-background"
-                placeholder="300"
-                value={bidAmount}
-                onChange={(e) => setBidAmount(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label className="text-sm font-medium">Delivery Days</label>
-              <input
-                type="number"
-                className="mt-1 w-full p-3 border rounded-lg bg-background"
-                placeholder="7"
-                value={deliveryDays}
-                onChange={(e) => setDeliveryDays(e.target.value)}
-              />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-3 z-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.97, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+            className="bg-card border border-border rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[92vh]"
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold text-foreground">Submit Proposal</h2>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-[180px] sm:max-w-[260px]">{job.title}</p>
+              </div>
               <button
-                onClick={() => setShowProposalModal(false)}
-                className="px-4 py-2 border rounded-lg"
+                onClick={handleGenerateProposal}
+                disabled={isGeneratingProposal || txLoading}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-90 transition disabled:opacity-50 shadow-md shrink-0"
+                style={{ background: "linear-gradient(to right, #7c3aed, #4f46e5)", color: "#ffffff" }}
+              >
+                {isGeneratingProposal ? (
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: "#ffffff" }} /> Generating…</>
+                ) : (
+                  <><Sparkles className="w-3.5 h-3.5" style={{ color: "#ffffff" }} /> Generate with AI</>
+                )}
+              </button>
+            </div>
+
+            {/* Scrollable body */}
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-foreground">Your Proposal</label>
+                <p className="text-xs text-muted-foreground">
+                  Describe why you are the best fit, or click{" "}
+                  <span className="text-violet-400 font-medium">Generate with AI</span> to auto-draft from your profile.
+                </p>
+                <div className="relative">
+                  <textarea
+                    className="w-full p-3 sm:p-4 rounded-xl border border-border bg-background text-foreground text-sm leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-primary/40 transition placeholder:text-muted-foreground/50"
+                    rows={8}
+                    placeholder="Write your proposal here…"
+                    value={proposalText}
+                    onChange={(e) => setProposalText(e.target.value)}
+                    disabled={isGeneratingProposal}
+                  />
+                  {isGeneratingProposal && (
+                    <div className="absolute inset-0 rounded-xl bg-background/70 flex flex-col items-center justify-center gap-2 pointer-events-none">
+                      <Sparkles className="w-5 h-5 text-violet-400 animate-pulse" />
+                      <span className="text-sm text-violet-400 font-medium">Writing your proposal…</span>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground text-right">{proposalText.length} characters</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5 flex-1">
+                  <label className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                    <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+                    Bid Amount <span className="text-muted-foreground font-normal">(USDT)</span>
+                  </label>
+                  <input
+                    type="number"
+                    className="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 transition"
+                    placeholder={`e.g. ${(Number(job.budgetUSDC) / 1e6).toFixed(0)}`}
+                    value={bidAmount}
+                    onChange={(e) => setBidAmount(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">Budget: {(Number(job.budgetUSDC) / 1e6).toFixed(2)} USDT</p>
+                </div>
+                <div className="space-y-1.5 flex-1">
+                  <label className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-amber-400" />
+                    Delivery Days
+                  </label>
+                  <input
+                    type="number"
+                    className="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 transition"
+                    placeholder="e.g. 7"
+                    value={deliveryDays}
+                    onChange={(e) => setDeliveryDays(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">Minimum 1 day</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-border shrink-0 flex justify-end gap-3">
+              <button
+                onClick={() => { setShowProposalModal(false); setProposalText(""); }}
+                className="px-5 py-2.5 rounded-xl border border-border text-foreground text-sm font-medium hover:bg-surface-secondary transition"
+                disabled={isGeneratingProposal}
               >
                 Cancel
               </button>
-
               <button
                 onClick={handleApplyWithProposal}
-                disabled={txLoading}
-                className="px-4 py-2 bg-primary text-white rounded-lg"
+                disabled={txLoading || isGeneratingProposal}
+                className="px-6 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition disabled:opacity-50 shadow-md shadow-primary/20"
               >
-                {txLoading ? "Submitting..." : "Submit"}
+                {txLoading
+                  ? <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Submitting…</span>
+                  : "Submit Proposal"}
               </button>
             </div>
-          </div>
+          </motion.div>
         </div>
       )}
 
       {/* KYC VERIFICATION MODAL */}
       {showKYCModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-background border border-amber-500/30 p-6 rounded-xl w-full max-w-md space-y-4">
+          <div className="bg-card border border-amber-500/30 p-6 rounded-2xl w-full max-w-md space-y-4">
             <div className="flex items-center gap-3 text-amber-400">
               <ShieldAlert className="w-8 h-8" />
               <h2 className="text-xl font-semibold">KYC Verification Required</h2>
             </div>
-
-            <p className="text-sm text-gray-300">
-              You need to complete KYC verification before you can view job details and submit proposals.
+            <p className="text-sm text-foreground">
+              You need to complete KYC verification before you can submit proposals.
             </p>
-
-            <p className="text-sm text-gray-400">
-              Please complete your KYC verification in your profile settings to access all freelancer features.
+            <p className="text-sm text-muted-foreground">
+              Complete KYC verification in your profile settings to access all freelancer features.
             </p>
-
             <div className="flex justify-end gap-3 pt-2">
               <button
                 onClick={() => router.push("/freelancer/FindWork")}
-                className="px-4 py-2 border rounded-lg hover:bg-surface-secondary transition"
-              >
-                Back to Jobs
-              </button>
-
+                className="px-4 py-2 border border-border rounded-xl text-sm hover:bg-surface-secondary transition"
+              >Back to Jobs</button>
               <button
                 onClick={() => router.push("/freelancer/Profile")}
-                className="px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition"
-              >
-                Go to Profile
-              </button>
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:opacity-90 transition"
+              >Go to Profile</button>
             </div>
           </div>
         </div>

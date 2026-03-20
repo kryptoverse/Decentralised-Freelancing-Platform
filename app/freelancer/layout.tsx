@@ -13,7 +13,7 @@ export default function FreelancerLayout({
 }) {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
 
   // Check if public profile page
   const isPublicProfile = /^\/freelancer\/0x[a-fA-F0-9]{40}$/i.test(pathname);
@@ -96,6 +96,7 @@ export default function FreelancerLayout({
             userRole={userRole}
             onLogout={handleLogout}
             onRoleChange={handleRoleChange}
+            onToggleSidebar={() => setIsOpen(!isOpen)}
           />
 
           {/* Page Content */}

@@ -10,7 +10,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const pathname = usePathname();
 
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
 
   const [userRole, setUserRole] = useState<
     "freelancer" | "client" | "founder" | "investor"
@@ -70,6 +70,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             userRole={userRole}
             onLogout={handleLogout}
             onRoleChange={handleRoleChange}
+            onToggleSidebar={() => setIsOpen(!isOpen)}
           />
 
           {/* Page Content */}

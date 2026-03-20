@@ -14,6 +14,8 @@ import {
   CheckCircle2,
   Send,
   Flag,
+  Sparkles,
+  Brain,
 } from "lucide-react";
 
 import {
@@ -62,6 +64,17 @@ interface Applicant {
   proposalText: string;
   bidAmount: bigint;
   deliveryDays: bigint;
+  // Enriched Profile Data
+  profile?: {
+    name: string;
+    completedJobs: number;
+    disputes: number;
+    rating: number;
+    totalEarnings: number;
+    level: number;
+    skills: string[];
+    profileImage?: string;
+  };
 }
 
 interface Delivery {
@@ -340,6 +353,8 @@ export default function JobAnalyticsPage() {
 
 
 
+  const { chatContext, setChatContext } = useChatContext();
+
   const [job, setJob] = useState<Job | null>(null);
   const [description, setDescription] = useState("");
   const [applicants, setApplicants] = useState<Applicant[]>([]);
@@ -370,6 +385,9 @@ export default function JobAnalyticsPage() {
   const [successOpen, setSuccessOpen] = useState(false);
   const [successInfo, setSuccessInfo] = useState<any>(null);
 
+  // AI Hiring Analysis
+  const [aiHiringAnalysis, setAiHiringAnalysis] = useState<string>("");
+  const [isAnalyzingApplicants, setIsAnalyzingApplicants] = useState(false);
   /** JOB ID from slug */
   const jobId: bigint = useMemo(() => {
     if (!jobSlug) return 0n;
@@ -737,12 +755,74 @@ export default function JobAnalyticsPage() {
             text = j.proposal ?? proposalURI;
           } catch { }
 
+          // --- FETCH FREELANCER PROFILE DATA ---
+          let profileData: Applicant["profile"] = undefined;
+          try {
+            const factory = getContract({
+              client,
+              chain: CHAIN,
+              address: DEPLOYED_CONTRACTS.addresses.FreelancerFactory,
+            });
+
+            const profileAddr = await readContract({
+              contract: factory,
+              method: "function freelancerProfile(address) view returns (address)",
+              params: [addr as `0x${string}`],
+            });
+
+            if (profileAddr && profileAddr !== "0x0000000000000000000000000000000000000000") {
+              const profileContract = getContract({
+                client,
+                chain: CHAIN,
+                address: profileAddr as `0x${string}`,
+              });
+
+              const [pName, pURI, cJobs, tPoints, tEarnings, dJobs, pLevel] = await Promise.all([
+                readContract({ contract: profileContract, method: "function name() view returns (string)" }).catch(() => ""),
+                readContract({ contract: profileContract, method: "function profileURI() view returns (string)" }).catch(() => ""),
+                readContract({ contract: profileContract, method: "function completedJobs() view returns (uint256)" }).catch(() => 0n),
+                readContract({ contract: profileContract, method: "function totalPoints() view returns (uint256)" }).catch(() => 0n),
+                readContract({ contract: profileContract, method: "function totalEarnings() view returns (uint256)" }).catch(() => 0n),
+                readContract({ contract: profileContract, method: "function disputedJobs() view returns (uint256)" }).catch(() => 0n),
+                readContract({ contract: profileContract, method: "function level() view returns (uint8)" }).catch(() => 0),
+              ]);
+
+              let pSkills: string[] = [];
+              let pImg: string | undefined = undefined;
+              if (pURI) {
+                try {
+                  const res = await fetch(ipfsToHttp(pURI));
+                  const meta = await res.json();
+                  pSkills = meta.skills ?? [];
+                  pImg = meta.profileImage;
+                } catch { }
+              }
+
+              // Calculate rating % (max 100)
+              const rating = cJobs > 0n ? Math.round((Number(tPoints) / (Number(cJobs) * 5)) * 100) : 0;
+
+              profileData = {
+                name: pName || "Anonymous",
+                completedJobs: Number(cJobs),
+                disputes: Number(dJobs),
+                rating,
+                totalEarnings: Number(tEarnings) / 1e6,
+                level: Number(pLevel),
+                skills: pSkills,
+                profileImage: pImg,
+              };
+            }
+          } catch (profileErr) {
+            console.warn("Could not load freelancer profile for", addr, profileErr);
+          }
+
           enriched.push({
             freelancer: addr,
             appliedAt,
             proposalText: text,
             bidAmount,
             deliveryDays,
+            profile: profileData,
           });
         }
 
@@ -1073,6 +1153,118 @@ export default function JobAnalyticsPage() {
   }
 
   /* ============================================================
+      AI CONTEXT INJECTION
+      Injects job, applicant, and escrow data into the Chat Context
+      so the AI Assistant can help the client decide or review work.
+  ============================================================ */
+  useEffect(() => {
+    if (!job) return;
+
+    let context = `${defaultContext}\n\n--- CURRENT CONTEXT ---\n`;
+    context += `JOB TITLE: ${job.title}\n`;
+    context += `BUDGET: ${(Number(job.budgetUSDC) / 1e6).toFixed(2)} USDT\n`;
+    context += `DESCRIPTION: ${description || "Loading..."}\n`;
+    context += `STATUS: ${job.status === 1 ? "Open for Bids" : "Hired / In Progress"}\n\n`;
+
+    if (applicants.length > 0) {
+      context += `### APPLICANTS (${applicants.length} total):\n`;
+      applicants.forEach((app, i) => {
+        context += `${i + 1}. Freelancer: ${app.freelancer}\n`;
+        context += `   Bid: ${(Number(app.bidAmount) / 1e6).toFixed(2)} USDT\n`;
+        context += `   Delivery: ${app.deliveryDays.toString()} Days\n`;
+        context += `   Proposal Snippet: ${app.proposalText.slice(0, 200)}${app.proposalText.length > 200 ? "..." : ""}\n`;
+        if (app.profile) {
+          context += `   Stats: ${app.profile.completedJobs} jobs, ${app.profile.rating}% rating, ${app.profile.disputes} disputes, Level ${app.profile.level}\n`;
+          context += `   Skills: ${app.profile.skills.join(", ")}\n`;
+        }
+        context += `\n`;
+      });
+    } else {
+      context += `No applicants yet.\n\n`;
+    }
+
+    if (escrowData) {
+      context += `### ESCROW & SUBMISSIONS:\n`;
+      context += `Escrow Address: ${escrowData.escrowAddr}\n`;
+      context += `Delivered: ${escrowData.delivered ? "Yes" : "No"}\n`;
+      if (escrowData.deliveryHistory.length > 0) {
+        const latest = escrowData.deliveryHistory[escrowData.deliveryHistory.length - 1];
+        context += `Latest Submission (v${latest.version}):\n`;
+        context += `Notes: ${latest.notes || "No notes"}\n`;
+        context += `Link: ${latest.deliveryLink || "No link provided"}\n`;
+      }
+      if (escrowData.disputed) {
+        context += `STATUS: Job is currently in DISPUTE.\n`;
+      }
+    }
+
+    setChatContext(context);
+  }, [job, description, applicants, escrowData, setChatContext]);
+
+  const generateHiringRecommendation = async () => {
+    if (!job || applicants.length === 0) return;
+    setIsAnalyzingApplicants(true);
+    setAiHiringAnalysis("");
+
+    const systemPrompt = `You are an expert HR and Hiring Consultant for a decentralized freelancing platform.
+Analyze the provided job description and the list of applicants to recommend the best candidate for the role.
+Structure your response as:
+1. Pool Overview (1-2 sentences)
+2. Top Recommendations (Pros and Cons)
+3. Risk Assessment (Disputes/Ratings)
+4. Final Verdict
+
+DO NOT use markdown characters like asterisks, hashes, or bullet dashes. Use plain text paragraphs only.
+Keep it under 350 words.`;
+
+    const appsContext = applicants.map(app => (
+      `Freelancer: ${app.freelancer}
+       Bid: ${Number(app.bidAmount) / 1e6} USDT
+       Days: ${app.deliveryDays}
+       Proposal: ${app.proposalText}
+       Stats: ${app.profile ? `${app.profile.completedJobs} jobs, ${app.profile.rating}% rating, ${app.profile.disputes} disputes, Level ${app.profile.level}, Earnings: ${app.profile.totalEarnings} USDT, Skills: ${app.profile.skills.join(", ")}` : "No profile data available"}`
+    )).join("\n\n---\n\n");
+
+    const userMessage = `Job: ${job.title}
+Budget: ${Number(job.budgetUSDC) / 1e6} USDT
+Description: ${description}
+
+Applicants:
+${appsContext}`;
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: userMessage }],
+          systemContext: systemPrompt,
+          stream: true,
+        }),
+      });
+
+      if (!response.ok) throw new Error("Failed to generate recommendation");
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No reader");
+
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        setAiHiringAnalysis(prev => prev + chunk);
+      }
+    } catch (err) {
+      console.error("AI Hiring Recommendation error:", err);
+      setAiHiringAnalysis("Error generating recommendation. Please try again.");
+    } finally {
+      setIsAnalyzingApplicants(false);
+    }
+  };
+
+
+  /* ============================================================
       RENDER
   ============================================================ */
   if (!activeAccount)
@@ -1094,13 +1286,13 @@ export default function JobAnalyticsPage() {
         <p className="whitespace-pre-line text-sm text-muted-foreground">{errorModal.message}</p>
         <button onClick={() => setErrorModal({ open: false, title: "", message: "" })} className="mt-4 w-full py-2 flex justify-center rounded-xl bg-primary text-primary-foreground font-semibold hover:opacity-90 transition">Okay</button>
       </Modal>
-      <DisputeModal open={disputeModal} onClose={() => setDisputeModal(false)} onSubmit={handleRaiseDispute} />
+      <DisputeModal open={disputeModal} onClose={() => setDisputeModal(false)} onSubmit={handleRaiseDispute} loading={disputeLoading} />
       <Modal open={!!selectedApplicant} onClose={() => setSelectedApplicant(null)} title="Applicant Proposal">
         {selectedApplicant && (
           <div className="space-y-4">
-            <div className="flex justify-between items-center bg-surface p-3 rounded-xl border border-border">
-              <span className="font-mono text-sm font-medium">{selectedApplicant.freelancer}</span>
-              <button onClick={() => router.push(`/freelancer/${selectedApplicant.freelancer}`)} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition">View Profile</button>
+            <div className="flex justify-between items-center bg-surface p-3 rounded-xl border border-border gap-2">
+              <span className="font-mono text-sm font-medium truncate">{selectedApplicant.freelancer}</span>
+              <button onClick={() => router.push(`/freelancer/${selectedApplicant.freelancer}`)} className="shrink-0 px-3 py-1.5 text-xs font-semibold rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition">View Profile</button>
             </div>
             <div className="bg-background border border-border rounded-xl p-4 text-sm leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto custom-scrollbar">
               {selectedApplicant.proposalText || "No proposal details provided."}
@@ -1262,6 +1454,8 @@ export default function JobAnalyticsPage() {
             delivered={escrowData.delivered}
             lastDeliveryURI={escrowData.lastDeliveryURI}
             viewerRole="client"
+            totalBudget={job.budgetUSDC}
+            escrowAddress={escrowData.escrowAddr}
           />
         )}
 
@@ -1380,12 +1574,69 @@ export default function JobAnalyticsPage() {
         {/* Applicants List - Full Width */}
         {isJobOpen && (
           <section className="bg-surface/30 border border-border/60 rounded-2xl p-5 md:p-8 shadow-sm">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold flex items-center gap-2 text-foreground">
-                <Users className="w-5 h-5 text-primary" /> Proposals
-              </h2>
-              <span className="text-xs font-semibold bg-surface px-3 py-1 border rounded-lg text-muted-foreground shadow-sm">{applicants.length} Total</span>
+            <div className="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
+              <div className="flex items-center gap-2 text-foreground">
+                <Users className="w-5 h-5 text-primary" />
+                <h2 className="text-xl font-bold">Proposals</h2>
+                <span className="text-xs font-semibold bg-surface px-3 py-1 border rounded-lg text-muted-foreground shadow-sm ml-2">{applicants.length} Total</span>
+              </div>
+
+              {applicants.length > 0 && (
+                <button
+                  onClick={generateHiringRecommendation}
+                  disabled={isAnalyzingApplicants}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-white font-semibold transition-all disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-primary/20"
+                  style={{
+                    background: "linear-gradient(135deg, hsl(var(--primary)) 0%, #a855f7 100%)"
+                  }}
+                >
+                  {isAnalyzingApplicants ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-4 h-4" />
+                  )}
+                  {isAnalyzingApplicants ? "Analyzing..." : "AI Hiring Insight"}
+                </button>
+              )}
             </div>
+
+            <AnimatePresence mode="wait">
+              {(aiHiringAnalysis || isAnalyzingApplicants) && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="mb-8 overflow-hidden"
+                >
+                  <div className="relative p-6 rounded-2xl border border-primary/20 bg-primary/5 backdrop-blur-sm">
+                    {/* Decorative background element */}
+                    <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+                      <Brain className="w-24 h-24" />
+                    </div>
+
+                    <div className="relative z-10 space-y-4">
+                      <div className="flex items-center gap-2 text-primary">
+                        <Sparkles className="w-5 h-5" />
+                        <h3 className="font-bold uppercase tracking-wider text-xs">AI Recommendation Engine</h3>
+                      </div>
+
+                      {isAnalyzingApplicants && !aiHiringAnalysis && (
+                        <div className="flex items-center gap-3 text-muted-foreground italic text-sm">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Analyzing freelancer stats, completed jobs, and disputes...
+                        </div>
+                      )}
+
+                      {aiHiringAnalysis && (
+                        <div className="text-sm leading-relaxed whitespace-pre-line text-foreground/90">
+                          {aiHiringAnalysis}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {loading ? (
               <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
@@ -1401,34 +1652,37 @@ export default function JobAnalyticsPage() {
               <div className="grid gap-4">
                 {applicants.map((app, i) => (
                   <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-                    className="group flex flex-col md:flex-row md:items-center justify-between p-5 rounded-2xl border border-border/60 bg-surface/50 hover:bg-surface hover:shadow-md transition-all gap-5">
+                    className="group flex flex-col sm:flex-row sm:items-center justify-between p-4 md:p-5 rounded-2xl border border-border/60 bg-surface/50 hover:bg-surface hover:shadow-md transition-all gap-4 md:gap-5">
 
-                    <div className="flex items-center gap-4 flex-1 overflow-hidden">
-                      <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0 shadow-sm">
-                        <Users className="w-5 h-5 text-primary" />
+                    <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
+                      <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <Users className="w-4 h-4 md:w-5 md:h-5 text-primary" />
                       </div>
-                      <div className="min-w-0">
-                        <p className="font-mono text-sm md:text-base font-bold text-foreground truncate">{app.freelancer}</p>
-                        <p className="text-[10px] uppercase font-bold text-muted-foreground mt-1 tracking-widest">Applied {formatTs(app.appliedAt)}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-mono text-sm md:text-base font-bold text-foreground truncate">
+                          <span className="hidden md:inline">{app.freelancer}</span>
+                          <span className="md:hidden">{app.freelancer.slice(0, 6)}...{app.freelancer.slice(-4)}</span>
+                        </p>
+                        <p className="text-[10px] uppercase font-bold text-muted-foreground mt-0.5 tracking-widest">Applied {formatTs(app.appliedAt)}</p>
                       </div>
                     </div>
 
-                    <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4 flex-shrink-0 border-t md:border-t-0 pt-4 md:pt-0 border-border">
-                      <div className="flex items-center justify-between md:justify-end gap-6 md:px-4 text-sm">
-                        <div className="text-left md:text-right">
-                          <p className="text-[10px] uppercase text-muted-foreground font-bold tracking-widest mb-1">Bid</p>
-                          <p className="text-emerald-400 font-bold text-base">{(Number(app.bidAmount) / 1e6).toFixed(2)} USDT</p>
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 flex-shrink-0 border-t sm:border-t-0 pt-4 sm:pt-0 border-border/40">
+                      <div className="flex items-center justify-between sm:justify-end gap-6 sm:px-4 text-sm">
+                        <div className="text-left sm:text-right">
+                          <p className="text-[10px] uppercase text-muted-foreground font-bold tracking-widest mb-0.5">Bid</p>
+                          <p className="text-emerald-400 font-bold text-sm md:text-base">{(Number(app.bidAmount) / 1e6).toFixed(2)} USDT</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-[10px] uppercase text-muted-foreground font-bold tracking-widest mb-1">Delivery</p>
-                          <p className="text-foreground font-bold text-base">{app.deliveryDays.toString()} Days</p>
+                          <p className="text-[10px] uppercase text-muted-foreground font-bold tracking-widest mb-0.5">Delivery</p>
+                          <p className="text-foreground font-bold text-sm md:text-base">{app.deliveryDays.toString()} Days</p>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3 w-full md:w-auto mt-2 md:mt-0">
-                        <button onClick={() => setSelectedApplicant(app)} className="flex-1 md:flex-none px-4 py-2.5 text-xs font-bold bg-background border rounded-xl hover:bg-muted/50 transition text-foreground whitespace-nowrap shadow-sm">View Proposal</button>
+                      <div className="flex items-center gap-2 md:gap-3 w-full sm:w-auto">
+                        <button onClick={() => setSelectedApplicant(app)} className="flex-1 sm:flex-none px-3 md:px-4 py-2 text-xs font-bold bg-background border rounded-lg hover:bg-muted/50 transition text-foreground whitespace-nowrap shadow-sm">View Details</button>
                         {isClient && (
-                          <button disabled={hiring} onClick={() => handleHire(app)} className="flex-1 md:flex-none px-6 py-2.5 text-xs font-bold bg-primary text-primary-foreground rounded-xl hover:opacity-90 disabled:opacity-50 transition whitespace-nowrap shadow-sm shadow-primary/20">
+                          <button disabled={hiring} onClick={() => handleHire(app)} className="flex-1 sm:flex-none px-4 md:px-6 py-2 text-xs font-bold bg-primary text-primary-foreground rounded-lg hover:opacity-90 disabled:opacity-50 transition whitespace-nowrap shadow-sm shadow-primary/20">
                             {hiring ? "Hiring..." : "Hire Now"}
                           </button>
                         )}

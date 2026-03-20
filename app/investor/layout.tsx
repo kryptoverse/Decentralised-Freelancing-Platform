@@ -13,7 +13,7 @@ export default function InvestorLayout({
 }) {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
 
   const [activeTab, setActiveTab] = useState("home");
   const [userRole, setUserRole] = useState<
@@ -71,6 +71,7 @@ export default function InvestorLayout({
             userRole={userRole}
             onLogout={handleLogout}
             onRoleChange={handleRoleChange}
+            onToggleSidebar={() => setIsOpen(!isOpen)}
           />
 
           {/* Page Content */}

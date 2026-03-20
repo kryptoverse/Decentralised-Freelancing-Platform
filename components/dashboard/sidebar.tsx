@@ -66,10 +66,10 @@ export function Sidebar({
 
   return (
     <>
-      {/* Mobile toggle button */}
+      {/* Mobile toggle button (Floating - Optional if TopNavbar has one, but keep for safety or remove if redundant) */}
       <button
         onClick={onToggle}
-        className="md:hidden fixed top-4 left-4 z-30 p-2 rounded-full glass-effect"
+        className="md:hidden fixed top-4 left-4 z-[60] p-2 rounded-full glass-effect bg-background/50"
       >
         {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
       </button>
@@ -82,8 +82,16 @@ export function Sidebar({
           width: isCollapsed ? 80 : 256,
         }}
         transition={{ duration: 0.3 }}
-        className="fixed top-0 left-0 h-screen glass-effect-dark border-r border-border p-6 flex flex-col z-20 overflow-hidden"
+        className="fixed top-0 left-0 h-screen glass-effect-dark border-r border-border p-6 flex flex-col z-50 overflow-hidden"
       >
+        {/* Mobile Close Button (Inside Sidebar) */}
+        <button 
+          onClick={onToggle}
+          className="md:hidden absolute top-4 right-4 p-2 rounded-xl hover:bg-white/5 text-foreground transition-colors"
+        >
+          <X className="w-6 h-6" />
+        </button>
+
         {/* Header */}
         <div className="mb-8 pt-8 md:pt-0 flex items-center justify-between">
           {!isCollapsed && (
@@ -160,7 +168,7 @@ export function Sidebar({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onToggle}
-          className="fixed inset-0 bg-black/50 md:hidden z-10"
+          className="fixed inset-0 bg-black/80 md:hidden z-[45] backdrop-blur-sm"
         />
       )}
     </>

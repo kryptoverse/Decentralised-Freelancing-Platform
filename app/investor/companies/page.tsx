@@ -27,9 +27,10 @@ import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { ipfsToHttp } from "@/utils/ipfs";
 import { useIPFSUpload } from "@/hooks/useIPFSUpload";
-import { X, UserPlus as UserPlusIcon } from "lucide-react";
+import { X, UserPlus as UserPlusIcon, Scale } from "lucide-react";
 import { InvestModal } from "@/components/investor/InvestModal";
 import { CompanyPreviewModal } from "@/components/investor/CompanyPreviewModal";
+import { AIInvestmentHelper } from "@/components/investor/AIInvestmentHelper";
 
 /* ============================================================
    TYPES
@@ -82,6 +83,7 @@ export default function ExploreCompaniesPage() {
   
   const [selectedCompany, setSelectedCompany] = useState<CompanyWithRound | null>(null);
   const [previewCompany, setPreviewCompany] = useState<CompanyWithRound | null>(null);
+  const [selectedForAI, setSelectedForAI] = useState<CompanyWithRound[]>([]);
 
   const [hasProfile, setHasProfile] = useState<boolean | null>(null);
   const [showProfileSetup, setShowProfileSetup] = useState(false);
@@ -215,8 +217,24 @@ export default function ExploreCompaniesPage() {
       return nameMatch || sectorMatch;
   });
 
+  const toggleComparison = (c: CompanyWithRound) => {
+    setSelectedForAI(prev => {
+      const exists = prev.find(item => String(item.id) === String(c.id));
+      if (exists) return prev.filter(item => String(item.id) !== String(c.id));
+      if (prev.length >= 4) {
+          alert("Maximum 4 companies can be compared at once.");
+          return prev;
+      }
+      return [...prev, c];
+    });
+  };
+
   return (
       <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8">
+      <AIInvestmentHelper 
+        selectedCompanies={selectedForAI} 
+        onRemove={(id) => setSelectedForAI(prev => prev.filter(c => String(c.id) !== String(id)))} 
+      />
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-3 sm:gap-4">
         <div>
@@ -260,9 +278,16 @@ export default function ExploreCompaniesPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="glass-effect overflow-hidden rounded-2xl border border-border hover:border-primary/50 transition-colors group flex flex-col"
+                className={`glass-effect overflow-hidden rounded-2xl border transition-all group flex flex-col ${selectedForAI.find(item => String(item.id) === String(c.id)) ? 'border-primary ring-2 ring-primary/40 shadow-2xl scale-[1.02]' : 'border-border hover:border-primary/50'}`}
               >
                 <div className="p-6 flex-1 flex flex-col space-y-4 relative">
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); toggleComparison(c); }}
+                        className={`absolute top-4 right-4 p-2.5 rounded-xl border transition-all z-20 ${selectedForAI.find(item => String(item.id) === String(c.id)) ? 'bg-primary text-white border-primary shadow-lg scale-110 opacity-100' : 'bg-surface/80 text-muted-foreground border-border hover:border-primary/50 opacity-100 sm:opacity-0 group-hover:opacity-100 hover:scale-110'}`}
+                        title="Add to AI Comparison"
+                    >
+                        <Scale className="w-4 h-4" />
+                    </button>
                     <div className="flex justify-between items-start">
                         <div>
                             <span className="inline-block px-2.5 py-1 rounded-full bg-surface text-xs font-medium text-muted-foreground border border-border mb-3">

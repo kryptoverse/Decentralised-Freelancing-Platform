@@ -10,6 +10,7 @@ import {
   Copy,
   CheckCheck,
   ChevronDown,
+  Menu,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useActiveAccount, useDisconnect, useActiveWallet } from "thirdweb/react"; // ✅ added useActiveWallet
@@ -20,9 +21,15 @@ interface TopNavbarProps {
   userRole: keyof typeof ROLE_ROUTES | null;
   onLogout: () => void;
   onRoleChange: (role: keyof typeof ROLE_ROUTES) => void;
+  onToggleSidebar?: () => void;
 }
 
-export function TopNavbar({ userRole, onLogout, onRoleChange }: TopNavbarProps) {
+export function TopNavbar({ 
+  userRole, 
+  onLogout, 
+  onRoleChange,
+  onToggleSidebar 
+}: TopNavbarProps) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [walletDropdown, setWalletDropdown] = useState(false);
@@ -100,10 +107,20 @@ export function TopNavbar({ userRole, onLogout, onRoleChange }: TopNavbarProps) 
   // UI
   // --------------------------------------------------
   return (
-    <nav id="top-navbar" className="border-b border-border glass-effect-dark sticky top-0 z-10">
+    <nav id="top-navbar" className="border-b border-border glass-effect-dark sticky top-0 z-40">
       <div className="px-6 md:px-8 py-4 flex items-center justify-between">
-        {/* Left: Wallet */}
+        {/* Left: Hamburger (Mobile) + Wallet */}
         <div className="relative flex items-center gap-3">
+          {onToggleSidebar && (
+            <button
+              onClick={onToggleSidebar}
+              className="md:hidden p-2 -ml-2 rounded-xl hover:bg-surface-secondary text-foreground transition-colors"
+              title="Toggle Sidebar"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+          )}
+
           <div className="p-2 rounded-full bg-primary/10">
             <Wallet className="w-5 h-5 text-primary" />
           </div>
@@ -225,7 +242,7 @@ export function TopNavbar({ userRole, onLogout, onRoleChange }: TopNavbarProps) 
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="absolute right-0 mt-2 w-56 rounded-2xl overflow-hidden shadow-xl bg-surface border-2 border-border"
+                  className="absolute right-0 mt-2 w-56 rounded-2xl overflow-hidden shadow-xl bg-surface border-2 border-border z-50"
                 >
                   {/* Current Role */}
                   <div className="px-4 py-3 border-b border-border bg-surface-secondary">

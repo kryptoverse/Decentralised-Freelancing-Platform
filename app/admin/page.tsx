@@ -19,6 +19,8 @@ import {
   User,
   DollarSign,
   ExternalLink,
+  Sparkles,
+  Brain,
 } from "lucide-react";
 
 interface Freelancer {
@@ -76,6 +78,10 @@ export default function AdminPage() {
   const [selectedDispute, setSelectedDispute] = useState<Dispute | null>(null);
   const [resolvingDispute, setResolvingDispute] = useState(false);
   const [customSplit, setCustomSplit] = useState(50);
+
+  // AI Dispute Analysis (cached per jobId so re-opening never re-fetches)
+  const [aiAnalysisCache, setAiAnalysisCache] = useState<Record<number, string>>({});
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const fetchFreelancers = async () => {
     try {
@@ -266,6 +272,72 @@ export default function AdminPage() {
     }
   };
 
+  const generateDisputeAnalysis = async (dispute: Dispute) => {
+    setIsAnalyzing(true);
+    setAiAnalysisCache(prev => ({ ...prev, [dispute.jobId]: "" }));
+
+    const systemPrompt = `You are an impartial AI arbitrator for a decentralized freelancing platform.
+Analyze the dispute details provided and give a concise, neutral assessment.
+DO NOT use markdown formatting: no asterisks, no hashes, no bullet dashes, no underscores.
+Write in plain paragraphs. Structure your response as:
+1. Summary of the situation (1-2 sentences)
+2. Freelancer position (strengths and weaknesses)
+3. Client position (strengths and weaknesses)
+4. Recommended resolution with suggested payout percentage
+5. Reasoning for your recommendation
+Keep the total response under 300 words. Be direct and impartial.`;
+
+    const userMessage = `Analyze this freelance dispute:
+
+JOB TITLE: ${dispute.jobTitle}
+JOB ID: ${dispute.jobId}
+BUDGET IN DISPUTE: ${dispute.budget} USDT
+
+JOB REQUIREMENTS:
+${dispute.jobDescription || "Not provided"}
+
+FREELANCER SUBMITTED WORK:
+${dispute.lastDeliveryURI ? `Delivery submitted (IPFS: ${dispute.lastDeliveryURI})` : "No delivery submitted"}
+
+CLIENT DISPUTE REASON:
+${dispute.disputeReason || "Not provided"}
+
+PARTIES:
+Client: ${dispute.clientName} (${dispute.client})
+Freelancer: ${dispute.freelancerName} (${dispute.freelancer})
+
+Please analyze and give your recommendation.`;
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [{ id: "dispute-1", role: "user", content: userMessage }],
+          systemContext: systemPrompt,
+        }),
+      });
+
+      if (!res.ok) throw new Error("AI request failed");
+      const reader = res.body?.getReader();
+      if (!reader) return;
+
+      const decoder = new TextDecoder();
+      let generated = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        generated += decoder.decode(value, { stream: true });
+        setAiAnalysisCache(prev => ({ ...prev, [dispute.jobId]: generated }));
+      }
+    } catch (err) {
+      console.error("AI dispute analysis failed:", err);
+      setAiAnalysisCache(prev => ({ ...prev, [dispute.jobId]: "AI analysis failed. Please try again using the Re-analyze button." }));
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   useEffect(() => {
     const verifySession = async () => {
@@ -283,6 +355,14 @@ export default function AdminPage() {
 
     verifySession();
   }, []);
+
+  // Auto-generate AI analysis when a dispute is opened (only if not already cached)
+  useEffect(() => {
+    if (selectedDispute && !(selectedDispute.jobId in aiAnalysisCache)) {
+      generateDisputeAnalysis(selectedDispute);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDispute]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -858,14 +938,52 @@ export default function AdminPage() {
               </div>
 
               {/* Dispute Reason */}
-              <div className="p-4 rounded-lg border border-red-500/30 bg-red-500/10">
+              <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/10">
                 <div className="flex items-center gap-2 mb-2">
                   <AlertCircle className="w-4 h-4 text-red-400" />
                   <span className="font-semibold text-red-400">Client Dispute Reason</span>
                 </div>
-                <p className="text-sm text-foreground-secondary whitespace-pre-wrap">
-                  {selectedDispute.disputeReason}
+                <p className="text-sm text-foreground whitespace-pre-wrap">
+                  {selectedDispute.disputeReason || <span className="italic text-muted-foreground">No reason provided.</span>}
                 </p>
+              </div>
+
+              {/* AI Analysis Panel */}
+              <div className="p-4 rounded-xl border border-violet-500/30 bg-violet-500/5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Brain className="w-4 h-4 text-violet-400" />
+                    <span className="font-semibold text-violet-400">AI Arbitration Analysis</span>
+                  </div>
+                  <button
+                    onClick={() => generateDisputeAnalysis(selectedDispute)}
+                    disabled={isAnalyzing}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50 transition hover:opacity-80"
+                    style={{ background: "linear-gradient(to right, #7c3aed, #4f46e5)", color: "#ffffff" }}
+                  >
+                    {isAnalyzing ? (
+                      <><Loader2 className="w-3 h-3 animate-spin" style={{ color: "#ffffff" }} /> Analyzing…</>
+                    ) : (
+                      <><Sparkles className="w-3 h-3" style={{ color: "#ffffff" }} /> Re-analyze</>
+                    )}
+                  </button>
+                </div>
+
+                {isAnalyzing && !aiAnalysisCache[selectedDispute.jobId] ? (
+                  <div className="flex items-center gap-3 py-4">
+                    <Loader2 className="w-5 h-5 animate-spin text-violet-400" />
+                    <span className="text-sm text-violet-400 animate-pulse">AI is analyzing the dispute…</span>
+                  </div>
+                ) : aiAnalysisCache[selectedDispute.jobId] ? (
+                  <div className="relative">
+                    <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+                      {aiAnalysisCache[selectedDispute.jobId]}
+                    </p>
+                    {isAnalyzing && (
+                      <span className="inline-block w-1.5 h-4 bg-violet-400 animate-pulse ml-0.5 align-middle" />
+                    )}
+                  </div>
+                ) : null}
               </div>
 
               {/* Resolution Options */}

@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { Menu, X, ChevronLeft, ChevronRight, Home as HomeIcon } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { ROLE_TABS, ROLE_ROUTES } from "@/src/config/roles-config";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface SidebarProps {
   activeTab: string;
@@ -26,6 +27,7 @@ export function Sidebar({
 }: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const isMobile = useIsMobile();
 
   // 1. build nav items:
   //    - if user hasn't picked a role yet (userRole = null), show just the "universal dashboard home"
@@ -78,7 +80,7 @@ export function Sidebar({
       <motion.aside
         initial={false}
         animate={{
-          x: isOpen ? 0 : -300,
+          x: isMobile ? (isOpen ? 0 : -300) : 0,
           width: isCollapsed ? 80 : 256,
         }}
         transition={{ duration: 0.3 }}

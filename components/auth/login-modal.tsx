@@ -3,6 +3,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { ConnectEmbed } from "thirdweb/react";
 import { client, inAppSmartWallet } from "@/lib/thirdweb";
+import { Logo } from "@/components/ui/logo";
 
 interface LoginModalProps {
   onLogin: () => void;
@@ -39,6 +40,9 @@ export function LoginModal({ onLogin, onClose }: LoginModalProps) {
           transition={{ duration: 0.3 }}
           className="bg-surface rounded-2xl p-8 w-[90%] max-w-md shadow-xl text-center"
         >
+          <div className="flex justify-center mb-6">
+            <Logo className="h-10" />
+          </div>
           <h2 className="text-2xl font-bold mb-4 text-foreground">
             Login to WORQS
           </h2>

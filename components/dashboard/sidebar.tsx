@@ -1,10 +1,12 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Image from "next/image";
 import { Menu, X, ChevronLeft, ChevronRight, Home as HomeIcon } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { ROLE_TABS, ROLE_ROUTES } from "@/src/config/roles-config";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Logo } from "@/components/ui/logo";
 
 interface SidebarProps {
   activeTab: string;
@@ -34,14 +36,14 @@ export function Sidebar({
   //    - else show that role's full sidebar config
   const navItems = !userRole
     ? [
-        {
-          id: "home",
-          label: "Home",
-          icon: HomeIcon,
-          path: "/",
-          match: "exact" as const,
-        },
-      ]
+      {
+        id: "home",
+        label: "Home",
+        icon: HomeIcon,
+        path: "/",
+        match: "exact" as const,
+      },
+    ]
     : ROLE_TABS[userRole];
 
   // Normalize helper for comparisons
@@ -87,7 +89,7 @@ export function Sidebar({
         className="fixed top-0 left-0 h-screen glass-effect-dark border-r border-border p-6 flex flex-col z-50 overflow-hidden"
       >
         {/* Mobile Close Button (Inside Sidebar) */}
-        <button 
+        <button
           onClick={onToggle}
           className="md:hidden absolute top-4 right-4 p-2 rounded-xl hover:bg-white/5 text-foreground transition-colors"
         >
@@ -98,8 +100,8 @@ export function Sidebar({
         <div className="mb-8 pt-8 md:pt-0 flex items-center justify-between">
           {!isCollapsed && (
             <div>
-              <h1 className="text-2xl font-bold gradient-text">WORQS</h1>
-              <p className="text-xs text-foreground-secondary">Web3 Platform</p>
+              <Logo className="h-10 mb-1" />
+              <p className="text-[10px] text-foreground-secondary uppercase tracking-widest font-medium opacity-70">Web3 Platform</p>
             </div>
           )}
           <button
@@ -129,19 +131,16 @@ export function Sidebar({
                   router.push(item.path);
                   if (window.innerWidth < 768) onToggle();
                 }}
-                className={`w-full flex items-center transition-all duration-300 ease-out rounded-xl ${
-                  isCollapsed ? "justify-center p-4" : "gap-3 px-4 py-3"
-                } ${
-                  isActive
+                className={`w-full flex items-center transition-all duration-300 ease-out rounded-xl ${isCollapsed ? "justify-center p-4" : "gap-3 px-4 py-3"
+                  } ${isActive
                     ? "gradient-primary text-foreground shadow-lg shadow-primary/30 font-semibold"
                     : "text-foreground-secondary hover:bg-surface-secondary hover:text-foreground"
-                }`}
+                  }`}
                 title={isCollapsed ? item.label : ""}
               >
                 <Icon
-                  className={`w-6 h-6 flex-shrink-0 transition-transform duration-200 ${
-                    isCollapsed ? "hover:scale-110" : ""
-                  }`}
+                  className={`w-6 h-6 flex-shrink-0 transition-transform duration-200 ${isCollapsed ? "hover:scale-110" : ""
+                    }`}
                 />
                 {!isCollapsed && (
                   <span className="font-medium text-sm md:text-base">

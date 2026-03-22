@@ -1,6 +1,7 @@
 "use client"
 
 import { motion } from "framer-motion"
+import { Logo } from "@/components/ui/logo"
 
 export function FooterSection() {
   return (
@@ -11,6 +12,9 @@ export function FooterSection() {
           whileInView={{ opacity: 1 }}
           transition={{ duration: 0.8 }}
         >
+          <div className="flex justify-center mb-8">
+            <Logo className="h-8 opacity-80 hover:opacity-100 transition-opacity" />
+          </div>
           <div className="flex flex-wrap justify-center gap-3 sm:gap-6 mb-6 sm:mb-8 text-sm">
             {["About", "Whitepaper", "Privacy", "Socials"].map((item, i) => (
               <a

@@ -3,13 +3,13 @@
   "chainId": 80002,
   "addresses": {
     "MockUSDT": "0x4eC3e0BeCEC0054397f140eF2501191bE93A19cA",
-    "FreelancerFactory": "0xE6bEe2c34B50657D8b882196C8a4Ed060fC74474",
-    "ClientFactory": "0xAb96E81eAe676Deaf4d46d39C798CcdcFa817498",
-    "EscrowFactory": "0x1A27536B6f82689A09BF1a9CE5683ffc76c153bD",
-    "JobBoard": "0xe0593C27Feaf882103D64c49515b2aCef6df373C",
-    "FundraiseFactory": "0x74Cf1858b20E0eD3f22B030E1E683F278c98502B",
-    "CompanyRegistry": "0x8d8C31AE86E8E61405db43C4D873907DA32C5eaC",
-    "InvestorRegistry": "0x7472F8422A76Dcda3fEe684D3626D96924B90d72"
+    "FreelancerFactory": "0x0E147F266577EB3Ff06ED0f82Bf078433d525249",
+    "ClientFactory": "0x0b3b9CCb2E6504fBf9d878b4bd2D926ad76828fb",
+    "EscrowFactory": "0x7135DCBafdE64BFA5Bd62879674b62F8381c98Cf",
+    "JobBoard": "0xc78Ae4a04aa0fC6f9461F8B23dA85e85CFd90ec8",
+    "FundraiseFactory": "0xf766758945275Fcf03F8FEBC38645a1361F5310C",
+    "CompanyRegistry": "0x9ca26E04354622908fE3D16F64d141ea35295bF9",
+    "InvestorRegistry": "0xBDd13f0AF5dFe5c3A9184196Bfe644209D750c12"
   },
   "roles": {
     "platformWallet": "0xDEd8e5C08fD108c6eDE834e0BFF25904E03c5094",

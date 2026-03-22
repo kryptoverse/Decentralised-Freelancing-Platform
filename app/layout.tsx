@@ -12,8 +12,10 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "WORQS",
-  description:
-    "work it own it",
+  description: "work it own it",
+  icons: {
+    icon: "/ico.png",
+  },
 };
 
 export default function RootLayout({

@@ -230,7 +230,7 @@ export function TopNavbar({
           <div className="relative">
             <button
               onClick={() => setProfileOpen(!profileOpen)}
-              className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center text-primary-foreground font-semibold hover:shadow-lg"
+              className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-semibold hover:shadow-lg"
               title="Open profile menu"
             >
               {userRole ? roleDisplay[0] : "?"}

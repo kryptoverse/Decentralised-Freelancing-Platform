@@ -26,7 +26,7 @@ export function LandingPage({ onGetStarted }: LandingPageProps) {
         </p>
         <button
           onClick={onGetStarted}
-          className="rounded-full px-6 sm:px-8 py-3 bg-gradient-primary text-white font-semibold shadow-lg hover:scale-105 transition-all w-full sm:w-auto"
+          className="rounded-full px-6 sm:px-8 py-3 gradient-primary text-white font-semibold shadow-lg hover:scale-105 transition-all w-full sm:w-auto"
         >
           Get Started
         </button>

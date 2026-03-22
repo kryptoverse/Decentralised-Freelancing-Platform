@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { getContract, readContract } from "thirdweb";
 import { useActiveAccount } from "thirdweb/react";
@@ -29,16 +29,20 @@ export default function FindWorkPage() {
   const router = useRouter();
 
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [jobIds, setJobIds] = useState<bigint[]>([]);
+  const [processedCount, setProcessedCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [hasProfile, setHasProfile] = useState<boolean | null>(null);
   const { setChatContext } = useChatContext();
 
+  // Load initial batch of job IDs
   useEffect(() => {
     if (!account) return;
 
-    const fetchJobs = async () => {
+    const fetchInitialJobs = async () => {
       if (hasProfile === false) {
         setLoading(false);
         return;
@@ -47,14 +51,12 @@ export default function FindWorkPage() {
         setLoading(true);
         setError(null);
 
-        // 1️⃣ Get JobBoard contract
         const jobBoard = getContract({
           client,
           chain: CHAIN,
           address: DEPLOYED_CONTRACTS.addresses.JobBoard,
         });
 
-        // 2️⃣ Get total open jobs count
         const totalOpen = await readContract({
           contract: jobBoard,
           method: "function totalOpenJobs() view returns (uint256)",
@@ -62,104 +64,30 @@ export default function FindWorkPage() {
 
         if (Number(totalOpen) === 0) {
           setJobs([]);
+          setJobIds([]);
           return;
         }
 
-        // 3️⃣ Fetch open job IDs (paginated)
-        const limit = 50; // Fetch first 50 jobs
-        const jobIds = await readContract({
+        // Fetch ALL open job IDs initially
+        const ids = await readContract({
           contract: jobBoard,
           method: "function openJobs(uint256,uint256) view returns (uint256[])",
-          params: [0n, BigInt(limit)],
-        });
+          params: [0n, totalOpen as bigint],
+        }) as bigint[];
 
-        if (!jobIds || jobIds.length === 0) {
+        if (!ids || ids.length === 0) {
           setJobs([]);
+          setJobIds([]);
           return;
         }
 
-        // 4️⃣ Fetch each job's details
-        const jobPromises = jobIds.map(async (jobId: bigint) => {
-          try {
-            const jobData = await readContract({
-              contract: jobBoard,
-              method:
-                "function getJob(uint256) view returns (address,string,string,uint256,uint8,address,address,uint64,uint64,uint64,bytes32[],uint256)",
-              params: [jobId],
-            });
+        // Reverse to show newest first
+        const reversedIds = [...ids].reverse();
+        setJobIds(reversedIds);
 
-            const [
-              clientAddr,
-              title,
-              descriptionURI,
-              budgetUSDC,
-              status,
-              hiredFreelancer,
-              escrow,
-              createdAt,
-              updatedAt,
-              expiresAt,
-              tags,
-              postingBond,
-            ] = jobData as [
-              string,
-              string,
-              string,
-              bigint,
-              number,
-              string,
-              string,
-              bigint,
-              bigint,
-              bigint,
-              `0x${string}`[],
-              bigint
-            ];
-
-            // Only show Open jobs (status = 1)
-            if (Number(status) !== 1) return null;
-
-            // Filter out expired jobs
-            const now = Math.floor(Date.now() / 1000);
-            if (expiresAt > 0n && Number(expiresAt) <= now) {
-              return null; // Job has expired
-            }
-
-            // Convert tags from bytes32 to strings
-            const tagStrings = (tags as `0x${string}`[])
-              .map((tag) => {
-                try {
-                  const hex = tag.slice(2);
-                  const bytes = new Uint8Array(
-                    hex.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16))
-                  );
-                  const text = new TextDecoder().decode(bytes);
-                  return text.replace(/\0/g, "").trim();
-                } catch {
-                  return "";
-                }
-              })
-              .filter((tag) => tag.length > 0);
-
-            return {
-              jobId: Number(jobId),
-              client: clientAddr as string,
-              title: title as string,
-              description: "Click to view full job details", // Placeholder - full description loads on detail page
-              budgetUSDC: budgetUSDC as bigint,
-              status: Number(status),
-              createdAt: createdAt as bigint,
-              expiresAt: expiresAt as bigint,
-              tags: tagStrings,
-            };
-          } catch (err) {
-            console.warn(`Failed to fetch job ${jobId}:`, err);
-            return null;
-          }
-        });
-
-        const results = await Promise.all(jobPromises);
-        setJobs(results.filter(Boolean) as Job[]);
+        // Fetch details for the first 10
+        await loadJobDetails(reversedIds.slice(0, 10), jobBoard, true);
+        setProcessedCount(Math.min(10, reversedIds.length));
       } catch (err: any) {
         console.error("❌ Failed to load jobs:", err);
         setError(err?.message || "Failed to fetch jobs");
@@ -169,10 +97,9 @@ export default function FindWorkPage() {
     };
 
     if (hasProfile !== false) {
-      fetchJobs();
+      fetchInitialJobs();
     }
 
-    // Fetch user profile for AI context
     const fetchProfile = async () => {
       if (!account) return;
       try {
@@ -221,6 +148,79 @@ export default function FindWorkPage() {
     };
   }, [account, setChatContext, hasProfile]);
 
+  const loadJobDetails = async (idsToLoad: bigint[], jobBoard: any, isInitial: boolean = false) => {
+    const jobPromises = idsToLoad.map(async (jobId: bigint) => {
+      try {
+        const jobData = await readContract({
+          contract: jobBoard,
+          method:
+            "function getJob(uint256) view returns (address,string,string,uint256,uint8,address,address,uint64,uint64,uint64,bytes32[],uint256)",
+          params: [jobId],
+        });
+
+        const [
+          clientAddr, title, descriptionURI, budgetUSDC, status,
+          hiredFreelancer, escrow, createdAt, updatedAt, expiresAt, tags, postingBond
+        ] = jobData as any;
+
+        if (Number(status) !== 1) return null;
+
+        const now = Math.floor(Date.now() / 1000);
+        if (expiresAt > 0n && Number(expiresAt) <= now) {
+          return null;
+        }
+
+        const tagStrings = (tags as `0x${string}`[])
+          .map((tag) => {
+            try {
+              const hex = tag.slice(2);
+              const bytes = new Uint8Array(hex.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16)));
+              return new TextDecoder().decode(bytes).replace(/\0/g, "").trim();
+            } catch { return ""; }
+          })
+          .filter((tag) => tag.length > 0);
+
+        return {
+          jobId: Number(jobId),
+          client: clientAddr as string,
+          title: title as string,
+          description: "Click to view full job details",
+          budgetUSDC: budgetUSDC as bigint,
+          status: Number(status),
+          createdAt: createdAt as bigint,
+          expiresAt: expiresAt as bigint,
+          tags: tagStrings,
+        };
+      } catch (err) {
+        console.warn(`Failed to fetch job ${jobId}:`, err);
+        return null;
+      }
+    });
+
+    const results = await Promise.all(jobPromises);
+    const validJobs = results.filter(Boolean) as Job[];
+    if (isInitial) {
+      setJobs(validJobs);
+    } else {
+      setJobs(prev => [...prev, ...validJobs]);
+    }
+  };
+
+  const loadMoreJobs = async () => {
+    if (isLoadingMore || processedCount >= jobIds.length) return;
+    setIsLoadingMore(true);
+    try {
+      const jobBoard = getContract({ client, chain: CHAIN, address: DEPLOYED_CONTRACTS.addresses.JobBoard });
+      const nextIds = jobIds.slice(processedCount, processedCount + 10);
+      await loadJobDetails(nextIds, jobBoard, false);
+      setProcessedCount(prev => prev + nextIds.length);
+    } catch (err) {
+      console.error("Failed to load more jobs", err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
   /* ------------------------------------
       AI CONTEXT INJECTION
   ------------------------------------ */
@@ -241,6 +241,18 @@ YOUR PROFILE CONTEXT:
 
     setChatContext(defaultContext + "\n\n" + context);
   }, [jobs, profile, setChatContext]);
+
+  const observer = useRef<IntersectionObserver | null>(null);
+  const lastJobElementRef = useCallback((node: HTMLDivElement | null) => {
+    if (loading || isLoadingMore) return;
+    if (observer.current) observer.current.disconnect();
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && processedCount < jobIds.length) {
+        loadMoreJobs();
+      }
+    });
+    if (node) observer.current.observe(node);
+  }, [loading, isLoadingMore, processedCount, jobIds.length, loadMoreJobs]);
 
   if (!account) {
     return (
@@ -267,6 +279,8 @@ YOUR PROFILE CONTEXT:
     );
   }
 
+
+
   return (
     <main className="space-y-6">
       <div>
@@ -276,7 +290,7 @@ YOUR PROFILE CONTEXT:
         </p>
         {!loading && jobs.length > 0 && (
           <p className="text-sm text-muted-foreground mt-1">
-            {jobs.length} active {jobs.length === 1 ? 'job' : 'jobs'} available
+            {jobs.length} active {jobs.length === 1 ? 'job' : 'jobs'} loaded
           </p>
         )}
       </div>
@@ -303,7 +317,8 @@ YOUR PROFILE CONTEXT:
 
             return (
               <motion.div
-                key={job.jobId}
+                ref={jobs.length === i + 1 ? lastJobElementRef : null}
+                key={`${job.jobId}-${i}`}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: i * 0.05 }}
@@ -363,7 +378,6 @@ YOUR PROFILE CONTEXT:
                 <button
                   onClick={() =>
                     router.push(`/freelancer/FindWork/${job.jobId}`)
-
                   }
                   className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition font-medium"
                 >
@@ -372,6 +386,12 @@ YOUR PROFILE CONTEXT:
               </motion.div>
             );
           })}
+        </div>
+      )}
+      
+      {isLoadingMore && (
+        <div className="flex justify-center py-6">
+          <Loader2 className="w-6 h-6 text-primary animate-spin" />
         </div>
       )}
 

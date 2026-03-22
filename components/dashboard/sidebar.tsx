@@ -133,7 +133,7 @@ export function Sidebar({
                   isCollapsed ? "justify-center p-4" : "gap-3 px-4 py-3"
                 } ${
                   isActive
-                    ? "bg-gradient-primary text-foreground shadow-lg shadow-primary/30 font-semibold"
+                    ? "gradient-primary text-foreground shadow-lg shadow-primary/30 font-semibold"
                     : "text-foreground-secondary hover:bg-surface-secondary hover:text-foreground"
                 }`}
                 title={isCollapsed ? item.label : ""}

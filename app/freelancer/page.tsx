@@ -76,6 +76,7 @@ export default function FreelancerHome() {
   const [disputedCount, setDisputedCount] = useState(0);
   const [cancelledCount, setCancelledCount] = useState(0);
   const [mobileJobTab, setMobileJobTab] = useState<"hired" | "applied" | "completed" | "cancelled">("hired");
+  const [desktopJobTab, setDesktopJobTab] = useState<"hired" | "applied" | "completed" | "cancelled">("hired");
 
   // Faucet state
   const [faucetLoading, setFaucetLoading] = useState(false);
@@ -867,215 +868,164 @@ Hired (Active) Jobs: ${hiredJobs.length}
               )}
             </div>
 
-            {/* ===== DESKTOP: 4-column grid (768px+) ===== */}
+            {/* ===== DESKTOP: Tabbed View (768px+) ===== */}
             <div className="hidden md:block">
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-              {/* Applied Jobs */}
-              <div className="rounded-2xl p-5 glass-effect border border-border shadow-md">
-                <h3 className="text-lg font-semibold mb-3">Applied (Pending)</h3>
-                {appliedJobs.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    You have not applied to any jobs yet, or they are already hired.
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {appliedJobs.map((job) => (
-                      <div
-                        key={job.jobId}
-                        className="border border-border rounded-xl p-4 hover:border-primary/50 transition-all hover:shadow-md bg-surface-secondary"
-                      >
-                        <div className="flex justify-between items-start gap-4 mb-3">
-                          <div className="flex-1">
-                            <h4 className="font-semibold text-base mb-1 line-clamp-2">
-                              {job.title}
-                            </h4>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <span className="px-2 py-0.5 rounded-md bg-surface text-foreground border border-border">
-                                Job #{job.jobId}
-                              </span>
-                              <span>•</span>
-                              <span>{JOB_STATUS_LABEL[job.status] || "Unknown"}</span>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm font-bold text-primary">
-                              {(Number(job.budgetUSDC) / 1e6).toFixed(2)} USDT
-                            </p>
-                            <p className="text-xs text-muted-foreground">Budget</p>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() =>
-                            router.push(`/freelancer/jobs/${job.jobId}`)
-                          }
-                          className="w-full px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition flex items-center justify-center gap-2 text-sm font-medium"
-                        >
-                          View Job Details
-                          <ArrowRight className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+              <div className="flex border-b border-border/60 mb-6">
+                {(["hired", "applied", "completed", "cancelled"] as const).map((tab) => {
+                  const counts = { hired: hiredJobs.length, applied: appliedJobs.length, completed: completedJobs.length, cancelled: cancelledJobs.length };
+                  const labels = { hired: "Active Jobs", applied: "Applied (Pending)", completed: "Completed", cancelled: "Cancelled / Refunded" };
+                  const isActive = desktopJobTab === tab;
+                  return (
+                    <button key={tab} onClick={() => setDesktopJobTab(tab)}
+                      className={`px-6 py-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${isActive ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"}`}>
+                      {labels[tab]}
+                      <span className={`rounded-full px-2.5 py-0.5 text-xs ${isActive ? "bg-primary/10 text-primary" : "bg-surface-secondary text-muted-foreground"}`}>{counts[tab]}</span>
+                    </button>
+                  );
+                })}
               </div>
 
-              {/* Hired Jobs */}
-              <div className="rounded-2xl p-5 glass-effect border border-border shadow-md">
-                <h3 className="text-lg font-semibold mb-3">Hired Jobs</h3>
-                {hiredJobs.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No jobs have been accepted yet.
-                  </p>
+              {/* Tab Content */}
+              <div className="space-y-4">
+                {/* Hired / Active Jobs */}
+                {desktopJobTab === "hired" && (hiredJobs.length === 0 ? (
+                  <div className="text-center py-16 rounded-2xl glass-effect border border-border/50">
+                    <p className="text-muted-foreground">No active jobs yet.</p>
+                  </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {hiredJobs.map((job) => (
-                      <div
-                        key={job.jobId}
-                        className="border border-emerald-500/30 rounded-xl p-4 bg-emerald-500/5 hover:border-emerald-500/50 transition-all hover:shadow-md"
-                      >
-                        <div className="flex justify-between items-start gap-4 mb-3">
-                          <div className="flex-1">
-                            <h4 className="font-semibold text-base mb-1 line-clamp-2">
-                              {job.title}
-                            </h4>
-                            <div className="flex items-center gap-2 text-xs mb-2">
-                              <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 font-medium">
-                                Active
-                              </span>
-                              <span className="text-muted-foreground">Job #{job.jobId}</span>
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              Client: {job.client.slice(0, 6)}...{job.client.slice(-4)}
-                            </p>
+                      <div key={job.jobId} className="flex flex-col md:flex-row md:items-center justify-between p-5 rounded-2xl glass-effect border border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-500/50 transition-all shadow-sm">
+                        <div className="flex-1 flex flex-col md:flex-row md:items-center gap-4 md:gap-8 min-w-0 mr-6">
+                          <div className="flex-1 min-w-0">
+                             <h4 className="font-semibold text-lg mb-1.5 truncate">{job.title}</h4>
+                             <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                               <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 font-medium text-xs">Active</span>
+                               <span>Job #{job.jobId}</span>
+                               <span>•</span>
+                               <span>Client: {job.client.slice(0, 6)}...{job.client.slice(-4)}</span>
+                             </div>
                           </div>
-                          <div className="text-right">
-                            <p className="text-sm font-bold text-emerald-400">
-                              {(Number(job.budgetUSDC) / 1e6).toFixed(2)} USDT
-                            </p>
-                            <p className="text-xs text-muted-foreground">Payment</p>
+                          <div className="text-left md:text-right px-1 md:px-6 md:border-l border-border/50 flex-shrink-0">
+                             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Payment</p>
+                             <p className="text-lg font-bold text-emerald-400">{(Number(job.budgetUSDC) / 1e6).toFixed(2)} USDT</p>
                           </div>
                         </div>
-                        <button
-                          onClick={() =>
-                            router.push(`/freelancer/jobs/${job.jobId}`)
-                          }
-                          className="w-full px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition flex items-center justify-center gap-2 text-sm font-medium"
-                        >
-                          View Job Details
-                          <ArrowRight className="w-4 h-4" />
-                        </button>
+                        <div className="mt-4 md:mt-0 md:pl-6 md:border-l border-border/50 flex-shrink-0">
+                          <button onClick={() => router.push(`/freelancer/jobs/${job.jobId}`)} className="w-full md:w-auto px-6 py-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition flex items-center justify-center gap-2 text-sm font-semibold whitespace-nowrap">
+                            View Details <ArrowRight className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
+                ))}
 
-              {/* Cancelled Jobs */}
-              <div className="rounded-2xl p-5 glass-effect border border-border shadow-md">
-                <h3 className="text-lg font-semibold mb-3">Cancelled / Refunded</h3>
-                {cancelledJobs.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No cancelled jobs.
-                  </p>
+                {/* Applied Jobs */}
+                {desktopJobTab === "applied" && (appliedJobs.length === 0 ? (
+                  <div className="text-center py-16 rounded-2xl glass-effect border border-border/50">
+                    <p className="text-muted-foreground">You have not applied to any jobs yet, or they are already hired.</p>
+                  </div>
                 ) : (
-                  <div className="space-y-3">
-                    {cancelledJobs.map((job) => (
-                      <div
-                        key={job.jobId}
-                        className="border border-red-500/30 rounded-xl p-4 bg-red-500/5 hover:border-red-500/50 transition-all hover:shadow-md"
-                      >
-                        <div className="flex justify-between items-start gap-4 mb-3">
-                          <div className="flex-1">
-                            <h4 className="font-semibold text-base mb-1 line-clamp-2">
-                              {job.title}
-                            </h4>
-                            <div className="flex items-center gap-2 text-xs mb-2">
-                              <span className="px-2 py-0.5 rounded-md bg-red-500/20 text-red-400 font-medium">
-                                ✕ Cancelled
-                              </span>
-                              <span className="text-muted-foreground">Job #{job.jobId}</span>
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              Client: {job.client.slice(0, 6)}...{job.client.slice(-4)}
-                            </p>
+                  <div className="space-y-4">
+                    {appliedJobs.map((job) => (
+                      <div key={job.jobId} className="flex flex-col md:flex-row md:items-center justify-between p-5 rounded-2xl glass-effect border border-border bg-surface-secondary hover:border-primary/50 transition-all shadow-sm">
+                        <div className="flex-1 flex flex-col md:flex-row md:items-center gap-4 md:gap-8 min-w-0 mr-6">
+                          <div className="flex-1 min-w-0">
+                             <h4 className="font-semibold text-lg mb-1.5 truncate">{job.title}</h4>
+                             <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                               <span className="px-2.5 py-0.5 rounded-md bg-surface border border-border text-foreground font-medium text-xs">Job #{job.jobId}</span>
+                               <span>•</span>
+                               <span>{JOB_STATUS_LABEL[job.status] || "Unknown"}</span>
+                             </div>
                           </div>
-                          <div className="text-right">
-                            <p className="text-sm font-bold text-red-400">
-                              {(Number(job.budgetUSDC) / 1e6).toFixed(2)} USDT
-                            </p>
-                            <p className="text-xs text-muted-foreground">Refunded</p>
+                          <div className="text-left md:text-right px-1 md:px-6 md:border-l border-border/50 flex-shrink-0">
+                             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Budget</p>
+                             <p className="text-lg font-bold text-primary">{(Number(job.budgetUSDC) / 1e6).toFixed(2)} USDT</p>
                           </div>
                         </div>
-                        <button
-                          onClick={() =>
-                            router.push(`/freelancer/jobs/${job.jobId}`)
-                          }
-                          className="w-full px-4 py-2 rounded-lg bg-red-900/40 text-red-300 hover:bg-red-900/60 transition flex items-center justify-center gap-2 text-sm font-medium"
-                        >
-                          View Job Details
-                          <ArrowRight className="w-4 h-4" />
-                        </button>
+                        <div className="mt-4 md:mt-0 md:pl-6 md:border-l border-border/50 flex-shrink-0">
+                          <button onClick={() => router.push(`/freelancer/jobs/${job.jobId}`)} className="w-full md:w-auto px-6 py-2.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition flex items-center justify-center gap-2 text-sm font-semibold whitespace-nowrap">
+                            View Details <ArrowRight className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
+                ))}
 
-              {/* Completed Jobs */}
-              <div className="rounded-2xl p-5 glass-effect border border-border shadow-md">
-                <h3 className="text-lg font-semibold mb-3">Completed Jobs</h3>
-                {completedJobs.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No completed jobs yet.
-                  </p>
+                {/* Completed Jobs */}
+                {desktopJobTab === "completed" && (completedJobs.length === 0 ? (
+                  <div className="text-center py-16 rounded-2xl glass-effect border border-border/50">
+                    <p className="text-muted-foreground">No completed jobs yet.</p>
+                  </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {completedJobs.map((job) => (
-                      <div
-                        key={job.jobId}
-                        className="border border-blue-500/30 rounded-xl p-4 bg-blue-500/5 hover:border-blue-500/50 transition-all hover:shadow-md"
-                      >
-                        <div className="flex justify-between items-start gap-4 mb-3">
-                          <div className="flex-1">
-                            <h4 className="font-semibold text-base mb-1 line-clamp-2">
-                              {job.title}
-                            </h4>
-                            <div className="flex items-center gap-2 text-xs mb-2">
-                              <span className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-400 font-medium">
-                                ✓ Completed
-                              </span>
-                              <span className="text-muted-foreground">Job #{job.jobId}</span>
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              Client: {job.client.slice(0, 6)}...{job.client.slice(-4)}
-                            </p>
+                      <div key={job.jobId} className="flex flex-col md:flex-row md:items-center justify-between p-5 rounded-2xl glass-effect border border-blue-500/30 bg-blue-500/5 hover:border-blue-500/50 transition-all shadow-sm">
+                        <div className="flex-1 flex flex-col md:flex-row md:items-center gap-4 md:gap-8 min-w-0 mr-6">
+                          <div className="flex-1 min-w-0">
+                             <h4 className="font-semibold text-lg mb-1.5 truncate">{job.title}</h4>
+                             <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                               <span className="px-2.5 py-0.5 rounded-md bg-blue-500/20 text-blue-400 font-medium text-xs">✓ Done</span>
+                               <span>Job #{job.jobId}</span>
+                               <span>•</span>
+                               <span>Client: {job.client.slice(0, 6)}...{job.client.slice(-4)}</span>
+                             </div>
                           </div>
-                          <div className="text-right">
-                            <p className="text-sm font-bold text-blue-400">
-                              {(Number(job.budgetUSDC) / 1e6).toFixed(2)} USDT
-                            </p>
-                            <p className="text-xs text-muted-foreground">Earned</p>
+                          <div className="text-left md:text-right px-1 md:px-6 md:border-l border-border/50 flex-shrink-0">
+                             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Earned</p>
+                             <p className="text-lg font-bold text-blue-400">{(Number(job.budgetUSDC) / 1e6).toFixed(2)} USDT</p>
                           </div>
                         </div>
-                        <button
-                          onClick={() =>
-                            router.push(`/freelancer/jobs/${job.jobId}`)
-                          }
-                          className="w-full px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition flex items-center justify-center gap-2 text-sm font-medium"
-                        >
-                          View Job Details
-                          <ArrowRight className="w-4 h-4" />
-                        </button>
+                        <div className="mt-4 md:mt-0 md:pl-6 md:border-l border-border/50 flex-shrink-0">
+                          <button onClick={() => router.push(`/freelancer/jobs/${job.jobId}`)} className="w-full md:w-auto px-6 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition flex items-center justify-center gap-2 text-sm font-semibold whitespace-nowrap">
+                            View Details <ArrowRight className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
-                </div>
+                ))}
+
+                {/* Cancelled Jobs */}
+                {desktopJobTab === "cancelled" && (cancelledJobs.length === 0 ? (
+                  <div className="text-center py-16 rounded-2xl glass-effect border border-border/50">
+                    <p className="text-muted-foreground">No cancelled jobs.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {cancelledJobs.map((job) => (
+                      <div key={job.jobId} className="flex flex-col md:flex-row md:items-center justify-between p-5 rounded-2xl glass-effect border border-red-500/30 bg-red-500/5 hover:border-red-500/50 transition-all shadow-sm">
+                        <div className="flex-1 flex flex-col md:flex-row md:items-center gap-4 md:gap-8 min-w-0 mr-6">
+                          <div className="flex-1 min-w-0">
+                             <h4 className="font-semibold text-lg mb-1.5 truncate">{job.title}</h4>
+                             <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                               <span className="px-2.5 py-0.5 rounded-md bg-red-500/20 text-red-500 font-medium text-xs">✕ Cancelled</span>
+                               <span>Job #{job.jobId}</span>
+                               <span>•</span>
+                               <span>Client: {job.client.slice(0, 6)}...{job.client.slice(-4)}</span>
+                             </div>
+                          </div>
+                          <div className="text-left md:text-right px-1 md:px-6 md:border-l border-border/50 flex-shrink-0">
+                             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Refunded</p>
+                             <p className="text-lg font-bold text-red-400">{(Number(job.budgetUSDC) / 1e6).toFixed(2)} USDT</p>
+                          </div>
+                        </div>
+                        <div className="mt-4 md:mt-0 md:pl-6 md:border-l border-border/50 flex-shrink-0">
+                          <button onClick={() => router.push(`/freelancer/jobs/${job.jobId}`)} className="w-full md:w-auto px-6 py-2.5 rounded-xl bg-red-900/40 text-red-300 hover:bg-red-900/60 transition flex items-center justify-center gap-2 text-sm font-semibold whitespace-nowrap">
+                            View Details <ArrowRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ))}
               </div>
             </div>
-          )}
-        </section>
+          </div>
+        )}
+      </section>
     </main>
   );
 }

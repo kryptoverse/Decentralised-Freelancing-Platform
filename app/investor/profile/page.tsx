@@ -129,7 +129,7 @@ export default function InvestorProfilePage() {
         {profileExists && !isEditing && (
           <button
             onClick={() => setIsEditing(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-primary text-white text-sm font-medium rounded-xl w-full sm:w-auto hover:opacity-90 transition-opacity"
+            className="flex items-center gap-2 px-4 py-2 gradient-primary text-white text-sm font-medium rounded-xl w-full sm:w-auto hover:opacity-90 transition-opacity"
           >
             <Edit2 className="w-4 h-4" /> Edit Profile
           </button>

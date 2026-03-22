@@ -98,12 +98,12 @@ export function AIAssistantChat({ isOpen, onToggle }: AIAssistantChatProps) {
     <>
       <motion.button
         onClick={onToggle}
-        className="fixed bottom-4 right-4 md:bottom-6 md:right-6 w-14 h-14 rounded-full bg-gradient-primary text-white shadow-lg hover:shadow-xl flex items-center justify-center z-40 transition-all duration-300 ease-out border-2 border-primary/50"
+        className="fixed bottom-4 right-4 md:bottom-6 md:right-6 w-14 h-14 rounded-full gradient-primary text-white shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 flex items-center justify-center z-40 transition-all duration-300 ease-out border-2 border-white/20 ring-2 ring-primary/20"
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
         title="Open AI Assistant"
       >
-        <Sparkles className="w-6 h-6" />
+        <Sparkles className="w-6 h-6 drop-shadow-sm" />
       </motion.button>
 
       <AnimatePresence>
@@ -140,7 +140,7 @@ export function AIAssistantChat({ isOpen, onToggle }: AIAssistantChatProps) {
                   >
                     <div
                       className={`max-w-[85%] px-4 py-3 rounded-2xl ${message.role === "user"
-                          ? "bg-gradient-primary dark:text-white text-gray-900 rounded-br-none"
+                          ? "gradient-primary text-white rounded-br-none"
                           : "glass-effect text-foreground rounded-bl-none border border-border/50"
                         }`}
                     >
@@ -195,7 +195,7 @@ export function AIAssistantChat({ isOpen, onToggle }: AIAssistantChatProps) {
               />
               <button
                 type="submit"
-                className="px-4 py-2.5 rounded-full bg-gradient-primary text-white font-medium hover:shadow-lg hover:shadow-primary/30 transition-all duration-300 ease-out disabled:opacity-50 flex items-center justify-center shrink-0"
+                className="px-4 py-2.5 rounded-full gradient-primary text-white font-medium hover:shadow-lg hover:shadow-primary/30 transition-all duration-300 ease-out disabled:opacity-50 flex items-center justify-center shrink-0"
                 disabled={!input?.trim() || isLoading}
               >
                 <Send className="w-4 h-4" />

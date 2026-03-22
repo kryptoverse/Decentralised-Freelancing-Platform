@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getContract, readContract, prepareContractCall, sendTransaction } from "thirdweb";
 import { smartWallet } from "thirdweb/wallets";
@@ -85,10 +85,6 @@ function InvestModal({
   const parsedAmount = parseFloat(amount) || 0;
   const rawAmount = BigInt(Math.floor(parsedAmount * 1e6));
 
-  // Projected Profit Calculation
-  // Profit = Amount * (Fundraise Target / Escrow Target) * Profit Share?
-  // Wait, no. Total net profit = EscrowReward - TargetAmount
-  // User's share of net profit = (UserAmount / TargetAmount) * TotalNetProfit * ProfitShare / 10000
   const netProfit = fundraise.escrowRewardUSDT > fundraise.targetAmount ? fundraise.escrowRewardUSDT - fundraise.targetAmount : 0n;
   const userShareOfNetProfit = fundraise.targetAmount > 0n ? (rawAmount * netProfit / fundraise.targetAmount) * fundraise.investorProfitShareBps / 10000n : 0n;
   const projectedReturn = rawAmount + userShareOfNetProfit;
@@ -233,15 +229,31 @@ export default function InvestorBrowsePage() {
   const [profileForm, setProfileForm] = useState({ name: "", bio: "" });
   const [savingProfile, setSavingProfile] = useState(false);
 
+  const [allFundraiseAddrs, setAllFundraiseAddrs] = useState<string[]>([]);
   const [fundraises, setFundraises] = useState<FundraiseInfo[]>([]);
+  const [processedCount, setProcessedCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  
   const [selected, setSelected] = useState<FundraiseInfo | null>(null);
   const [filter, setFilter] = useState<"active" | "all">("active");
 
   const [maticBalance, setMaticBalance] = useState<{ displayValue: string; symbol: string } | null>(null);
   const [usdtBalance, setUsdtBalance] = useState<string | null>(null);
   const [totalProfit, setTotalProfit] = useState<bigint>(0n);
+
+  const observer = useRef<IntersectionObserver | null>(null);
+  const lastElementRef = useCallback((node: HTMLDivElement | null) => {
+    if (loading || isLoadingMore) return;
+    if (observer.current) observer.current.disconnect();
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && processedCount < allFundraiseAddrs.length) {
+        loadMoreFundraises();
+      }
+    });
+    if (node) observer.current.observe(node);
+  }, [loading, isLoadingMore, processedCount, allFundraiseAddrs.length]);
 
   async function getExecutionAccount() {
     if (!activeWallet) throw new Error("No active wallet");
@@ -250,8 +262,80 @@ export default function InvestorBrowsePage() {
     return await smartWallet({ chain: CHAIN, sponsorGas: true }).connect({ client, personalAccount: personal });
   }
 
-  const fetchFundraises = useCallback(async () => {
+  const loadFundraisesDetails = async (addrsToLoad: string[], isInitial: boolean = false) => {
+    if (addrsToLoad.length === 0) return;
+    // STEP 1: All Base Data
+    const basePromises = addrsToLoad.map(addr => {
+      const f = getContract({ client, chain: CHAIN, address: addr as `0x${string}` });
+
+      const mainReqs = [
+        readContract({ contract: f, method: "function targetAmount() view returns (uint256)" }),
+        readContract({ contract: f, method: "function totalRaised() view returns (uint256)" }),
+        readContract({ contract: f, method: "function fundingDeadline() view returns (uint64)" }),
+        readContract({ contract: f, method: "function investorProfitShareBps() view returns (uint96)" }),
+        readContract({ contract: f, method: "function isResolved() view returns (bool)" }),
+        readContract({ contract: f, method: "function isAccepted() view returns (bool)" }),
+        readContract({ contract: f, method: "function escrow() view returns (address)" }),
+      ];
+
+      if (account) {
+        mainReqs.push(
+          readContract({
+            contract: f,
+            method: "function deposits(address) view returns (uint256)",
+            params: [account.address as `0x${string}`],
+          }).catch(() => 0n)
+        );
+      } else {
+        mainReqs.push(Promise.resolve(0n)); // myDeposit 0 if not logged in
+      }
+
+      return Promise.all(mainReqs).then(data => ({ addr, data })).catch(() => null);
+    });
+
+    const baseRaw = await Promise.all(basePromises);
+    const baseData = baseRaw.filter(x => x !== null) as { addr: string, data: any[] }[];
+
+    // STEP 2: Escrows 
+    const escrowPromises = baseData.map(({ data }) => {
+      const escrowAddr = data[6] as string;
+      if (!escrowAddr) return Promise.resolve(["", "", 0n]);
+      const escrowC = getContract({ client, chain: CHAIN, address: escrowAddr as `0x${string}` });
+      return Promise.all([
+        readContract({ contract: escrowC, method: "function client() view returns (address)" }).catch(() => ""),
+        readContract({ contract: escrowC, method: "function freelancer() view returns (address)" }).catch(() => ""),
+        readContract({ contract: escrowC, method: "function amount() view returns (uint256)" }).catch(() => 0n)
+      ]);
+    });
+
+    const escrowsData = await Promise.all(escrowPromises);
+
+    // STEP 3: ZIP
+    const finalRes = baseData.map(({ addr, data }, i) => {
+      const [targetAmount, totalRaised, fundingDeadline, investorProfitShareBps, isResolved, isAccepted, escrowAddr, myDeposit] = data;
+      const [jobClient, jobFreelancer, escrowRewardUSDT] = escrowsData[i];
+
+      const jobTitle = jobFreelancer ? `Job Fundraise — ${(jobFreelancer as string).slice(0, 8)}...` : `Fundraise ${addr.slice(0, 8)}...`;
+
+      return {
+        address: addr, escrow: escrowAddr as string,
+        targetAmount: targetAmount as bigint, totalRaised: totalRaised as bigint,
+        fundingDeadline: fundingDeadline as bigint, investorProfitShareBps: investorProfitShareBps as bigint,
+        isResolved: isResolved as boolean, isAccepted: isAccepted as boolean,
+        myDeposit: myDeposit as bigint, jobTitle, jobClient: jobClient as string, jobFreelancer: jobFreelancer as string, escrowRewardUSDT: escrowRewardUSDT as bigint
+      } satisfies FundraiseInfo;
+    });
+
+    if (isInitial) {
+      setFundraises(finalRes);
+    } else {
+      setFundraises(prev => [...prev, ...finalRes]);
+    }
+  };
+
+  const fetchInitialFundraises = useCallback(async () => {
     try {
+      setLoading(true);
       const factory = getContract({
         client, chain: CHAIN,
         address: DEPLOYED_CONTRACTS.addresses.FundraiseFactory as `0x${string}`,
@@ -261,83 +345,46 @@ export default function InvestorBrowsePage() {
         contract: factory, method: "function getTotalFundraises() view returns (uint256)",
       }) as bigint;
 
-      if (total === 0n) { setFundraises([]); return; }
+      if (total === 0n) {
+        setAllFundraiseAddrs([]);
+        setFundraises([]); 
+        return; 
+      }
 
       const addrs = await readContract({
         contract: factory,
         method: "function getFundraises(uint256,uint256) view returns (address[])",
         params: [0n, total],
       }) as string[];
+      
+      const reversedAddrs = [...addrs].reverse();
+      setAllFundraiseAddrs(reversedAddrs);
 
-      // STEP 1: All Base Data
-      const basePromises = addrs.map(addr => {
-        const f = getContract({ client, chain: CHAIN, address: addr as `0x${string}` });
+      await loadFundraisesDetails(reversedAddrs.slice(0, 10), true);
+      setProcessedCount(Math.min(10, reversedAddrs.length));
 
-        const mainReqs = [
-          readContract({ contract: f, method: "function targetAmount() view returns (uint256)" }),
-          readContract({ contract: f, method: "function totalRaised() view returns (uint256)" }),
-          readContract({ contract: f, method: "function fundingDeadline() view returns (uint64)" }),
-          readContract({ contract: f, method: "function investorProfitShareBps() view returns (uint96)" }),
-          readContract({ contract: f, method: "function isResolved() view returns (bool)" }),
-          readContract({ contract: f, method: "function isAccepted() view returns (bool)" }),
-          readContract({ contract: f, method: "function escrow() view returns (address)" }),
-        ];
-
-        if (account) {
-          mainReqs.push(
-            readContract({
-              contract: f,
-              method: "function deposits(address) view returns (uint256)",
-              params: [account.address as `0x${string}`],
-            }).catch(() => 0n)
-          );
-        } else {
-          mainReqs.push(Promise.resolve(0n)); // myDeposit 0 if not logged in
-        }
-
-        return Promise.all(mainReqs).then(data => ({ addr, data })).catch(() => null);
-      });
-
-      const baseRaw = await Promise.all(basePromises);
-      const baseData = baseRaw.filter(x => x !== null) as { addr: string, data: any[] }[];
-
-      // STEP 2: Escrows 
-      const escrowPromises = baseData.map(({ data }) => {
-        const escrowAddr = data[6] as string;
-        if (!escrowAddr) return Promise.resolve(["", "", 0n]);
-        const escrowC = getContract({ client, chain: CHAIN, address: escrowAddr as `0x${string}` });
-        return Promise.all([
-          readContract({ contract: escrowC, method: "function client() view returns (address)" }).catch(() => ""),
-          readContract({ contract: escrowC, method: "function freelancer() view returns (address)" }).catch(() => ""),
-          readContract({ contract: escrowC, method: "function amount() view returns (uint256)" }).catch(() => 0n)
-        ]);
-      });
-
-      const escrowsData = await Promise.all(escrowPromises);
-
-      // STEP 3: ZIP
-      const finalRes = baseData.map(({ addr, data }, i) => {
-        const [targetAmount, totalRaised, fundingDeadline, investorProfitShareBps, isResolved, isAccepted, escrowAddr, myDeposit] = data;
-        const [jobClient, jobFreelancer, escrowRewardUSDT] = escrowsData[i];
-
-        const jobTitle = jobFreelancer ? `Job Fundraise — ${(jobFreelancer as string).slice(0, 8)}...` : `Fundraise ${addr.slice(0, 8)}...`;
-
-        return {
-          address: addr, escrow: escrowAddr as string,
-          targetAmount: targetAmount as bigint, totalRaised: totalRaised as bigint,
-          fundingDeadline: fundingDeadline as bigint, investorProfitShareBps: investorProfitShareBps as bigint,
-          isResolved: isResolved as boolean, isAccepted: isAccepted as boolean,
-          myDeposit: myDeposit as bigint, jobTitle, jobClient: jobClient as string, jobFreelancer: jobFreelancer as string, escrowRewardUSDT: escrowRewardUSDT as bigint
-        } satisfies FundraiseInfo;
-      });
-
-      setFundraises(finalRes);
     } catch (err) {
       console.error("Failed to load fundraises:", err);
+    } finally {
+      setLoading(false);
     }
   }, [account]);
 
-  useEffect(() => { setLoading(true); fetchFundraises().finally(() => setLoading(false)); }, [fetchFundraises]);
+  const loadMoreFundraises = async () => {
+    if (isLoadingMore || processedCount >= allFundraiseAddrs.length) return;
+    setIsLoadingMore(true);
+    try {
+      const nextBatch = allFundraiseAddrs.slice(processedCount, processedCount + 10);
+      await loadFundraisesDetails(nextBatch, false);
+      setProcessedCount(prev => prev + nextBatch.length);
+    } catch (err) {
+      console.error("Failed to load more fundraises:", err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  useEffect(() => { fetchInitialFundraises(); }, [fetchInitialFundraises]);
 
   const fetchProfile = useCallback(async () => {
     if (!account) { setHasProfile(null); return; }
@@ -432,7 +479,7 @@ export default function InvestorBrowsePage() {
 
   async function refresh() {
     setRefreshing(true);
-    await fetchFundraises();
+    await fetchInitialFundraises();
     setRefreshing(false);
   }
 
@@ -457,7 +504,7 @@ export default function InvestorBrowsePage() {
             <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
           </button>
           <button onClick={() => router.push("/investor/portfolio")}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-primary text-white text-sm font-medium">
+            className="flex items-center gap-2 px-4 py-2 rounded-xl gradient-primary text-white text-sm font-medium">
             <TrendingUp className="w-4 h-4" /> My Portfolio
           </button>
         </div>
@@ -485,7 +532,7 @@ export default function InvestorBrowsePage() {
       <div className="flex gap-2">
         {(["active", "all"] as const).map(f => (
           <button key={f} onClick={() => setFilter(f)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${filter === f ? "bg-gradient-primary text-white" : "border border-border hover:bg-surface-secondary"}`}>
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${filter === f ? "gradient-primary text-white" : "border border-border hover:bg-surface-secondary"}`}>
             {f === "active" ? "Active Only" : "All"}
           </button>
         ))}
@@ -508,7 +555,7 @@ export default function InvestorBrowsePage() {
             const isActive = !f.isResolved && !isExpired && f.totalRaised < f.targetAmount;
 
             return (
-              <motion.div key={f.address} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+              <motion.div ref={displayed.length === i + 1 ? lastElementRef : null} key={f.address} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
                 className={`glass-effect rounded-2xl p-5 flex flex-col gap-4 border hover:shadow-lg hover:shadow-primary/10 transition-all ${f.myDeposit > 0n ? "border-primary/40" : "border-border"}`}>
                 {/* Head */}
                 <div className="flex justify-between items-start">
@@ -603,6 +650,12 @@ export default function InvestorBrowsePage() {
               </motion.div>
             );
           })}
+        </div>
+      )}
+
+      {isLoadingMore && (
+        <div className="flex justify-center py-6">
+          <Loader2 className="w-6 h-6 text-primary animate-spin" />
         </div>
       )}
 

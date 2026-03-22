@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   getContract,
   readContract,
@@ -77,6 +77,9 @@ export default function ExploreCompaniesPage() {
   const activeAccount = useActiveAccount();
   const { uploadMetadata } = useIPFSUpload();
 
+  const [allCompanyIds, setAllCompanyIds] = useState<bigint[]>([]);
+  const [processedCount, setProcessedCount] = useState(0);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [companies, setCompanies] = useState<CompanyWithRound[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -90,24 +93,31 @@ export default function ExploreCompaniesPage() {
   const [profileForm, setProfileForm] = useState({ name: "", bio: "" });
   const [savingProfile, setSavingProfile] = useState(false);
 
-  const fetchCompanies = useCallback(async () => {
-    setLoading(true);
-    try {
-      const registry = getContract({
-        client,
-        chain: CHAIN,
-        address: DEPLOYED_CONTRACTS.addresses.CompanyRegistry as any,
-      });
+  const observer = useRef<IntersectionObserver | null>(null);
+  const lastElementRef = useCallback((node: HTMLDivElement | null) => {
+    if (loading || isLoadingMore) return;
+    if (observer.current) observer.current.disconnect();
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && processedCount < allCompanyIds.length) {
+        loadMoreCompanies();
+      }
+    });
+    if (node) observer.current.observe(node);
+  }, [loading, isLoadingMore, processedCount, allCompanyIds.length]);
 
-      const totalNum = (await readContract({
-        contract: registry,
-        method: "function totalCompanies() view returns (uint256)",
-        params: [],
-      })) as bigint;
+  const loadCompaniesDetails = async (idsToLoad: bigint[], isInitial: boolean = false) => {
+    if (idsToLoad.length === 0) return;
+    
+    const registry = getContract({
+      client,
+      chain: CHAIN,
+      address: DEPLOYED_CONTRACTS.addresses.CompanyRegistry as any,
+    });
 
-      const results: CompanyWithRound[] = [];
+    const results: CompanyWithRound[] = [];
 
-      for (let i = 1n; i <= totalNum; i++) {
+    for (const i of idsToLoad) {
+      try {
         const comp = (await readContract({
           contract: registry,
           method:
@@ -156,9 +166,45 @@ export default function ExploreCompaniesPage() {
             active: rInfo[3],
           }
         });
+      } catch (err) {
+        console.warn(`Failed to fetch company ${i}:`, err);
+      }
+    }
+
+    if (isInitial) {
+      setCompanies(results);
+    } else {
+      setCompanies(prev => [...prev, ...results]);
+    }
+  };
+
+  const fetchInitialCompanies = useCallback(async () => {
+    setLoading(true);
+    try {
+      const registry = getContract({
+        client,
+        chain: CHAIN,
+        address: DEPLOYED_CONTRACTS.addresses.CompanyRegistry as any,
+      });
+
+      const totalNum = (await readContract({
+        contract: registry,
+        method: "function totalCompanies() view returns (uint256)",
+        params: [],
+      })) as bigint;
+
+      if (totalNum === 0n) {
+        setAllCompanyIds([]);
+        setCompanies([]);
+        return;
       }
 
-      setCompanies(results.reverse()); // Newest first
+      const ids: bigint[] = [];
+      for (let i = totalNum; i > 0n; i--) ids.push(i);
+      
+      setAllCompanyIds(ids);
+      await loadCompaniesDetails(ids.slice(0, 10), true);
+      setProcessedCount(Math.min(10, ids.length));
 
     } catch (err) {
       console.error("Failed to fetch companies:", err);
@@ -166,6 +212,20 @@ export default function ExploreCompaniesPage() {
       setLoading(false);
     }
   }, []);
+
+  const loadMoreCompanies = async () => {
+    if (isLoadingMore || processedCount >= allCompanyIds.length) return;
+    setIsLoadingMore(true);
+    try {
+      const nextBatch = allCompanyIds.slice(processedCount, processedCount + 10);
+      await loadCompaniesDetails(nextBatch, false);
+      setProcessedCount(prev => prev + nextBatch.length);
+    } catch (err) {
+      console.error("Failed to load more companies", err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
 
   const fetchProfile = useCallback(async () => {
     if (!activeAccount) { setHasProfile(null); return; }
@@ -185,8 +245,8 @@ export default function ExploreCompaniesPage() {
   }, [activeAccount]);
 
   useEffect(() => {
-    fetchCompanies();
-  }, [fetchCompanies]);
+    fetchInitialCompanies();
+  }, [fetchInitialCompanies]);
 
   useEffect(() => {
     fetchProfile();
@@ -272,8 +332,9 @@ export default function ExploreCompaniesPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <AnimatePresence>
-            {filtered.map((c) => (
+            {filtered.map((c, i) => (
               <motion.div 
+                ref={filtered.length === i + 1 ? lastElementRef : null}
                 key={c.id.toString()}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -346,6 +407,12 @@ export default function ExploreCompaniesPage() {
         </div>
       )}
 
+      {isLoadingMore && (
+        <div className="flex justify-center py-6">
+          <Loader2 className="w-6 h-6 text-primary animate-spin" />
+        </div>
+      )}
+
       {/* Company Preview Modal */}
       <CompanyPreviewModal
         company={previewCompany}
@@ -359,7 +426,7 @@ export default function ExploreCompaniesPage() {
          company={selectedCompany} 
          open={selectedCompany !== null} 
          onClose={() => setSelectedCompany(null)} 
-         onSuccess={fetchCompanies} 
+         onSuccess={() => { setAllCompanyIds([]); fetchInitialCompanies(); }} 
       />
 
       <AnimatePresence>

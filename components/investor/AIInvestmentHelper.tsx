@@ -307,7 +307,7 @@ Use markdown formatting with bold headers.`;
                          
                          <div className="prose prose-invert prose-sm max-w-none prose-headings:text-primary prose-headings:font-black prose-headings:uppercase prose-headings:tracking-widest prose-p:text-foreground/80 prose-p:leading-relaxed prose-strong:text-white prose-li:text-foreground/70 text-[13px] sm:text-sm">
                             {analysisResult ? (
-                              <div className="whitespace-pre-wrap font-medium leading-relaxed">
+                              <div className="whitespace-pre-wrap font-medium leading-relaxed text-slate-200">
                                 {analysisResult}
                                 {analyzing && <span className="inline-block w-2 h-4 bg-primary animate-pulse ml-1 align-middle" />}
                               </div>

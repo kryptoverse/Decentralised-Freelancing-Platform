@@ -1129,9 +1129,7 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
                     {company.sector}
                   </span>
                 </div>
-                <p className="text-muted-foreground font-medium text-xs sm:text-sm md:text-lg opacity-70 italic max-w-xl line-clamp-1 hidden sm:block">
-                  {company.meta?.description || "Incorporate your mission. This company is currently operating in stealth mode."}
-                </p>
+
              </div>
           </div>
         </div>

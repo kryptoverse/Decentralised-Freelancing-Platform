@@ -9,33 +9,39 @@ export async function POST(req: Request) {
       ...messages.map((m: any) => ({ role: m.role, content: m.content }))
     ];
 
-    const providers = [
-      { 
-        url: 'https://api.groq.com/openai/v1/chat/completions', 
-        key: process.env.GROQ_API_KEY, 
-        model: 'llama-3.3-70b-versatile' 
-      },
-      { 
-        url: 'https://api.groq.com/openai/v1/chat/completions', 
-        key: process.env.GROQ_API_KEY, 
-        model: 'llama-3.1-70b-versatile' 
-      },
-      { 
-        url: 'https://api.groq.com/openai/v1/chat/completions', 
-        key: process.env.GROQ_API_KEY, 
-        model: 'llama-3.1-8b-instant' 
-      },
-      { 
-        url: 'https://api.groq.com/openai/v1/chat/completions', 
-        key: process.env.GROQ_API_KEY, 
-        model: 'mixtral-8x7b-32768' 
-      },
-      { 
-        url: 'https://text.pollinations.ai/openai/v1/chat/completions', 
-        key: 'pollinations', 
-        model: 'openai' 
-      }
+    const groqKeys = [
+      process.env.GROQ_API_KEY,
+      process.env.GROQ_API_KEY2,
+      process.env.GROQ_API_KEY3,
+      process.env.GROQ_API_KEY4
     ];
+    
+    const groqModels = [
+      'llama-3.3-70b-versatile',
+      'llama-3.1-70b-versatile',
+      'llama-3.1-8b-instant',
+      'mixtral-8x7b-32768'
+    ];
+
+    const providers: { url: string, key: string | undefined, model: string }[] = [];
+    
+    for (const key of groqKeys) {
+      if (key) {
+        for (const model of groqModels) {
+          providers.push({
+            url: 'https://api.groq.com/openai/v1/chat/completions',
+            key,
+            model
+          });
+        }
+      }
+    }
+
+    providers.push({ 
+      url: 'https://text.pollinations.ai/openai/v1/chat/completions', 
+      key: 'pollinations', 
+      model: 'openai' 
+    });
 
     let response: Response | null = null;
     let lastError: any = null;
@@ -73,7 +79,14 @@ export async function POST(req: Request) {
     }
 
     if (!response) {
-        throw lastError || new Error("All AI provider fallbacks failed.");
+        const errorMessage = lastError?.message || "Unknown error occurred";
+        const fallbackMessage = `⚠️ System Notice: All AI providers (including 4 Groq API keys) have failed to respond. Please check your API keys and try again later.\n\nError details: ${errorMessage}`;
+        
+        return new Response(fallbackMessage, {
+            headers: {
+                'Content-Type': 'text/plain; charset=utf-8'
+            }
+        });
     }
 
     // Pass through the SSE stream, extracting only the text to match our frontend's raw text reader

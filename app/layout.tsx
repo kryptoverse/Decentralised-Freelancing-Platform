@@ -7,6 +7,8 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { ThirdwebProvider } from "thirdweb/react";
 import { ChatProvider } from "@/components/chat/ChatContext";
 import { GlobalChatBot } from "@/components/chat/GlobalChatBot";
+import { GlobalChatListener } from "@/components/chat/GlobalChatListener";
+import { Toaster as SonnerToaster } from "sonner";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -31,7 +33,9 @@ export default function RootLayout({
             <ChatProvider>
               {children}
               <GlobalChatBot />
+              <GlobalChatListener />
             </ChatProvider>
+            <SonnerToaster position="top-right" expand={true} richColors />
           </ThemeProvider>
         </ThirdwebProvider>
       </body>

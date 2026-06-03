@@ -354,7 +354,8 @@ function OfferCard({
     onFund?: () => void,
     onCancel?: () => void,
     funding?: boolean,
-    isHistory?: boolean
+    isHistory?: boolean,
+    onMessage?: () => void
 }) {
     const statusColor =
         offer.cancelled ? "bg-red-500/10 text-red-500" :
@@ -400,6 +401,9 @@ function OfferCard({
                 </div>
             </CardContent>
             <CardFooter className="gap-2 justify-end">
+                <Button variant="outline" onClick={() => window.location.href = `/chat/${offer.jobId}`} size="sm">
+                    Message
+                </Button>
                 {onFund && (
                     <Button onClick={onFund} disabled={funding} className="bg-green-600 hover:bg-green-700">
                         {funding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

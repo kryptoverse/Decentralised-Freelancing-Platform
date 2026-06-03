@@ -378,6 +378,9 @@ function ProposalCard({
                         <a href={`/freelancer/jobs/${offer.jobId}`}>View Job Details</a>
                     </Button>
                 )}
+                <Button variant="outline" size="sm" asChild>
+                    <a href={`/chat/${offer.jobId}`}>Open Chat</a>
+                </Button>
             </CardFooter>
         </Card>
     );

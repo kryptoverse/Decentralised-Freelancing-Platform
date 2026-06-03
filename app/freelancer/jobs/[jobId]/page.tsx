@@ -1338,6 +1338,13 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
               <div className="p-5 border rounded-2xl bg-surface-secondary space-y-3">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Actions</h3>
 
+                <button 
+                  onClick={() => window.location.href = `/chat/${jobId}`}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition font-semibold"
+                >
+                  Open Chat
+                </button>
+
                 {canDeliver ? (
                   <button onClick={() => setDeliverModal(true)}
                     className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity">

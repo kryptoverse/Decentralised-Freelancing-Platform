@@ -10,9 +10,10 @@ import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { SpacetimeChat } from "@/components/chat/SpacetimeChat";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { WalletSessionGuard } from "@/components/auth/WalletSessionGuard";
 import { ArrowLeft, Loader2, Briefcase } from "lucide-react";
 
-export default function ChatPage() {
+function ChatPageContent() {
     const { jobId } = useParams();
     const router = useRouter();
     const account = useActiveAccount();
@@ -128,5 +129,13 @@ export default function ChatPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function ChatPage() {
+    return (
+        <WalletSessionGuard>
+            <ChatPageContent />
+        </WalletSessionGuard>
     );
 }

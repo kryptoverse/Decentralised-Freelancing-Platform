@@ -37,7 +37,7 @@ export function SpacetimeChat({ jobId, clientAddress, freelancerAddress, current
             
             // If client, ensure chat room is initiated
             if (currentUserRole === "client") {
-                initiateChat(jobId, freelancerAddress);
+                initiateChat(jobId, freelancerAddress, clientAddress);
             }
 
             // Subscribe to queries
@@ -68,7 +68,7 @@ export function SpacetimeChat({ jobId, clientAddress, freelancerAddress, current
     const handleSend = () => {
         if (!inputMsg.trim() || !connected) return;
         
-        sendMessage(jobId, inputMsg.trim());
+        sendMessage(jobId, inputMsg.trim(), account?.address);
         setInputMsg("");
     };
 
@@ -77,7 +77,7 @@ export function SpacetimeChat({ jobId, clientAddress, freelancerAddress, current
     }
 
     return (
-        <div className="flex flex-col h-[500px] border rounded-lg overflow-hidden bg-background">
+        <div className="flex flex-col h-full border rounded-lg overflow-hidden bg-background">
             <div className="p-3 bg-muted/50 border-b flex justify-between items-center">
                 <span className="font-semibold text-sm">Real-time Chat (SpacetimeDB)</span>
                 {!connected && <span className="flex items-center text-xs text-muted-foreground"><Loader2 className="w-3 h-3 animate-spin mr-1"/> Connecting...</span>}

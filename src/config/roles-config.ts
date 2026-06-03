@@ -5,6 +5,7 @@ import {
   Home as HomeIcon,
   TrendingUp,
   Wallet,
+  MessageSquare,
 } from "lucide-react";
 
 export const ROLE_ROUTES = {
@@ -74,6 +75,13 @@ export const ROLE_TABS: Record<
       path: "/freelancer/wallet", // you can add this route later
       match: "startsWith",
     },
+    {
+      id: "chat",
+      label: "Messages",
+      icon: MessageSquare,
+      path: "/freelancer/chat",
+      match: "startsWith",
+    },
   ],
 
   client: [
@@ -110,6 +118,13 @@ export const ROLE_TABS: Record<
       label: "Wallet",
       icon: Wallet,
       path: "/client/wallet", // add this route when ready
+      match: "startsWith",
+    },
+    {
+      id: "chat",
+      label: "Messages",
+      icon: MessageSquare,
+      path: "/client/chat",
       match: "startsWith",
     },
   ],

@@ -9,7 +9,7 @@ import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { ipfsToHttp } from "@/utils/ipfs";
 import { uploadToIPFS } from "@/utils/ipfs-upload";
-import { Loader2, Copy, Check, DollarSign, Briefcase, TrendingUp, Star, Send, User as UserIcon, ArrowUpRight } from "lucide-react";
+import { Loader2, Copy, Check, DollarSign, Briefcase, TrendingUp, Star, Send, User as UserIcon, ArrowUpRight, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -26,6 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
 import { useChatContext, defaultContext } from "@/components/chat/ChatContext";
+import { initiateChat } from "@/lib/spacetimedb";
 
 // ... (Metadata interface)
 
@@ -403,6 +404,24 @@ CURRENT FREELANCER CONTEXT:
     }
   };
 
+  const handleDirectMessage = () => {
+    if (!account) {
+      toast({
+        title: "Wallet not connected",
+        description: "Please connect your wallet to chat.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!address) return;
+    
+    const addressStr = typeof address === 'string' ? address : address[0];
+    const directChatId = `direct-${account.address}-${addressStr}`;
+    
+    initiateChat(directChatId, addressStr, account.address);
+    router.push(`/client/chat?chatId=${directChatId}`);
+  };
+
   return (
     <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -456,8 +475,17 @@ CURRENT FREELANCER CONTEXT:
                   Your Profile
                 </Button>
               ) : (
-                <Dialog open={isHireModalOpen} onOpenChange={setIsHireModalOpen}>
-                  <DialogTrigger asChild>
+                <div className="flex flex-col gap-3 w-full">
+                  <Button 
+                    variant="outline" 
+                    className="w-full border-primary text-primary hover:bg-primary/10 transition-all hover:scale-[1.02]"
+                    onClick={handleDirectMessage}
+                  >
+                    <MessageSquare className="w-4 h-4 mr-2" />
+                    Message
+                  </Button>
+                  <Dialog open={isHireModalOpen} onOpenChange={setIsHireModalOpen}>
+                    <DialogTrigger asChild>
                     <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-md transition-all hover:scale-[1.02]">
                       <Send className="w-4 h-4 mr-2" />
                       Hire Directly
@@ -524,6 +552,7 @@ CURRENT FREELANCER CONTEXT:
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
+                </div>
               )}
 
               <button

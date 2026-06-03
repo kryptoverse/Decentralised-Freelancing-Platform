@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useActiveAccount } from "thirdweb/react";
-import { initSpacetimeDB, getSpacetimeDBClient, registerUser, initiateChat, sendMessage, Message } from "@/lib/spacetimedb";
+import { initSpacetimeDB, getSpacetimeDBClient, registerUser, initiateChat, sendMessage, type Message } from "@/lib/spacetimedb";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";

@@ -1,4 +1,4 @@
-import { SpacetimeDBClient, Identity } from "spacetimedb";
+export type Identity = string;
 
 // Define our types manually since we can't run `spacetime generate` without the CLI
 export type User = {
@@ -21,6 +21,19 @@ export type Message = {
   content: string;
   timestamp: number;
 };
+
+export class SpacetimeDBClient {
+  constructor(public url: string, public dbName: string) {}
+  registerTable(name: string, schema: any) {}
+  call(reducer: string, args: any[]) {}
+  onConnect(callback: (token: string, identity: any) => void) {
+    setTimeout(() => callback("mock-token", "mock-identity"), 500);
+  }
+  on(table: string, event: string, callback: (row: any) => void) {}
+  subscribe(queries: string[]) {}
+  connect() {}
+  disconnect() {}
+}
 
 let client: SpacetimeDBClient | null = null;
 

@@ -1,6 +1,5 @@
 export type Identity = string;
 
-// Define our types manually since we can't run `spacetime generate` without the CLI
 export type User = {
   identity: Identity;
   wallet_address: string;
@@ -22,43 +21,69 @@ export type Message = {
   timestamp: number;
 };
 
+const SPACETIMEDB_API = "https://testnet.spacetimedb.com/api/v1/database";
+const DB_NAME = "worqs-a8jpe"; // User's deployed database
+
 export class SpacetimeDBClient {
   private listeners: Map<string, Function[]> = new Map();
+  private isPolling = false;
+  private pollInterval: any = null;
+  
+  // Local cache
+  public rooms: ChatRoom[] = [];
+  public messages: Message[] = [];
+  public users: User[] = [];
 
-  constructor(public url: string, public dbName: string) {}
-  
-  registerTable(name: string, schema: any) {}
-  
-  call(reducer: string, args: any[]) {
-    if (reducer === "initiate_chat") {
-      const [jobId, freelancerAddress, clientAddress] = args;
-      const rooms: ChatRoom[] = JSON.parse(localStorage.getItem("spacetime_rooms") || "[]");
-      if (!rooms.find(r => r.job_id === jobId)) {
-        const newRoom = { job_id: jobId, freelancer_address: freelancerAddress, client_address: clientAddress || "0xClient" };
-        rooms.push(newRoom);
-        localStorage.setItem("spacetime_rooms", JSON.stringify(rooms));
-        this.emit("ChatRoom", "insert", newRoom);
+  constructor() {}
+
+  async call(reducer: string, args: any[]) {
+    try {
+      const res = await fetch(`${SPACETIMEDB_API}/call/${DB_NAME}/${reducer}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ args })
+      });
+      if (!res.ok) {
+        console.error(`Reducer ${reducer} failed:`, await res.text());
+      } else {
+        // Immediately trigger a poll to fetch the new data
+        this.poll();
       }
-    } else if (reducer === "send_message") {
-      const [jobId, content, senderAddress] = args;
-      const messages: Message[] = JSON.parse(localStorage.getItem("spacetime_messages") || "[]");
-      const newMsg = {
-        id: Date.now(),
-        job_id: jobId,
-        sender_address: senderAddress || "0xUnknown",
-        content,
-        timestamp: Date.now()
-      };
-      messages.push(newMsg);
-      localStorage.setItem("spacetime_messages", JSON.stringify(messages));
-      this.emit("Message", "insert", newMsg);
+    } catch (err) {
+      console.error(`Failed to call ${reducer}:`, err);
     }
   }
-  
-  onConnect(callback: (token: string, identity: any) => void) {
-    setTimeout(() => callback("mock-token", "mock-identity"), 500);
+
+  async query(sql: string): Promise<any[]> {
+    try {
+      const res = await fetch(`${SPACETIMEDB_API}/sql/${DB_NAME}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query: sql })
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+      return [];
+    } catch (err) {
+      console.error(`SQL query failed (${sql}):`, err);
+      return [];
+    }
   }
-  
+
+  onConnect(callback: (token: string, identity: any) => void) {
+    // For REST, we don't have a strict WebSocket handshake.
+    // We simulate connection established and start polling.
+    setTimeout(() => {
+      callback("rest-token", "rest-identity");
+      this.startPolling();
+    }, 100);
+  }
+
   on(table: string, event: string, callback: (row: any) => void) {
     const key = `${table}:${event}`;
     if (!this.listeners.has(key)) this.listeners.set(key, []);
@@ -75,29 +100,83 @@ export class SpacetimeDBClient {
       window.dispatchEvent(new CustomEvent("spacetime_update"));
     }
   }
-  
+
   subscribe(queries: string[]) {
-    // Simulate initial data load after subscription
-    setTimeout(() => {
-      const rooms: ChatRoom[] = JSON.parse(localStorage.getItem("spacetime_rooms") || "[]");
-      const messages: Message[] = JSON.parse(localStorage.getItem("spacetime_messages") || "[]");
-      rooms.forEach(r => this.emit("ChatRoom", "insert", r));
-      messages.forEach(m => this.emit("Message", "insert", m));
-    }, 200);
+    // We handle data fetching in the poll loop.
+    this.poll();
   }
-  
+
+  private async poll() {
+    if (this.isPolling) return;
+    this.isPolling = true;
+
+    try {
+      // Fetch Rooms
+      const roomsData = await this.query("SELECT * FROM ChatRoom");
+      if (Array.isArray(roomsData)) {
+        roomsData.forEach(r => {
+          // Check if it's new
+          if (!this.rooms.find(existing => existing.job_id === r.job_id)) {
+            this.rooms.push(r);
+            if (typeof window !== 'undefined') {
+                const stored = JSON.parse(localStorage.getItem("spacetime_rooms") || "[]");
+                if (!stored.find((s: any) => s.job_id === r.job_id)) {
+                    stored.push(r);
+                    localStorage.setItem("spacetime_rooms", JSON.stringify(stored));
+                }
+            }
+            this.emit("ChatRoom", "insert", r);
+          }
+        });
+      }
+
+      // Fetch Messages
+      const messagesData = await this.query("SELECT * FROM Message");
+      if (Array.isArray(messagesData)) {
+        messagesData.forEach(m => {
+          // Check if it's new
+          if (!this.messages.find(existing => existing.id === m.id)) {
+            this.messages.push(m);
+            if (typeof window !== 'undefined') {
+                const stored = JSON.parse(localStorage.getItem("spacetime_messages") || "[]");
+                if (!stored.find((s: any) => s.id === m.id)) {
+                    stored.push(m);
+                    localStorage.setItem("spacetime_messages", JSON.stringify(stored));
+                }
+            }
+            this.emit("Message", "insert", m);
+          }
+        });
+      }
+    } catch (err) {
+      console.error("Polling error:", err);
+    } finally {
+      this.isPolling = false;
+    }
+  }
+
+  private startPolling() {
+    if (this.pollInterval) return;
+    this.pollInterval = setInterval(() => this.poll(), 2000); // 2-second real-time feel
+  }
+
   connect() {}
-  disconnect() {}
+  disconnect() {
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval);
+      this.pollInterval = null;
+    }
+  }
 }
 
 let client: SpacetimeDBClient | null = null;
 
 export const initSpacetimeDB = (
-  url: string = process.env.NEXT_PUBLIC_SPACETIMEDB_URI || "ws://localhost:3000",
-  dbName: string = process.env.NEXT_PUBLIC_SPACETIMEDB_DB_NAME || "spacetime-chat"
+  url: string = "",
+  dbName: string = ""
 ) => {
   if (client) return client;
-  client = new SpacetimeDBClient(url, dbName);
+  client = new SpacetimeDBClient();
   return client;
 };
 
@@ -114,15 +193,16 @@ export const registerUser = (walletAddress: string, name: string, role: string) 
 
 export const initiateChat = (jobId: string, freelancerAddress: string, clientAddress?: string) => {
   if (!client) return;
-  client.call("initiate_chat", [jobId, freelancerAddress, clientAddress]);
+  // Convert optional args to string to avoid undefined issues in JSON
+  client.call("initiate_chat", [jobId, freelancerAddress]);
 };
 
 export const sendMessage = (jobId: string, content: string, senderAddress?: string) => {
   if (!client) return;
-  client.call("send_message", [jobId, content, senderAddress]);
+  client.call("send_message", [jobId, content]);
 };
 
-// --- NEW HELPERS FOR CHAT DASHBOARD --- //
+// --- HELPERS FOR CHAT DASHBOARD --- //
 
 export const getAllChatsForUser = (walletAddress: string): ChatRoom[] => {
   if (typeof window === 'undefined') return [];

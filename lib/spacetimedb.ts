@@ -21,8 +21,8 @@ export type Message = {
   timestamp: number;
 };
 
-const SPACETIMEDB_API = "https://testnet.spacetimedb.com/api/v1/database";
-const DB_NAME = "worqs-a8jpe"; // User's deployed database
+const SPACETIMEDB_API = process.env.NEXT_PUBLIC_SPACETIMEDB_URI || "https://maincloud.spacetimedb.com/v1/database";
+const DB_NAME = process.env.NEXT_PUBLIC_SPACETIMEDB_NAME || "worqs-a8jpe"; // User's deployed database
 
 export class SpacetimeDBClient {
   private listeners: Map<string, Function[]> = new Map();

@@ -54,6 +54,25 @@ const messageTime = (message: Message) => {
     : new Date(message.timestamp).getTime();
 };
 
+const normalizeSqlResponse = (data: any): any[] => {
+  if (!Array.isArray(data)) return [];
+  if (data.length === 0) return [];
+
+  if (!data[0]?.schema?.elements || !Array.isArray(data[0]?.rows)) {
+    return data;
+  }
+
+  return data.flatMap((result: any) => {
+    const columns = result.schema.elements.map((element: any) => element.name?.some).filter(Boolean);
+    return result.rows.map((row: any[]) => {
+      return columns.reduce((record: Record<string, any>, column: string, index: number) => {
+        record[column] = row[index];
+        return record;
+      }, {});
+    });
+  });
+};
+
 export class SpacetimeDBClient {
   private listeners: Map<string, Function[]> = new Map();
   private isPolling = false;
@@ -70,7 +89,7 @@ export class SpacetimeDBClient {
 
   async call(reducer: string, args: any[] | Record<string, any>) {
     try {
-      const res = await fetch(`${SPACETIMEDB_API}/call/${DB_NAME}/${reducer}`, {
+      const res = await fetch(`${SPACETIMEDB_API}/${DB_NAME}/call/${reducer}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -93,15 +112,15 @@ export class SpacetimeDBClient {
 
   async query(sql: string): Promise<any[]> {
     try {
-      const res = await fetch(`${SPACETIMEDB_API}/sql/${DB_NAME}`, {
+      const res = await fetch(`${SPACETIMEDB_API}/${DB_NAME}/sql`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'text/plain',
         },
-        body: JSON.stringify({ query: sql })
+        body: sql
       });
       if (res.ok) {
-        return await res.json();
+        return normalizeSqlResponse(await res.json());
       }
       return [];
     } catch (err) {

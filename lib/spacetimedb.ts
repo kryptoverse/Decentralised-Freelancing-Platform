@@ -54,6 +54,37 @@ const messageTime = (message: Message) => {
     : new Date(message.timestamp).getTime();
 };
 
+const sortMessages = (messages: Message[]) => {
+  return [...messages].sort((a, b) => messageTime(a) - messageTime(b));
+};
+
+export const getProjectChatId = (jobId: string | number | bigint) => `project-${String(jobId)}`;
+
+export const isProjectChatId = (jobId: string) => jobId.startsWith("project-");
+
+export const getJobIdFromProjectChatId = (jobId: string) => (
+  isProjectChatId(jobId) ? jobId.slice("project-".length) : jobId
+);
+
+export const getDirectChatId = (clientAddress: string, freelancerAddress: string) => (
+  `direct-${clientAddress}-${freelancerAddress}`
+);
+
+const readStorageArray = <T>(key: string): T[] => {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    const value = localStorage.getItem(key);
+    if (!value) return [];
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    console.error(`Failed to read ${key} from localStorage:`, err);
+    localStorage.removeItem(key);
+    return [];
+  }
+};
+
 const normalizeSqlResponse = (data: any): any[] => {
   if (!Array.isArray(data)) return [];
   if (data.length === 0) return [];
@@ -135,12 +166,28 @@ export class SpacetimeDBClient {
     if (this.connected) {
       callback("rest-token", "rest-identity");
     }
+
+    return () => {
+      this.connectCallbacks = this.connectCallbacks.filter(cb => cb !== callback);
+    };
   }
 
   on(table: string, event: string, callback: (row: any) => void) {
     const key = `${table}:${event}`;
     if (!this.listeners.has(key)) this.listeners.set(key, []);
     this.listeners.get(key)!.push(callback);
+
+    return () => {
+      const callbacks = this.listeners.get(key);
+      if (!callbacks) return;
+
+      const nextCallbacks = callbacks.filter(cb => cb !== callback);
+      if (nextCallbacks.length === 0) {
+        this.listeners.delete(key);
+      } else {
+        this.listeners.set(key, nextCallbacks);
+      }
+    };
   }
 
   private emit(table: string, event: string, row: any) {
@@ -218,7 +265,7 @@ export class SpacetimeDBClient {
     }
 
     if (typeof window !== 'undefined') {
-      const stored: ChatRoom[] = JSON.parse(localStorage.getItem("spacetime_rooms") || "[]");
+      const stored = readStorageArray<ChatRoom>("spacetime_rooms");
       const storedIndex = stored.findIndex((s: ChatRoom) => s.job_id === room.job_id);
       if (storedIndex === -1) {
         stored.push(room);
@@ -229,6 +276,16 @@ export class SpacetimeDBClient {
     }
 
     return isNew;
+  }
+
+  removeRoom(jobId: string) {
+    this.rooms = this.rooms.filter(room => room.job_id !== jobId);
+
+    if (typeof window !== 'undefined') {
+      const stored = readStorageArray<ChatRoom>("spacetime_rooms").filter(room => room.job_id !== jobId);
+      localStorage.setItem("spacetime_rooms", JSON.stringify(stored));
+      window.dispatchEvent(new CustomEvent("spacetime_update"));
+    }
   }
 
   upsertMessage(message: Message) {
@@ -247,10 +304,10 @@ export class SpacetimeDBClient {
     } else {
       this.messages[existingIndex] = message;
     }
-    this.messages.sort((a, b) => messageTime(a) - messageTime(b));
+    this.messages = sortMessages(this.messages);
 
     if (typeof window !== 'undefined') {
-      const stored: Message[] = JSON.parse(localStorage.getItem("spacetime_messages") || "[]");
+      const stored = readStorageArray<Message>("spacetime_messages");
       let storedIndex = stored.findIndex((s: Message) => s.id === message.id);
       if (storedIndex === -1 && message.id > 0) {
         storedIndex = stored.findIndex((s: Message) =>
@@ -265,11 +322,20 @@ export class SpacetimeDBClient {
       } else {
         stored[storedIndex] = message;
       }
-      stored.sort((a, b) => messageTime(a) - messageTime(b));
-      localStorage.setItem("spacetime_messages", JSON.stringify(stored));
+      localStorage.setItem("spacetime_messages", JSON.stringify(sortMessages(stored)));
     }
 
     return isNew;
+  }
+
+  removeMessage(id: number) {
+    this.messages = this.messages.filter(message => message.id !== id);
+
+    if (typeof window !== 'undefined') {
+      const stored = readStorageArray<Message>("spacetime_messages").filter(message => message.id !== id);
+      localStorage.setItem("spacetime_messages", JSON.stringify(stored));
+      window.dispatchEvent(new CustomEvent("spacetime_update"));
+    }
   }
 }
 
@@ -292,7 +358,7 @@ export const getSpacetimeDBClient = () => {
 // Helpers for calling reducers
 export const registerUser = (walletAddress: string, name: string, role: string) => {
   if (!client) return;
-  client.call("register_user", {
+  return client.call("register_user", {
     wallet_address: walletAddress,
     name,
     role,
@@ -300,7 +366,7 @@ export const registerUser = (walletAddress: string, name: string, role: string) 
 };
 
 export const initiateChat = (jobId: string, freelancerAddress: string, clientAddress?: string, initiatorRole = "client") => {
-  if (!client) return;
+  if (!client) return Promise.resolve(false);
   const room = {
     job_id: jobId,
     client_address: clientAddress || "",
@@ -311,21 +377,28 @@ export const initiateChat = (jobId: string, freelancerAddress: string, clientAdd
     window.dispatchEvent(new CustomEvent("spacetime_update"));
   }
 
-  client.call("initiate_chat", {
+  return client.call("initiate_chat", {
     job_id: jobId,
     freelancer_address: freelancerAddress,
     client_address: clientAddress || "",
     initiator_role: initiatorRole,
   }).then((ok) => {
-    if (!ok) console.error("Failed to initiate chat room", { jobId, freelancerAddress, clientAddress });
+    if (!ok) {
+      client?.removeRoom(jobId);
+      console.error("Failed to initiate chat room", { jobId, freelancerAddress, clientAddress });
+    }
+    return ok;
   });
 };
 
 export const sendMessage = (jobId: string, content: string, senderAddress?: string) => {
-  if (!client) return;
+  if (!client) return Promise.resolve(false);
+  let optimisticId: number | null = null;
+
   if (senderAddress) {
+    optimisticId = -Date.now();
     const optimisticMessage: Message = {
-      id: -Date.now(),
+      id: optimisticId,
       job_id: jobId,
       sender_address: senderAddress,
       content,
@@ -337,30 +410,47 @@ export const sendMessage = (jobId: string, content: string, senderAddress?: stri
     }
   }
 
-  client.call("send_message", {
+  return client.call("send_message", {
     job_id: jobId,
     content,
     sender_address: senderAddress || "",
   }).then((ok) => {
-    if (!ok) console.error("Failed to send chat message", { jobId, senderAddress });
+    if (!ok) {
+      if (optimisticId !== null) client?.removeMessage(optimisticId);
+      console.error("Failed to send chat message", { jobId, senderAddress });
+    }
+    return ok;
   });
 };
 
 // --- HELPERS FOR CHAT DASHBOARD --- //
 
-export const getAllChatsForUser = (walletAddress: string): ChatRoom[] => {
+export const getAllChatsForUser = (
+  walletAddress: string,
+  options: { includeProjectChats?: boolean } = {}
+): ChatRoom[] => {
   if (typeof window === 'undefined') return [];
-  const rooms: ChatRoom[] = JSON.parse(localStorage.getItem("spacetime_rooms") || "[]");
+  const rooms = readStorageArray<ChatRoom>("spacetime_rooms");
   return rooms.filter(
     r => r.client_address.toLowerCase() === walletAddress.toLowerCase() || 
          r.freelancer_address.toLowerCase() === walletAddress.toLowerCase()
-  );
+  ).filter(room => options.includeProjectChats || !isProjectChatId(room.job_id));
+};
+
+export const getChatRoomById = (jobId: string): ChatRoom | undefined => {
+  if (typeof window === 'undefined') return undefined;
+  const rooms = readStorageArray<ChatRoom>("spacetime_rooms");
+  return rooms.find(room => room.job_id === jobId);
 };
 
 export const getMessagesForChat = (jobId: string): Message[] => {
   if (typeof window === 'undefined') return [];
-  const messages: Message[] = JSON.parse(localStorage.getItem("spacetime_messages") || "[]");
-  return messages.filter(m => m.job_id === jobId);
+  const messages = readStorageArray<Message>("spacetime_messages");
+  return sortMessages(messages.filter(m => m.job_id === jobId));
+};
+
+export const getCachedMessages = (): Message[] => {
+  return sortMessages(readStorageArray<Message>("spacetime_messages"));
 };
 
 export const refreshSpacetimeDB = async () => {

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useActiveAccount } from "thirdweb/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { getAllChatsForUser, initSpacetimeDB, refreshSpacetimeDB, ChatRoom, Message } from "@/lib/spacetimedb";
+import { getAllChatsForUser, getCachedMessages, initSpacetimeDB, refreshSpacetimeDB, ChatRoom, Message } from "@/lib/spacetimedb";
 import { SpacetimeChat } from "@/components/chat/SpacetimeChat";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageSquare, Search, User } from "lucide-react";
@@ -33,7 +33,7 @@ export function ChatDashboard({ currentUserRole }: ChatDashboardProps) {
             setChats(userChats);
 
             // Fetch all messages efficiently
-            const allMessages: Message[] = JSON.parse(localStorage.getItem("spacetime_messages") || "[]");
+            const allMessages = getCachedMessages();
             const messagesMap: Record<string, Message> = {};
             
             // Assume messages are ordered sequentially in localStorage
@@ -80,7 +80,7 @@ export function ChatDashboard({ currentUserRole }: ChatDashboardProps) {
     const selectedChat = chats.find(c => c.job_id === selectedChatId);
 
     return (
-        <div className="flex h-[calc(100vh-8rem)] bg-surface border border-border rounded-xl overflow-hidden shadow-lg mx-auto w-full max-w-7xl">
+        <div className="flex h-[calc(100dvh-7rem)] min-h-[520px] mb-4 bg-surface border border-border rounded-xl overflow-hidden shadow-lg mx-auto w-full max-w-7xl">
             
             {/* LEFT SIDEBAR - CHAT LIST */}
             <div className={`w-full md:w-80 border-r border-border bg-surface-secondary flex flex-col ${selectedChatId ? 'hidden md:flex' : 'flex'}`}>
@@ -149,9 +149,9 @@ export function ChatDashboard({ currentUserRole }: ChatDashboardProps) {
             </div>
 
             {/* RIGHT PANE - ACTIVE CHAT */}
-            <div className={`flex-1 flex flex-col bg-background ${!selectedChatId ? 'hidden md:flex' : 'flex'}`}>
+            <div className={`min-w-0 flex-1 flex flex-col bg-background ${!selectedChatId ? 'hidden md:flex' : 'flex'}`}>
                 {selectedChatId && selectedChat ? (
-                    <div className="flex-1 flex flex-col h-full relative">
+                    <div className="flex-1 min-h-0 flex flex-col h-full relative">
                         {/* Mobile back button header */}
                         <div className="md:hidden p-3 border-b border-border flex items-center bg-surface-secondary">
                             <button 
@@ -169,7 +169,7 @@ export function ChatDashboard({ currentUserRole }: ChatDashboardProps) {
                         </div>
                         
                         {/* We use a key to force remounting SpacetimeChat if we switch rooms */}
-                        <div className="flex-1 overflow-hidden" key={selectedChatId}>
+                        <div className="flex-1 min-h-0 overflow-hidden" key={selectedChatId}>
                             <SpacetimeChat 
                                 jobId={selectedChat.job_id}
                                 clientAddress={selectedChat.client_address}

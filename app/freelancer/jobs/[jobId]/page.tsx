@@ -44,6 +44,8 @@ import { client } from "@/lib/thirdweb-client";
 import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { ipfsToHttp } from "@/utils/ipfs";
+import { SpacetimeChat } from "@/components/chat/SpacetimeChat";
+import { getDirectChatId, getProjectChatId } from "@/lib/spacetimedb";
 
 /* ============================================================
    STRICT TYPES
@@ -886,6 +888,18 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
     job.status >= 2 && job.status !== 5 &&
     job.hiredFreelancer.toLowerCase() === walletAccount.address.toLowerCase();
 
+  const projectChatId = getProjectChatId(job.jobId);
+  const directChatId = getDirectChatId(job.client, job.hiredFreelancer);
+  const showProjectChat = Boolean(
+    isHired &&
+    escrowData &&
+    (job.status === 2 || job.status === 4)
+  );
+  const projectChatEnded = Boolean(
+    escrowData &&
+    (job.status === 4 || (escrowData.terminal && !escrowData.disputed))
+  );
+
   const fmtUSDT = (v: bigint) => (Number(v) / 1e6).toLocaleString("en-US", { minimumFractionDigits: 2 });
   const fmtTs = (ts: bigint) => {
     if (!ts || Number(ts) === 0) return "—";
@@ -952,6 +966,32 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
                 lastDeliveryURI={escrowData.lastDeliveryURI || escrowData.deliveryHistory[escrowData.deliveryHistory.length - 1]?.uri}
                 viewerRole="freelancer"
               />
+            )}
+
+            {showProjectChat && (
+              <section id="project-chat" className="p-6 border rounded-2xl bg-surface space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-base font-semibold flex items-center gap-2">
+                    <Send className="w-4 h-4 text-primary" /> Project Chat
+                  </h2>
+                  <span className="text-xs text-muted-foreground font-mono">Job #{job.jobId}</span>
+                </div>
+                <div className="h-[440px] min-h-0">
+                  <SpacetimeChat
+                    jobId={projectChatId}
+                    clientAddress={job.client}
+                    freelancerAddress={job.hiredFreelancer}
+                    currentUserRole="freelancer"
+                    title="Project Chat"
+                    ensureRoom
+                    disabled={projectChatEnded}
+                    disabledMessage="This project chat is closed because the job is complete and approved."
+                    directChatId={directChatId}
+                    directChatHref={`/freelancer/chat?chatId=${directChatId}`}
+                    directChatLabel="Open main chat"
+                  />
+                </div>
+              </section>
             )}
 
             {/* DESCRIPTION */}
@@ -1339,10 +1379,10 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Actions</h3>
 
                 <button 
-                  onClick={() => window.location.href = `/chat/${jobId}`}
+                  onClick={() => document.getElementById("project-chat")?.scrollIntoView({ behavior: "smooth", block: "start" })}
                   className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition font-semibold"
                 >
-                  Open Chat
+                  Open Project Chat
                 </button>
 
                 {canDeliver ? (

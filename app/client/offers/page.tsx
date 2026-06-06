@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, DollarSign, Clock, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import { ipfsToHttp } from "@/utils/ipfs";
 import { useToast } from "@/components/ui/use-toast";
+import { getDirectChatId, initiateChat, initSpacetimeDB } from "@/lib/spacetimedb";
 
 interface DirectOffer {
     jobId: string;
@@ -371,7 +372,18 @@ function OfferCard({
                 offer.jobStatus === 2 ? "Hired & Funded" :
                     offer.jobStatus === 4 ? "Completed" :
                         offer.accepted ? "Accepted - Needs Funding" :
-                            "Pending";
+            "Pending";
+
+    const openChat = async () => {
+        initSpacetimeDB();
+        const directChatId = getDirectChatId(offer.client, offer.freelancer);
+        const ok = await initiateChat(directChatId, offer.freelancer, offer.client, "client");
+        if (!ok) {
+            alert("Could not open chat. Please try again.");
+            return;
+        }
+        window.location.href = `/client/chat?chatId=${directChatId}`;
+    };
 
     return (
         <Card>
@@ -401,7 +413,7 @@ function OfferCard({
                 </div>
             </CardContent>
             <CardFooter className="gap-2 justify-end">
-                <Button variant="outline" onClick={() => window.location.href = `/chat/${offer.jobId}`} size="sm">
+                <Button variant="outline" onClick={openChat} size="sm">
                     Message
                 </Button>
                 {onFund && (

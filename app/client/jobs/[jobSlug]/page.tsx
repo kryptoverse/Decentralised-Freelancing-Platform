@@ -37,6 +37,8 @@ import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { ipfsToHttp } from "@/utils/ipfs";
 import { useIPFSUpload } from "@/hooks/useIPFSUpload";
 import { useChatContext, defaultContext } from "@/components/chat/ChatContext";
+import { SpacetimeChat } from "@/components/chat/SpacetimeChat";
+import { getDirectChatId, getProjectChatId } from "@/lib/spacetimedb";
 
 import HireSuccessModal from "@/components/client/HireSuccessModal";
 import DisputeModal from "@/components/modals/DisputeModal";
@@ -406,6 +408,20 @@ export default function JobAnalyticsPage() {
     smartAddress.toLowerCase() === job.client.toLowerCase();
 
   const isJobOpen = job && job.status === 1;
+  const projectChatId = job ? getProjectChatId(job.jobId) : "";
+  const directChatId = job?.hiredFreelancer ? getDirectChatId(job.client, job.hiredFreelancer) : "";
+  const showProjectChat = Boolean(
+    job &&
+    isClient &&
+    escrowData &&
+    job.hiredFreelancer &&
+    (job.status === 2 || job.status === 4)
+  );
+  const projectChatEnded = Boolean(
+    job &&
+    escrowData &&
+    (job.status === 4 || (escrowData.terminal && !escrowData.disputed))
+  );
 
   /* ============================================================
       HELPER: upload JSON to IPFS (for dispute reasons)
@@ -1457,6 +1473,35 @@ ${appsContext}`;
             totalBudget={job.budgetUSDC}
             escrowAddress={escrowData.escrowAddr}
           />
+        )}
+
+
+        {showProjectChat && job.hiredFreelancer && (
+          <section className="bg-surface/30 border border-border/60 rounded-2xl p-5 md:p-8 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold flex items-center gap-2 text-foreground">
+                <Send className="w-5 h-5 text-primary" /> Project Chat
+              </h2>
+              <span className="text-xs font-semibold bg-surface px-3 py-1 border rounded-lg text-muted-foreground shadow-sm">
+                Job #{job.jobId}
+              </span>
+            </div>
+            <div className="h-[440px] min-h-0">
+              <SpacetimeChat
+                jobId={projectChatId}
+                clientAddress={job.client}
+                freelancerAddress={job.hiredFreelancer}
+                currentUserRole="client"
+                title="Project Chat"
+                ensureRoom
+                disabled={projectChatEnded}
+                disabledMessage="This project chat is closed because the job is complete and approved."
+                directChatId={directChatId}
+                directChatHref={`/client/chat?chatId=${directChatId}`}
+                directChatLabel="Open main chat"
+              />
+            </div>
+          </section>
         )}
 
 

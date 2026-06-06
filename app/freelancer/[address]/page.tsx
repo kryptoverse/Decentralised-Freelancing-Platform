@@ -404,7 +404,7 @@ CURRENT FREELANCER CONTEXT:
     }
   };
 
-  const handleDirectMessage = () => {
+  const handleDirectMessage = async () => {
     if (!account) {
       toast({
         title: "Wallet not connected",
@@ -419,7 +419,16 @@ CURRENT FREELANCER CONTEXT:
     const directChatId = `direct-${account.address}-${addressStr}`;
     
     initSpacetimeDB();
-    initiateChat(directChatId, addressStr, account.address);
+    const ok = await initiateChat(directChatId, addressStr, account.address);
+    if (!ok) {
+      toast({
+        title: "Could not start chat",
+        description: "Please try again in a moment.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     router.push(`/client/chat?chatId=${directChatId}`);
   };
 

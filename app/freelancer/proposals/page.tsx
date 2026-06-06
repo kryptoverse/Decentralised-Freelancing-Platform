@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, DollarSign, Clock, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { getDirectChatId, initiateChat, initSpacetimeDB } from "@/lib/spacetimedb";
 
 interface DirectOffer {
     jobId: string;
@@ -269,6 +270,16 @@ function ProposalCard({
 }) {
     const [description, setDescription] = useState<string>("");
     const [isFetching, setIsFetching] = useState(false);
+    const openChat = async () => {
+        initSpacetimeDB();
+        const directChatId = getDirectChatId(offer.client, offer.freelancer);
+        const ok = await initiateChat(directChatId, offer.freelancer, offer.client, "client");
+        if (!ok) {
+            alert("Could not open chat. Please try again.");
+            return;
+        }
+        window.location.href = `/freelancer/chat?chatId=${directChatId}`;
+    };
 
     useEffect(() => {
         async function fetchDesc() {
@@ -378,8 +389,8 @@ function ProposalCard({
                         <a href={`/freelancer/jobs/${offer.jobId}`}>View Job Details</a>
                     </Button>
                 )}
-                <Button variant="outline" size="sm" asChild>
-                    <a href={`/chat/${offer.jobId}`}>Open Chat</a>
+                <Button variant="outline" size="sm" onClick={openChat}>
+                    Open Chat
                 </Button>
             </CardFooter>
         </Card>

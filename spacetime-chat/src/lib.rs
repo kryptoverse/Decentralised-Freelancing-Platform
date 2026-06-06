@@ -1,25 +1,26 @@
-use spacetimedb::{spacetimedb, Identity, ReducerContext, Timestamp};
+use spacetimedb::{reducer, table, DbContext, Identity, ReducerContext, Table, Timestamp};
 
-#[spacetimedb(table)]
+#[table(name = "User", accessor = user, public)]
 pub struct User {
-    #[primarykey]
+    #[primary_key]
     pub identity: Identity,
     pub wallet_address: String,
     pub name: String,
     pub role: String, // "client", "freelancer", "admin"
 }
 
-#[spacetimedb(table)]
+#[table(name = "ChatRoom", accessor = chat_room, public)]
 pub struct ChatRoom {
-    #[primarykey]
+    #[primary_key]
     pub job_id: String,
     pub client_address: String,
     pub freelancer_address: String,
 }
 
-#[spacetimedb(table)]
+#[table(name = "Message", accessor = message, public)]
 pub struct Message {
-    #[autoinc]
+    #[auto_inc]
+    #[primary_key]
     pub id: u64,
     pub job_id: String,
     pub sender_address: String,
@@ -28,23 +29,20 @@ pub struct Message {
 }
 
 // Register a user's wallet and name with their SpacetimeDB identity
-#[spacetimedb(reducer)]
-pub fn register_user(ctx: ReducerContext, wallet_address: String, name: String, role: String) {
-    if User::filter_by_identity(&ctx.sender).is_some() {
+#[reducer]
+pub fn register_user(ctx: &ReducerContext, wallet_address: String, name: String, role: String) {
+    if ctx.db().user().identity().find(ctx.sender()).is_some() {
         // Update existing
-        User::update_by_identity(
-            &ctx.sender,
-            User {
-                identity: ctx.sender,
-                wallet_address,
-                name,
-                role,
-            },
-        );
+        ctx.db().user().identity().update(User {
+            identity: ctx.sender(),
+            wallet_address,
+            name,
+            role,
+        });
     } else {
         // Insert new
-        User::insert(User {
-            identity: ctx.sender,
+        ctx.db().user().insert(User {
+            identity: ctx.sender(),
             wallet_address,
             name,
             role,
@@ -57,15 +55,15 @@ fn same_wallet(a: &str, b: &str) -> bool {
 }
 
 // Client initiates a chat for a specific job/proposal
-#[spacetimedb(reducer)]
+#[reducer]
 pub fn initiate_chat(
-    ctx: ReducerContext,
+    ctx: &ReducerContext,
     job_id: String,
     freelancer_address: String,
     client_address: String,
     initiator_role: String,
 ) {
-    let user = User::filter_by_identity(&ctx.sender);
+    let user = ctx.db().user().identity().find(ctx.sender());
     let registered_wallet = user
         .as_ref()
         .map(|u| u.wallet_address.clone())
@@ -101,8 +99,8 @@ pub fn initiate_chat(
         panic!("Only clients can initiate chat rooms");
     }
 
-    if ChatRoom::filter_by_job_id(&job_id).is_none() {
-        ChatRoom::insert(ChatRoom {
+    if ctx.db().chat_room().job_id().find(job_id.clone()).is_none() {
+        ctx.db().chat_room().insert(ChatRoom {
             job_id,
             client_address: room_client_address,
             freelancer_address,
@@ -111,12 +109,12 @@ pub fn initiate_chat(
 }
 
 // Send a message in a chat room
-#[spacetimedb(reducer)]
-pub fn send_message(ctx: ReducerContext, job_id: String, content: String, sender_address: String) {
-    let user = User::filter_by_identity(&ctx.sender);
+#[reducer]
+pub fn send_message(ctx: &ReducerContext, job_id: String, content: String, sender_address: String) {
+    let user = ctx.db().user().identity().find(ctx.sender());
     
     // Verify room exists
-    let room = ChatRoom::filter_by_job_id(&job_id).expect("Chat room does not exist");
+    let room = ctx.db().chat_room().job_id().find(job_id.clone()).expect("Chat room does not exist");
     
     // Verify permissions: Must be the client, the freelancer, or an admin
     let wallet_address = if sender_address.is_empty() {
@@ -144,7 +142,7 @@ pub fn send_message(ctx: ReducerContext, job_id: String, content: String, sender
         panic!("Not authorized to send messages in this room");
     }
     
-    Message::insert(Message {
+    ctx.db().message().insert(Message {
         id: 0, // Auto-incremented
         job_id,
         sender_address: wallet_address,

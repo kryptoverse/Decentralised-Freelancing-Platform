@@ -21,8 +21,32 @@ export type Message = {
   timestamp: number | string;
 };
 
-const SPACETIMEDB_API = process.env.NEXT_PUBLIC_SPACETIMEDB_URI || "https://maincloud.spacetimedb.com/v1/database";
-const DB_NAME = process.env.NEXT_PUBLIC_SPACETIMEDB_NAME || "worqs-a8jpe"; // User's deployed database
+const DEFAULT_SPACETIMEDB_API = "https://maincloud.spacetimedb.com/v1/database";
+
+const normalizeSpacetimeApi = (uri?: string) => {
+  const value = uri?.trim();
+  if (!value || value.startsWith("/") || !/^https?:\/\//i.test(value)) {
+    return DEFAULT_SPACETIMEDB_API;
+  }
+
+  const withoutTrailingSlash = value.replace(/\/+$/, "");
+  if (withoutTrailingSlash.endsWith("/v1/database")) {
+    return withoutTrailingSlash;
+  }
+
+  return `${withoutTrailingSlash}/v1/database`;
+};
+
+const SPACETIMEDB_API = normalizeSpacetimeApi(
+  process.env.NEXT_PUBLIC_SPACETIMEDB_API_URI ||
+  process.env.NEXT_PUBLIC_SPACETIMEDB_REST_URI ||
+  process.env.NEXT_PUBLIC_SPACETIMEDB_URI
+);
+const DB_NAME = (
+  process.env.NEXT_PUBLIC_SPACETIMEDB_NAME ||
+  process.env.NEXT_PUBLIC_SPACETIMEDB_DB_NAME ||
+  "worqs-a8jpe"
+).trim(); // User's deployed database
 
 const messageTime = (message: Message) => {
   return typeof message.timestamp === "number"

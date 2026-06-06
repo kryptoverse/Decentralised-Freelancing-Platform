@@ -8,6 +8,12 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, Send } from "lucide-react";
 
+const messageTime = (message: Message) => {
+    return typeof message.timestamp === "number"
+        ? message.timestamp
+        : new Date(message.timestamp).getTime();
+};
+
 interface SpacetimeChatProps {
     jobId: string;
     clientAddress: string;
@@ -26,7 +32,7 @@ export function SpacetimeChat({ jobId, clientAddress, freelancerAddress, current
 
         // Initialize SpacetimeDB connection
         const client = initSpacetimeDB();
-        setMessages(getMessagesForChat(jobId).sort((a, b) => a.timestamp - b.timestamp));
+        setMessages(getMessagesForChat(jobId).sort((a, b) => messageTime(a) - messageTime(b)));
         
         client.onConnect((token: string, identity: any) => {
             setConnected(true);
@@ -55,13 +61,13 @@ export function SpacetimeChat({ jobId, clientAddress, freelancerAddress, current
                 setMessages(prev => {
                     // Prevent duplicates
                     if (prev.find(m => m.id === row.id)) return prev;
-                    return [...prev, row].sort((a, b) => a.timestamp - b.timestamp);
+                    return [...prev, row].sort((a, b) => messageTime(a) - messageTime(b));
                 });
             }
         });
 
         const handleUpdate = () => {
-            setMessages(getMessagesForChat(jobId).sort((a, b) => a.timestamp - b.timestamp));
+            setMessages(getMessagesForChat(jobId).sort((a, b) => messageTime(a) - messageTime(b)));
         };
         window.addEventListener("spacetime_update", handleUpdate);
 

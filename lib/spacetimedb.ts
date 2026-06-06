@@ -18,11 +18,17 @@ export type Message = {
   job_id: string;
   sender_address: string;
   content: string;
-  timestamp: number;
+  timestamp: number | string;
 };
 
 const SPACETIMEDB_API = process.env.NEXT_PUBLIC_SPACETIMEDB_URI || "https://maincloud.spacetimedb.com/v1/database";
 const DB_NAME = process.env.NEXT_PUBLIC_SPACETIMEDB_NAME || "worqs-a8jpe"; // User's deployed database
+
+const messageTime = (message: Message) => {
+  return typeof message.timestamp === "number"
+    ? message.timestamp
+    : new Date(message.timestamp).getTime();
+};
 
 export class SpacetimeDBClient {
   private listeners: Map<string, Function[]> = new Map();
@@ -38,14 +44,14 @@ export class SpacetimeDBClient {
 
   constructor() {}
 
-  async call(reducer: string, args: any[]) {
+  async call(reducer: string, args: any[] | Record<string, any>) {
     try {
       const res = await fetch(`${SPACETIMEDB_API}/call/${DB_NAME}/${reducer}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ args })
+        body: JSON.stringify(args)
       });
       if (!res.ok) {
         console.error(`Reducer ${reducer} failed:`, await res.text());
@@ -198,7 +204,7 @@ export class SpacetimeDBClient {
     } else {
       this.messages[existingIndex] = message;
     }
-    this.messages.sort((a, b) => a.timestamp - b.timestamp);
+    this.messages.sort((a, b) => messageTime(a) - messageTime(b));
 
     if (typeof window !== 'undefined') {
       const stored: Message[] = JSON.parse(localStorage.getItem("spacetime_messages") || "[]");
@@ -216,7 +222,7 @@ export class SpacetimeDBClient {
       } else {
         stored[storedIndex] = message;
       }
-      stored.sort((a, b) => a.timestamp - b.timestamp);
+      stored.sort((a, b) => messageTime(a) - messageTime(b));
       localStorage.setItem("spacetime_messages", JSON.stringify(stored));
     }
 
@@ -243,7 +249,11 @@ export const getSpacetimeDBClient = () => {
 // Helpers for calling reducers
 export const registerUser = (walletAddress: string, name: string, role: string) => {
   if (!client) return;
-  client.call("register_user", [walletAddress, name, role]);
+  client.call("register_user", {
+    wallet_address: walletAddress,
+    name,
+    role,
+  });
 };
 
 export const initiateChat = (jobId: string, freelancerAddress: string, clientAddress?: string, initiatorRole = "client") => {
@@ -258,8 +268,13 @@ export const initiateChat = (jobId: string, freelancerAddress: string, clientAdd
     window.dispatchEvent(new CustomEvent("spacetime_update"));
   }
 
-  client.call("initiate_chat", [jobId, freelancerAddress, clientAddress || "", initiatorRole]).then((ok) => {
-    if (!ok) client?.call("initiate_chat", [jobId, freelancerAddress]);
+  client.call("initiate_chat", {
+    job_id: jobId,
+    freelancer_address: freelancerAddress,
+    client_address: clientAddress || "",
+    initiator_role: initiatorRole,
+  }).then((ok) => {
+    if (!ok) console.error("Failed to initiate chat room", { jobId, freelancerAddress, clientAddress });
   });
 };
 
@@ -279,8 +294,12 @@ export const sendMessage = (jobId: string, content: string, senderAddress?: stri
     }
   }
 
-  client.call("send_message", [jobId, content, senderAddress || ""]).then((ok) => {
-    if (!ok) client?.call("send_message", [jobId, content]);
+  client.call("send_message", {
+    job_id: jobId,
+    content,
+    sender_address: senderAddress || "",
+  }).then((ok) => {
+    if (!ok) console.error("Failed to send chat message", { jobId, senderAddress });
   });
 };
 

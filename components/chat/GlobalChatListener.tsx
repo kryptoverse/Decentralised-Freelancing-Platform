@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useActiveAccount } from "thirdweb/react";
-import { initSpacetimeDB } from "@/lib/spacetimedb";
+import { getAllChatsForUser, initSpacetimeDB, refreshSpacetimeDB } from "@/lib/spacetimedb";
 import { toast } from "sonner";
 import { MessageCircle } from "lucide-react";
 
@@ -20,12 +20,19 @@ export function GlobalChatListener() {
         if (!account) return;
 
         const client = initSpacetimeDB();
+
+        const refreshMyRooms = () => {
+            getAllChatsForUser(account.address).forEach(room => {
+                myRooms.current.add(room.job_id);
+            });
+        };
         
         const onConnect = () => {
             console.log("Global Chat Listener: Connected to SpacetimeDB");
             // In a real app we'd use parameterized queries if supported, 
             // but subscribing to all messages in the mock setup to filter locally.
             client.subscribe(["SELECT * FROM ChatRoom", "SELECT * FROM Message"]);
+            refreshSpacetimeDB().then(refreshMyRooms);
         };
 
         const onRoomInsert = (row: any) => {
@@ -47,15 +54,20 @@ export function GlobalChatListener() {
                 // Is it from someone else?
                 if (msg.sender_address.toLowerCase() !== account.address.toLowerCase()) {
                     // Are we NOT already looking at this chat?
-                    const isViewingChat = window.location.pathname === `/chat/${msg.job_id}`;
+                    const activeChatId = new URLSearchParams(window.location.search).get("chatId");
+                    const isViewingChat = window.location.pathname === `/chat/${msg.job_id}` || activeChatId === msg.job_id;
                     
                     if (!isViewingChat) {
+                        const chatPath = window.location.pathname.startsWith("/client")
+                            ? `/client/chat?chatId=${msg.job_id}`
+                            : `/freelancer/chat?chatId=${msg.job_id}`;
+
                         toast("New message received", {
                             description: msg.content.length > 50 ? msg.content.substring(0, 50) + "..." : msg.content,
                             icon: <MessageCircle className="w-4 h-4 text-primary" />,
                             action: {
                                 label: "Open Chat",
-                                onClick: () => router.push(`/chat/${msg.job_id}`),
+                                onClick: () => router.push(chatPath),
                             },
                             duration: 5000,
                             position: "top-right",
@@ -70,11 +82,13 @@ export function GlobalChatListener() {
         client.onConnect(onConnect);
         client.on("ChatRoom", "insert", onRoomInsert);
         client.on("Message", "insert", onMessageInsert);
+        window.addEventListener("spacetime_update", refreshMyRooms);
 
         // Auto connect if not connected
         client.connect();
 
         return () => {
+            window.removeEventListener("spacetime_update", refreshMyRooms);
             // Cleanup listeners if the component unmounts
             // Not strictly disconnecting here because other components (like SpacetimeChat) might share the instance
         };

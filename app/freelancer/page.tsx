@@ -857,6 +857,7 @@ Hired (Active) Jobs: ${hiredJobs.length}
               )}
             </div>
           </div>
+          </div>
         )}
       </motion.div>
 

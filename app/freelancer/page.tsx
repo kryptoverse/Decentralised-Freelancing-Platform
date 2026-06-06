@@ -54,12 +54,15 @@ export default function FreelancerHome() {
   const { setChatContext } = useChatContext();
 
   const [eoaAddress, setEoaAddress] = useState<string | null>(null);
-  const [walletView, setWalletView] = useState<"smart" | "eoa">("eoa");
+  const [walletView, setWalletView] = useState<"smart" | "eoa" | "company">("eoa");
 
   const [balance, setBalance] = useState<{ displayValue: string; symbol: string } | null>(null);
   const [usdtBalance, setUsdtBalance] = useState<string | null>(null);
   const [eoaMatic, setEoaMatic] = useState<string | null>(null);
   const [eoaUsdt, setEoaUsdt] = useState<string | null>(null);
+  const [companyVaultAddress, setCompanyVaultAddress] = useState<string | null>(null);
+  const [companyVaultMatic, setCompanyVaultMatic] = useState<string | null>(null);
+  const [companyVaultUsdt, setCompanyVaultUsdt] = useState<string | null>(null);
   const [loadingBalance, setLoadingBalance] = useState(false);
 
   useEffect(() => {
@@ -170,6 +173,28 @@ export default function FreelancerHome() {
         }
       }
 
+      // Fetch Company Vault Balances
+      if (companyVaultAddress && companyVaultAddress !== "0x0000000000000000000000000000000000000000") {
+        try {
+          const cvMaticRes = await getWalletBalance({
+            client,
+            chain: polygonAmoy,
+            address: companyVaultAddress,
+          });
+          setCompanyVaultMatic(cvMaticRes.displayValue);
+
+          const cvUsdtRaw = await readContract({
+            contract: usdt,
+            method: "function balanceOf(address) view returns (uint256)",
+            params: [companyVaultAddress],
+          });
+          const cvFormatted = Number(cvUsdtRaw as bigint) / 10 ** Number(decimals);
+          setCompanyVaultUsdt(cvFormatted.toFixed(2));
+        } catch (err) {
+          console.error("Company Vault Balance fetch failed:", err);
+        }
+      }
+
     } catch (err) {
       console.error("Balance fetch failed:", err);
     } finally {
@@ -181,7 +206,7 @@ export default function FreelancerHome() {
   useEffect(() => {
     if (!account?.address) return;
     fetchBalance();
-  }, [account?.address, eoaAddress]);
+  }, [account?.address, eoaAddress, companyVaultAddress]);
 
   // ===== 2) Fetch Profile Data (FreelancerProfile) =====
   const loadProfile = async (addr: string) => {
@@ -242,6 +267,7 @@ export default function FreelancerHome() {
         safeRead("function level() view returns (uint8)"),
         safeRead("function disputedJobs() view returns (uint256)"),
         safeRead("function cancelledJobs() view returns (uint256)"),
+        safeRead("function companyVault() view returns (address)"),
       ]);
 
       const completedJobs = Number(completedJobsRaw || 0);
@@ -621,19 +647,27 @@ Hired (Active) Jobs: ${hiredJobs.length}
           </div>
 
           {/* Balances */}
-          <div className="flex bg-black/20 p-1 rounded-lg mb-2">
+          <div className="flex bg-black/20 p-1 rounded-lg mb-2 overflow-x-auto">
             <button
               onClick={() => setWalletView("eoa")}
-              className={`flex-1 text-xs py-1.5 rounded-md font-medium transition-colors ${walletView === "eoa" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+              className={`flex-shrink-0 px-3 text-xs py-1.5 rounded-md font-medium transition-colors ${walletView === "eoa" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
             >
-              Personal (EOA)
+              Freelance EOA
             </button>
             <button
               onClick={() => setWalletView("smart")}
-              className={`flex-1 text-xs py-1.5 rounded-md font-medium transition-colors ${walletView === "smart" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+              className={`flex-shrink-0 px-3 text-xs py-1.5 rounded-md font-medium transition-colors ${walletView === "smart" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
             >
-              Smart Wallet
+              Freelance Smart
             </button>
+            {companyVaultAddress && (
+              <button
+                onClick={() => setWalletView("company")}
+                className={`flex-shrink-0 px-3 text-xs py-1.5 rounded-md font-medium transition-colors ${walletView === "company" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+              >
+                Company Vault
+              </button>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-2 mb-3">
             <div className="rounded-xl bg-black/25 p-3">
@@ -644,7 +678,9 @@ Hired (Active) Jobs: ${hiredJobs.length}
                 <p className="text-sm font-bold text-primary truncate">
                   {walletView === "smart"
                     ? (balance ? parseFloat(balance.displayValue).toFixed(3) : "0")
-                    : (eoaMatic ? parseFloat(eoaMatic).toFixed(3) : "0")}
+                    : walletView === "eoa"
+                      ? (eoaMatic ? parseFloat(eoaMatic).toFixed(3) : "0")
+                      : (companyVaultMatic ? parseFloat(companyVaultMatic).toFixed(3) : "0")}
                 </p>
               )}
             </div>
@@ -654,7 +690,7 @@ Hired (Active) Jobs: ${hiredJobs.length}
                 <div className="h-5 w-14 bg-white/10 rounded animate-pulse" />
               ) : (
                 <p className="text-sm font-bold text-primary truncate">
-                  {walletView === "smart" ? (usdtBalance ?? "0") : (eoaUsdt ?? "0")} USDT
+                  {walletView === "smart" ? (usdtBalance ?? "0") : walletView === "eoa" ? (eoaUsdt ?? "0") : (companyVaultUsdt ?? "0")} USDT
                 </p>
               )}
             </div>
@@ -807,19 +843,27 @@ Hired (Active) Jobs: ${hiredJobs.length}
           <p className="text-foreground-secondary">Fetching balance…</p>
         ) : (
           <div className="flex flex-col gap-4">
-            <div className="flex bg-black/20 p-1 rounded-lg w-fit">
+            <div className="flex bg-black/20 p-1 rounded-lg w-fit overflow-x-auto">
               <button
                 onClick={() => setWalletView("eoa")}
-                className={`px-4 text-xs py-1.5 rounded-md font-medium transition-colors ${walletView === "eoa" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+                className={`px-4 text-xs py-1.5 rounded-md font-medium transition-colors ${walletView === "eoa" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
               >
-                Personal (EOA)
+                Freelance EOA
               </button>
               <button
                 onClick={() => setWalletView("smart")}
-                className={`px-4 text-xs py-1.5 rounded-md font-medium transition-colors ${walletView === "smart" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+                className={`px-4 text-xs py-1.5 rounded-md font-medium transition-colors ${walletView === "smart" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
               >
-                Smart Wallet
+                Freelance Smart
               </button>
+              {companyVaultAddress && (
+                <button
+                  onClick={() => setWalletView("company")}
+                  className={`px-4 text-xs py-1.5 rounded-md font-medium transition-colors ${walletView === "company" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  Company Vault
+                </button>
+              )}
             </div>
             <div className="flex gap-8">
               <div>
@@ -827,13 +871,15 @@ Hired (Active) Jobs: ${hiredJobs.length}
                 <p className="text-2xl font-bold text-primary">
                   {walletView === "smart"
                     ? (balance ? `${parseFloat(balance.displayValue).toFixed(4)} ${balance.symbol}` : "0")
-                    : (eoaMatic ? `${parseFloat(eoaMatic).toFixed(4)} MATIC` : "0")}
+                    : walletView === "eoa"
+                      ? (eoaMatic ? `${parseFloat(eoaMatic).toFixed(4)} MATIC` : "0")
+                      : (companyVaultMatic ? `${parseFloat(companyVaultMatic).toFixed(4)} MATIC` : "0")}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-foreground-secondary">USDT</p>
                 <p className="text-2xl font-bold text-primary">
-                  {walletView === "smart" ? (usdtBalance ?? "0") : (eoaUsdt ?? "0")} USDT
+                  {walletView === "smart" ? (usdtBalance ?? "0") : walletView === "eoa" ? (eoaUsdt ?? "0") : (companyVaultUsdt ?? "0")} USDT
                 </p>
               </div>
               <div className="ml-auto flex flex-col justify-end gap-2">

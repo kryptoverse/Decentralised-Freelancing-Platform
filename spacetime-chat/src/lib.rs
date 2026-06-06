@@ -52,20 +52,59 @@ pub fn register_user(ctx: ReducerContext, wallet_address: String, name: String, 
     }
 }
 
+fn same_wallet(a: &str, b: &str) -> bool {
+    a.eq_ignore_ascii_case(b)
+}
+
 // Client initiates a chat for a specific job/proposal
 #[spacetimedb(reducer)]
-pub fn initiate_chat(ctx: ReducerContext, job_id: String, freelancer_address: String) {
-    let user = User::filter_by_identity(&ctx.sender).expect("User not registered");
-    
+pub fn initiate_chat(
+    ctx: ReducerContext,
+    job_id: String,
+    freelancer_address: String,
+    client_address: String,
+    initiator_role: String,
+) {
+    let user = User::filter_by_identity(&ctx.sender);
+    let registered_wallet = user
+        .as_ref()
+        .map(|u| u.wallet_address.clone())
+        .unwrap_or_default();
+    let registered_role = user
+        .as_ref()
+        .map(|u| u.role.clone())
+        .unwrap_or_default();
+
     // According to rules, only clients can initiate (or admins for testing)
-    // We assume the frontend ensures the caller is the actual client for this job.
-    // In a fully decentralized setup, we'd verify a signature or on-chain state,
-    // but for this DB module, we trust the caller's registered wallet_address.
-    
+    let room_client_address = if client_address.is_empty() {
+        registered_wallet.clone()
+    } else {
+        client_address
+    };
+
+    if room_client_address.is_empty() {
+        panic!("Client wallet address is required");
+    }
+
+    let is_registered_admin = registered_role == "admin";
+    let effective_role = if initiator_role.is_empty() {
+        registered_role.clone()
+    } else {
+        initiator_role
+    };
+
+    let can_initiate = effective_role == "client"
+        || is_registered_admin
+        || same_wallet(&registered_wallet, &room_client_address);
+
+    if !can_initiate {
+        panic!("Only clients can initiate chat rooms");
+    }
+
     if ChatRoom::filter_by_job_id(&job_id).is_none() {
         ChatRoom::insert(ChatRoom {
             job_id,
-            client_address: user.wallet_address,
+            client_address: room_client_address,
             freelancer_address,
         });
     }
@@ -73,16 +112,33 @@ pub fn initiate_chat(ctx: ReducerContext, job_id: String, freelancer_address: St
 
 // Send a message in a chat room
 #[spacetimedb(reducer)]
-pub fn send_message(ctx: ReducerContext, job_id: String, content: String) {
-    let user = User::filter_by_identity(&ctx.sender).expect("User not registered");
+pub fn send_message(ctx: ReducerContext, job_id: String, content: String, sender_address: String) {
+    let user = User::filter_by_identity(&ctx.sender);
     
     // Verify room exists
     let room = ChatRoom::filter_by_job_id(&job_id).expect("Chat room does not exist");
     
     // Verify permissions: Must be the client, the freelancer, or an admin
-    let is_authorized = user.wallet_address == room.client_address 
-        || user.wallet_address == room.freelancer_address 
-        || user.role == "admin";
+    let wallet_address = if sender_address.is_empty() {
+        user.as_ref()
+            .map(|u| u.wallet_address.clone())
+            .unwrap_or_default()
+    } else {
+        sender_address
+    };
+
+    if wallet_address.is_empty() {
+        panic!("Sender wallet address is required");
+    }
+
+    let role = user
+        .as_ref()
+        .map(|u| u.role.clone())
+        .unwrap_or_default();
+
+    let is_authorized = same_wallet(&wallet_address, &room.client_address)
+        || same_wallet(&wallet_address, &room.freelancer_address)
+        || role == "admin";
         
     if !is_authorized {
         panic!("Not authorized to send messages in this room");
@@ -91,7 +147,7 @@ pub fn send_message(ctx: ReducerContext, job_id: String, content: String) {
     Message::insert(Message {
         id: 0, // Auto-incremented
         job_id,
-        sender_address: user.wallet_address,
+        sender_address: wallet_address,
         content,
         timestamp: ctx.timestamp,
     });

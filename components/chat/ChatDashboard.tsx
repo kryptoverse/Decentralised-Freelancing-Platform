@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useActiveAccount } from "thirdweb/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { getAllChatsForUser, ChatRoom, Message } from "@/lib/spacetimedb";
+import { getAllChatsForUser, initSpacetimeDB, refreshSpacetimeDB, ChatRoom, Message } from "@/lib/spacetimedb";
 import { SpacetimeChat } from "@/components/chat/SpacetimeChat";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageSquare, Search, User } from "lucide-react";
@@ -24,6 +24,8 @@ export function ChatDashboard({ currentUserRole }: ChatDashboardProps) {
 
     useEffect(() => {
         if (!account) return;
+        const client = initSpacetimeDB();
+        client.connect();
         
         const loadData = () => {
             // Load all chats for this user from our mock localStorage database
@@ -53,6 +55,7 @@ export function ChatDashboard({ currentUserRole }: ChatDashboardProps) {
         };
 
         loadData();
+        refreshSpacetimeDB().then(loadData);
 
         // Listen for updates from other components or tabs
         const handleUpdate = () => loadData();

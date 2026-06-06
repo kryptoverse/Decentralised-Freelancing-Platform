@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useActiveAccount } from "thirdweb/react";
-import { initSpacetimeDB, getSpacetimeDBClient, registerUser, initiateChat, sendMessage, type Message } from "@/lib/spacetimedb";
+import { getMessagesForChat, initSpacetimeDB, initiateChat, refreshSpacetimeDB, registerUser, sendMessage, type Message } from "@/lib/spacetimedb";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -26,6 +26,7 @@ export function SpacetimeChat({ jobId, clientAddress, freelancerAddress, current
 
         // Initialize SpacetimeDB connection
         const client = initSpacetimeDB();
+        setMessages(getMessagesForChat(jobId).sort((a, b) => a.timestamp - b.timestamp));
         
         client.onConnect((token: string, identity: any) => {
             setConnected(true);
@@ -37,7 +38,7 @@ export function SpacetimeChat({ jobId, clientAddress, freelancerAddress, current
             
             // If client, ensure chat room is initiated
             if (currentUserRole === "client") {
-                initiateChat(jobId, freelancerAddress, clientAddress);
+                initiateChat(jobId, freelancerAddress, clientAddress, currentUserRole);
             }
 
             // Subscribe to queries
@@ -45,6 +46,7 @@ export function SpacetimeChat({ jobId, clientAddress, freelancerAddress, current
                 "SELECT * FROM Message WHERE job_id = '" + jobId + "'",
                 "SELECT * FROM ChatRoom WHERE job_id = '" + jobId + "'"
             ]);
+            refreshSpacetimeDB();
         });
 
         // Listen for new messages
@@ -58,9 +60,15 @@ export function SpacetimeChat({ jobId, clientAddress, freelancerAddress, current
             }
         });
 
+        const handleUpdate = () => {
+            setMessages(getMessagesForChat(jobId).sort((a, b) => a.timestamp - b.timestamp));
+        };
+        window.addEventListener("spacetime_update", handleUpdate);
+
         client.connect();
 
         return () => {
+            window.removeEventListener("spacetime_update", handleUpdate);
             client.disconnect();
         };
     }, [account, jobId, clientAddress, freelancerAddress, currentUserRole]);

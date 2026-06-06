@@ -28,6 +28,8 @@ export class SpacetimeDBClient {
   private listeners: Map<string, Function[]> = new Map();
   private isPolling = false;
   private pollInterval: any = null;
+  private connectCallbacks: Array<(token: string, identity: any) => void> = [];
+  private connected = false;
   
   // Local cache
   public rooms: ChatRoom[] = [];
@@ -47,12 +49,15 @@ export class SpacetimeDBClient {
       });
       if (!res.ok) {
         console.error(`Reducer ${reducer} failed:`, await res.text());
+        return false;
       } else {
         // Immediately trigger a poll to fetch the new data
-        this.poll();
+        await this.poll();
+        return true;
       }
     } catch (err) {
       console.error(`Failed to call ${reducer}:`, err);
+      return false;
     }
   }
 
@@ -76,12 +81,11 @@ export class SpacetimeDBClient {
   }
 
   onConnect(callback: (token: string, identity: any) => void) {
-    // For REST, we don't have a strict WebSocket handshake.
-    // We simulate connection established and start polling.
-    setTimeout(() => {
+    this.connectCallbacks.push(callback);
+
+    if (this.connected) {
       callback("rest-token", "rest-identity");
-      this.startPolling();
-    }, 100);
+    }
   }
 
   on(table: string, event: string, callback: (row: any) => void) {
@@ -106,7 +110,7 @@ export class SpacetimeDBClient {
     this.poll();
   }
 
-  private async poll() {
+  async poll() {
     if (this.isPolling) return;
     this.isPolling = true;
 
@@ -115,16 +119,7 @@ export class SpacetimeDBClient {
       const roomsData = await this.query("SELECT * FROM ChatRoom");
       if (Array.isArray(roomsData)) {
         roomsData.forEach(r => {
-          // Check if it's new
-          if (!this.rooms.find(existing => existing.job_id === r.job_id)) {
-            this.rooms.push(r);
-            if (typeof window !== 'undefined') {
-                const stored = JSON.parse(localStorage.getItem("spacetime_rooms") || "[]");
-                if (!stored.find((s: any) => s.job_id === r.job_id)) {
-                    stored.push(r);
-                    localStorage.setItem("spacetime_rooms", JSON.stringify(stored));
-                }
-            }
+          if (this.upsertRoom(r)) {
             this.emit("ChatRoom", "insert", r);
           }
         });
@@ -134,16 +129,7 @@ export class SpacetimeDBClient {
       const messagesData = await this.query("SELECT * FROM Message");
       if (Array.isArray(messagesData)) {
         messagesData.forEach(m => {
-          // Check if it's new
-          if (!this.messages.find(existing => existing.id === m.id)) {
-            this.messages.push(m);
-            if (typeof window !== 'undefined') {
-                const stored = JSON.parse(localStorage.getItem("spacetime_messages") || "[]");
-                if (!stored.find((s: any) => s.id === m.id)) {
-                    stored.push(m);
-                    localStorage.setItem("spacetime_messages", JSON.stringify(stored));
-                }
-            }
+          if (this.upsertMessage(m)) {
             this.emit("Message", "insert", m);
           }
         });
@@ -160,12 +146,81 @@ export class SpacetimeDBClient {
     this.pollInterval = setInterval(() => this.poll(), 2000); // 2-second real-time feel
   }
 
-  connect() {}
+  connect() {
+    if (this.connected) return;
+    this.connected = true;
+    setTimeout(() => {
+      this.connectCallbacks.forEach(callback => callback("rest-token", "rest-identity"));
+      this.startPolling();
+      this.poll();
+    }, 100);
+  }
   disconnect() {
-    if (this.pollInterval) {
-      clearInterval(this.pollInterval);
-      this.pollInterval = null;
+    // Keep the shared polling client alive while the app is mounted.
+  }
+
+  upsertRoom(room: ChatRoom) {
+    const existingIndex = this.rooms.findIndex(existing => existing.job_id === room.job_id);
+    const isNew = existingIndex === -1;
+    if (isNew) {
+      this.rooms.push(room);
+    } else {
+      this.rooms[existingIndex] = room;
     }
+
+    if (typeof window !== 'undefined') {
+      const stored: ChatRoom[] = JSON.parse(localStorage.getItem("spacetime_rooms") || "[]");
+      const storedIndex = stored.findIndex((s: ChatRoom) => s.job_id === room.job_id);
+      if (storedIndex === -1) {
+        stored.push(room);
+      } else {
+        stored[storedIndex] = room;
+      }
+      localStorage.setItem("spacetime_rooms", JSON.stringify(stored));
+    }
+
+    return isNew;
+  }
+
+  upsertMessage(message: Message) {
+    let existingIndex = this.messages.findIndex(existing => existing.id === message.id);
+    if (existingIndex === -1 && message.id > 0) {
+      existingIndex = this.messages.findIndex(existing =>
+        existing.id < 0 &&
+        existing.job_id === message.job_id &&
+        existing.sender_address.toLowerCase() === message.sender_address.toLowerCase() &&
+        existing.content === message.content
+      );
+    }
+    const isNew = existingIndex === -1;
+    if (isNew) {
+      this.messages.push(message);
+    } else {
+      this.messages[existingIndex] = message;
+    }
+    this.messages.sort((a, b) => a.timestamp - b.timestamp);
+
+    if (typeof window !== 'undefined') {
+      const stored: Message[] = JSON.parse(localStorage.getItem("spacetime_messages") || "[]");
+      let storedIndex = stored.findIndex((s: Message) => s.id === message.id);
+      if (storedIndex === -1 && message.id > 0) {
+        storedIndex = stored.findIndex((s: Message) =>
+          s.id < 0 &&
+          s.job_id === message.job_id &&
+          s.sender_address.toLowerCase() === message.sender_address.toLowerCase() &&
+          s.content === message.content
+        );
+      }
+      if (storedIndex === -1) {
+        stored.push(message);
+      } else {
+        stored[storedIndex] = message;
+      }
+      stored.sort((a, b) => a.timestamp - b.timestamp);
+      localStorage.setItem("spacetime_messages", JSON.stringify(stored));
+    }
+
+    return isNew;
   }
 }
 
@@ -191,15 +246,42 @@ export const registerUser = (walletAddress: string, name: string, role: string) 
   client.call("register_user", [walletAddress, name, role]);
 };
 
-export const initiateChat = (jobId: string, freelancerAddress: string, clientAddress?: string) => {
+export const initiateChat = (jobId: string, freelancerAddress: string, clientAddress?: string, initiatorRole = "client") => {
   if (!client) return;
-  // Convert optional args to string to avoid undefined issues in JSON
-  client.call("initiate_chat", [jobId, freelancerAddress]);
+  const room = {
+    job_id: jobId,
+    client_address: clientAddress || "",
+    freelancer_address: freelancerAddress,
+  };
+  client.upsertRoom(room);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent("spacetime_update"));
+  }
+
+  client.call("initiate_chat", [jobId, freelancerAddress, clientAddress || "", initiatorRole]).then((ok) => {
+    if (!ok) client?.call("initiate_chat", [jobId, freelancerAddress]);
+  });
 };
 
 export const sendMessage = (jobId: string, content: string, senderAddress?: string) => {
   if (!client) return;
-  client.call("send_message", [jobId, content]);
+  if (senderAddress) {
+    const optimisticMessage: Message = {
+      id: -Date.now(),
+      job_id: jobId,
+      sender_address: senderAddress,
+      content,
+      timestamp: Date.now(),
+    };
+    client.upsertMessage(optimisticMessage);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent("spacetime_update"));
+    }
+  }
+
+  client.call("send_message", [jobId, content, senderAddress || ""]).then((ok) => {
+    if (!ok) client?.call("send_message", [jobId, content]);
+  });
 };
 
 // --- HELPERS FOR CHAT DASHBOARD --- //
@@ -217,4 +299,9 @@ export const getMessagesForChat = (jobId: string): Message[] => {
   if (typeof window === 'undefined') return [];
   const messages: Message[] = JSON.parse(localStorage.getItem("spacetime_messages") || "[]");
   return messages.filter(m => m.job_id === jobId);
+};
+
+export const refreshSpacetimeDB = async () => {
+  if (!client) return;
+  await client.poll();
 };

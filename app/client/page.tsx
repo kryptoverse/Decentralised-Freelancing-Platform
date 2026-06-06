@@ -2,8 +2,8 @@
 
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { useActiveAccount } from "thirdweb/react";
-import { Wallet, FileText, Plus, Briefcase, Copy, CheckCheck, RefreshCw, ArrowRight } from "lucide-react";
+import { useActiveAccount, useActiveWallet } from "thirdweb/react";
+import { Wallet, FileText, Plus, Briefcase, Copy, CheckCheck, RefreshCw, ArrowRight, ArrowRightLeft } from "lucide-react";
 import { getWalletBalance } from "thirdweb/wallets";
 import { polygonAmoy } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb-client";
@@ -35,15 +35,23 @@ export default function ClientHome() {
   const smartAddress: `0x${string}` =
     (account?.address as `0x${string}`) || ZERO;
 
-  const eoaAddress: `0x${string}` =
-    ((account as any)?.walletAddress as `0x${string}`) || ZERO;
+  const activeWallet = useActiveWallet();
+  const [eoaAddress, setEoaAddress] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const pa = (activeWallet as any)?.getAdminAccount?.();
+      if (pa?.address) setEoaAddress(pa.address);
+    } catch {}
+  }, [activeWallet]);
 
   const [copied, setCopied] = useState(false);
+  const [walletView, setWalletView] = useState<"smart" | "eoa">("eoa");
 
-  const [balance, setBalance] = useState<{ displayValue: string; symbol: string } | null>(
-    null
-  );
+  const [balance, setBalance] = useState<{ displayValue: string; symbol: string } | null>(null);
   const [usdtBalance, setUsdtBalance] = useState<string | null>(null);
+  const [eoaMatic, setEoaMatic] = useState<string | null>(null);
+  const [eoaUsdt, setEoaUsdt] = useState<string | null>(null);
 
   const [loadingJobs, setLoadingJobs] = useState(false);
   const [loadingBalance, setLoadingBalance] = useState(false);
@@ -255,10 +263,22 @@ export default function ClientHome() {
         chain: polygonAmoy,
         address: smartAddress,
       });
-
       setBalance({ displayValue: result.displayValue, symbol: result.symbol });
     } catch (err) {
       console.error("❌ balance error:", err);
+    }
+
+    if (eoaAddress) {
+      try {
+        const eoaMaticRes = await getWalletBalance({
+          client,
+          chain: polygonAmoy,
+          address: eoaAddress,
+        });
+        setEoaMatic(eoaMaticRes.displayValue);
+      } catch (err) {
+        console.error("❌ EOA balance error:", err);
+      }
     }
   };
 
@@ -282,10 +302,22 @@ export default function ClientHome() {
         method: "function decimals() view returns (uint8)",
       });
 
-      const formatted =
-        Number(raw as bigint) / 10 ** Number(decimals);
-
+      const formatted = Number(raw as bigint) / 10 ** Number(decimals);
       setUsdtBalance(formatted.toFixed(2));
+
+      if (eoaAddress) {
+        try {
+          const eoaUsdtRaw = await readContract({
+            contract: usdt,
+            method: "function balanceOf(address) view returns (uint256)",
+            params: [eoaAddress],
+          });
+          const eoaFormatted = Number(eoaUsdtRaw as bigint) / 10 ** Number(decimals);
+          setEoaUsdt(eoaFormatted.toFixed(2));
+        } catch (err) {
+          console.error("❌ EOA USDT balance error:", err);
+        }
+      }
     } catch (err) {
       console.error("❌ USDT balance error:", err);
       setUsdtBalance(null);
@@ -301,7 +333,7 @@ export default function ClientHome() {
       fetchUSDTBalance();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [account, smartAddress]);
+  }, [account, smartAddress, eoaAddress]);
 
   /* ------------------------------------
       AI CONTEXT INJECTION
@@ -438,20 +470,45 @@ Wallet Balances: MATIC: ${balance?.displayValue} ${balance?.symbol}, USDT: ${usd
                 </p>
               </div>
             </div>
+            {/* Wallet Toggle */}
+            <div className="flex bg-black/20 p-1 rounded-lg mb-2">
+              <button
+                onClick={() => setWalletView("eoa")}
+                className={`flex-1 text-xs py-1.5 rounded-md font-medium transition-colors ${walletView === "eoa" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+              >
+                Personal (EOA)
+              </button>
+              <button
+                onClick={() => setWalletView("smart")}
+                className={`flex-1 text-xs py-1.5 rounded-md font-medium transition-colors ${walletView === "smart" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+              >
+                Smart Wallet
+              </button>
+            </div>
             {/* Balances */}
             <div className="grid grid-cols-2 gap-2 mb-3">
               <div className="rounded-xl bg-black/25 p-3">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">MATIC</p>
                 <p className="text-sm font-bold text-primary truncate">
-                  {balance ? parseFloat(balance.displayValue).toFixed(3) : "0"}
+                  {walletView === "smart" 
+                    ? (balance ? parseFloat(balance.displayValue).toFixed(3) : "0")
+                    : (eoaMatic ? parseFloat(eoaMatic).toFixed(3) : "0")}
                 </p>
               </div>
               <div className="rounded-xl bg-black/25 p-3">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">USDT</p>
                 <p className="text-sm font-bold text-primary truncate">
-                  {usdtBalance !== null ? `${usdtBalance}` : "—"}
+                  {walletView === "smart" ? (usdtBalance ?? "—") : (eoaUsdt ?? "—")}
                 </p>
               </div>
+            </div>
+            <div className="mb-3">
+              <button
+                onClick={() => router.push("/client/wallet")}
+                className="w-full text-xs py-2 rounded-xl border border-border bg-black/20 text-muted-foreground hover:text-primary transition"
+              >
+                Transfer funds between EOA and Smart Wallet &rarr;
+              </button>
             </div>
             {/* Actions */}
             <div className="flex gap-2">
@@ -494,7 +551,29 @@ Wallet Balances: MATIC: ${balance?.displayValue} ${balance?.symbol}, USDT: ${usd
 
         {/* STATS HEADER (desktop only – mobile shows balances in hero) */}
         <div className="hidden md:flex items-center justify-between">
-          <h2 className="text-xl font-bold">Overview</h2>
+          <div className="flex items-center gap-4">
+            <h2 className="text-xl font-bold">Overview</h2>
+            <div className="flex bg-surface-secondary border border-border p-1 rounded-lg">
+              <button
+                onClick={() => setWalletView("eoa")}
+                className={`px-4 text-xs py-1.5 rounded-md font-medium transition-colors ${walletView === "eoa" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Personal (EOA)
+              </button>
+              <button
+                onClick={() => setWalletView("smart")}
+                className={`px-4 text-xs py-1.5 rounded-md font-medium transition-colors ${walletView === "smart" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Smart Wallet
+              </button>
+            </div>
+            <button
+              onClick={() => router.push("/client/wallet")}
+              className="text-xs px-3 py-1.5 rounded-lg border border-border hover:bg-surface-secondary text-foreground-secondary transition flex items-center gap-1"
+            >
+              Transfer Funds <ArrowRight className="w-3 h-3" />
+            </button>
+          </div>
           <button onClick={refreshBalances} disabled={loadingBalance}
             className="flex items-center gap-2 text-sm text-primary hover:underline disabled:opacity-50">
             <RefreshCw className={`w-4 h-4 ${loadingBalance ? "animate-spin" : ""}`} /> Refresh Balances
@@ -519,19 +598,16 @@ Wallet Balances: MATIC: ${balance?.displayValue} ${balance?.symbol}, USDT: ${usd
             {
               icon: Wallet,
               label: "MATIC Balance",
-              value: balance
-                ? `${parseFloat(balance.displayValue).toFixed(4)} ${balance.symbol}`
-                : loadingBalance
-                  ? "Fetching..."
-                  : "0",
+              value: walletView === "smart"
+                ? (balance ? `${parseFloat(balance.displayValue).toFixed(4)} ${balance.symbol}` : (loadingBalance ? "Fetching..." : "0"))
+                : (eoaMatic ? `${parseFloat(eoaMatic).toFixed(4)} MATIC` : (loadingBalance ? "Fetching..." : "0")),
             },
             {
               icon: Wallet,
               label: "USDT Balance",
-              value:
-                usdtBalance !== null
-                  ? `${usdtBalance} USDT`
-                  : "Fetching...",
+              value: walletView === "smart"
+                ? (usdtBalance !== null ? `${usdtBalance} USDT` : "Fetching...")
+                : (eoaUsdt !== null ? `${eoaUsdt} USDT` : "Fetching..."),
             },
           ].map((stat, i) => (
             <motion.div

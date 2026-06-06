@@ -49,7 +49,9 @@ export function ChatDashboard({ currentUserRole }: ChatDashboardProps) {
                 if (chatIdParam) {
                     setSelectedChatId(chatIdParam);
                 } else if (userChats.length > 0) {
-                    setSelectedChatId(userChats[0].job_id);
+                    if (typeof window !== "undefined" && window.innerWidth >= 768) {
+                        setSelectedChatId(userChats[0].job_id);
+                    }
                 }
             }
         };

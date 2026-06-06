@@ -15,7 +15,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useActiveAccount } from "thirdweb/react";
+import { useActiveAccount, useActiveWallet } from "thirdweb/react";
 import { getContract, readContract } from "thirdweb";
 import { getWalletBalance } from "thirdweb/wallets";
 import { polygonAmoy } from "thirdweb/chains";
@@ -50,11 +50,24 @@ const JOB_STATUS_LABEL: Record<number, string> = {
 export default function FreelancerHome() {
   const router = useRouter();
   const account = useActiveAccount();
+  const activeWallet = useActiveWallet();
   const { setChatContext } = useChatContext();
+
+  const [eoaAddress, setEoaAddress] = useState<string | null>(null);
+  const [walletView, setWalletView] = useState<"smart" | "eoa">("eoa");
 
   const [balance, setBalance] = useState<{ displayValue: string; symbol: string } | null>(null);
   const [usdtBalance, setUsdtBalance] = useState<string | null>(null);
+  const [eoaMatic, setEoaMatic] = useState<string | null>(null);
+  const [eoaUsdt, setEoaUsdt] = useState<string | null>(null);
   const [loadingBalance, setLoadingBalance] = useState(false);
+
+  useEffect(() => {
+    try {
+      const pa = (activeWallet as any)?.getAdminAccount?.();
+      if (pa?.address) setEoaAddress(pa.address);
+    } catch {}
+  }, [activeWallet]);
 
   const [profile, setProfile] = useState<any>(null);
   const [stats, setStats] = useState({
@@ -134,6 +147,29 @@ export default function FreelancerHome() {
 
       const formatted = Number(usdtRaw as bigint) / 10 ** Number(decimals);
       setUsdtBalance(formatted.toFixed(2));
+
+      // Fetch EOA Balances
+      if (eoaAddress) {
+        try {
+          const eoaMaticRes = await getWalletBalance({
+            client,
+            chain: polygonAmoy,
+            address: eoaAddress,
+          });
+          setEoaMatic(eoaMaticRes.displayValue);
+
+          const eoaUsdtRaw = await readContract({
+            contract: usdt,
+            method: "function balanceOf(address) view returns (uint256)",
+            params: [eoaAddress],
+          });
+          const eoaFormatted = Number(eoaUsdtRaw as bigint) / 10 ** Number(decimals);
+          setEoaUsdt(eoaFormatted.toFixed(2));
+        } catch (err) {
+          console.error("EOA Balance fetch failed:", err);
+        }
+      }
+
     } catch (err) {
       console.error("Balance fetch failed:", err);
     } finally {
@@ -145,7 +181,7 @@ export default function FreelancerHome() {
   useEffect(() => {
     if (!account?.address) return;
     fetchBalance();
-  }, [account?.address]);
+  }, [account?.address, eoaAddress]);
 
   // ===== 2) Fetch Profile Data (FreelancerProfile) =====
   const loadProfile = async (addr: string) => {
@@ -585,6 +621,20 @@ Hired (Active) Jobs: ${hiredJobs.length}
           </div>
 
           {/* Balances */}
+          <div className="flex bg-black/20 p-1 rounded-lg mb-2">
+            <button
+              onClick={() => setWalletView("eoa")}
+              className={`flex-1 text-xs py-1.5 rounded-md font-medium transition-colors ${walletView === "eoa" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+            >
+              Personal (EOA)
+            </button>
+            <button
+              onClick={() => setWalletView("smart")}
+              className={`flex-1 text-xs py-1.5 rounded-md font-medium transition-colors ${walletView === "smart" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+            >
+              Smart Wallet
+            </button>
+          </div>
           <div className="grid grid-cols-2 gap-2 mb-3">
             <div className="rounded-xl bg-black/25 p-3">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">MATIC</p>
@@ -592,7 +642,9 @@ Hired (Active) Jobs: ${hiredJobs.length}
                 <div className="h-5 w-14 bg-white/10 rounded animate-pulse" />
               ) : (
                 <p className="text-sm font-bold text-primary truncate">
-                  {balance ? parseFloat(balance.displayValue).toFixed(3) : "0"}
+                  {walletView === "smart"
+                    ? (balance ? parseFloat(balance.displayValue).toFixed(3) : "0")
+                    : (eoaMatic ? parseFloat(eoaMatic).toFixed(3) : "0")}
                 </p>
               )}
             </div>
@@ -601,9 +653,19 @@ Hired (Active) Jobs: ${hiredJobs.length}
               {loadingBalance ? (
                 <div className="h-5 w-14 bg-white/10 rounded animate-pulse" />
               ) : (
-                <p className="text-sm font-bold text-primary truncate">{usdtBalance ?? "0"} USDT</p>
+                <p className="text-sm font-bold text-primary truncate">
+                  {walletView === "smart" ? (usdtBalance ?? "0") : (eoaUsdt ?? "0")} USDT
+                </p>
               )}
             </div>
+          </div>
+          <div className="mb-3">
+            <button
+              onClick={() => router.push("/freelancer/wallet")}
+              className="w-full text-xs py-2 rounded-xl border border-border bg-black/20 text-muted-foreground hover:text-primary transition"
+            >
+              Transfer funds between EOA and Smart Wallet &rarr;
+            </button>
           </div>
 
           {/* Actions */}
@@ -744,20 +806,43 @@ Hired (Active) Jobs: ${hiredJobs.length}
         {loadingBalance ? (
           <p className="text-foreground-secondary">Fetching balance…</p>
         ) : (
-          <div className="flex gap-8">
-            <div>
-              <p className="text-sm text-foreground-secondary">MATIC</p>
-              <p className="text-2xl font-bold text-primary">
-                {balance ? `${parseFloat(balance.displayValue).toFixed(4)} ${balance.symbol}` : "0"}
-              </p>
+          <div className="flex flex-col gap-4">
+            <div className="flex bg-black/20 p-1 rounded-lg w-fit">
+              <button
+                onClick={() => setWalletView("eoa")}
+                className={`px-4 text-xs py-1.5 rounded-md font-medium transition-colors ${walletView === "eoa" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+              >
+                Personal (EOA)
+              </button>
+              <button
+                onClick={() => setWalletView("smart")}
+                className={`px-4 text-xs py-1.5 rounded-md font-medium transition-colors ${walletView === "smart" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+              >
+                Smart Wallet
+              </button>
             </div>
-            <div>
-              <p className="text-sm text-foreground-secondary">USDT</p>
-              <p className="text-2xl font-bold text-primary">
-                {usdtBalance !== null ? `${usdtBalance} USDT` : "0"}
-              </p>
-            </div>
-            <div className="ml-auto flex flex-col justify-end">
+            <div className="flex gap-8">
+              <div>
+                <p className="text-sm text-foreground-secondary">MATIC</p>
+                <p className="text-2xl font-bold text-primary">
+                  {walletView === "smart"
+                    ? (balance ? `${parseFloat(balance.displayValue).toFixed(4)} ${balance.symbol}` : "0")
+                    : (eoaMatic ? `${parseFloat(eoaMatic).toFixed(4)} MATIC` : "0")}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-foreground-secondary">USDT</p>
+                <p className="text-2xl font-bold text-primary">
+                  {walletView === "smart" ? (usdtBalance ?? "0") : (eoaUsdt ?? "0")} USDT
+                </p>
+              </div>
+              <div className="ml-auto flex flex-col justify-end gap-2">
+                <button
+                  onClick={() => router.push("/freelancer/wallet")}
+                  className="px-4 py-2 rounded-lg border border-border hover:bg-surface-secondary text-foreground-secondary transition text-sm flex items-center justify-center"
+                >
+                  Transfer funds between EOA and Smart Wallet &rarr;
+                </button>
               <button
                 onClick={requestTestTokens}
                 disabled={faucetLoading}

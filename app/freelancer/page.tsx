@@ -49,7 +49,7 @@ const JOB_STATUS_LABEL: Record<number, string> = {
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
-const isRealAddress = (address?: string | null) => {
+const isRealAddress = (address?: string | null): address is string => {
   return Boolean(address && address !== ZERO_ADDRESS);
 };
 

@@ -66,6 +66,18 @@ export const getJobIdFromProjectChatId = (jobId: string) => (
   isProjectChatId(jobId) ? jobId.slice("project-".length) : jobId
 );
 
+export const getCompanyChatId = (companyId: string | number | bigint) => `company-${String(companyId)}`;
+
+export const isCompanyChatId = (jobId: string) => jobId.startsWith("company-");
+
+export const getCompanyIdFromChatId = (jobId: string) => (
+  isCompanyChatId(jobId) ? jobId.slice("company-".length) : jobId
+);
+
+export const getCompanyChatParticipantAddress = (companyId: string | number | bigint) => (
+  `company-group-${String(companyId)}`
+);
+
 export const getDirectChatId = (clientAddress: string, freelancerAddress: string) => (
   `direct-${clientAddress}-${freelancerAddress}`
 );
@@ -391,6 +403,15 @@ export const initiateChat = (jobId: string, freelancerAddress: string, clientAdd
   });
 };
 
+export const initiateCompanyChat = (companyId: string | number | bigint, founderAddress: string) => {
+  return initiateChat(
+    getCompanyChatId(companyId),
+    getCompanyChatParticipantAddress(companyId),
+    founderAddress,
+    "founder"
+  );
+};
+
 export const sendMessage = (jobId: string, content: string, senderAddress?: string) => {
   if (!client) return Promise.resolve(false);
   let optimisticId: number | null = null;
@@ -427,14 +448,17 @@ export const sendMessage = (jobId: string, content: string, senderAddress?: stri
 
 export const getAllChatsForUser = (
   walletAddress: string,
-  options: { includeProjectChats?: boolean } = {}
+  options: { includeProjectChats?: boolean; includeCompanyChatIds?: string[] } = {}
 ): ChatRoom[] => {
   if (typeof window === 'undefined') return [];
   const rooms = readStorageArray<ChatRoom>("spacetime_rooms");
+  const companyChatIds = new Set(options.includeCompanyChatIds || []);
   return rooms.filter(
-    r => r.client_address.toLowerCase() === walletAddress.toLowerCase() || 
-         r.freelancer_address.toLowerCase() === walletAddress.toLowerCase()
-  ).filter(room => options.includeProjectChats || !isProjectChatId(room.job_id));
+    r => r.client_address.toLowerCase() === walletAddress.toLowerCase() ||
+         r.freelancer_address.toLowerCase() === walletAddress.toLowerCase() ||
+         companyChatIds.has(r.job_id)
+  ).filter(room => options.includeProjectChats || !isProjectChatId(room.job_id))
+    .filter(room => companyChatIds.has(room.job_id) || !isCompanyChatId(room.job_id));
 };
 
 export const getChatRoomById = (jobId: string): ChatRoom | undefined => {

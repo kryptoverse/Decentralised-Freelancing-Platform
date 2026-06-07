@@ -2,8 +2,12 @@
 
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { getContract, readContract } from "thirdweb";
 import { useActiveAccount } from "thirdweb/react";
-import { getAllChatsForUser, getCachedMessages, getJobIdFromProjectChatId, initSpacetimeDB, isProjectChatId, refreshSpacetimeDB, type ChatRoom } from "@/lib/spacetimedb";
+import { CHAIN } from "@/lib/chains";
+import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
+import { client as thirdwebClient } from "@/lib/thirdweb-client";
+import { getAllChatsForUser, getCachedMessages, getCompanyChatId, getCompanyIdFromChatId, getJobIdFromProjectChatId, initSpacetimeDB, isCompanyChatId, isProjectChatId, refreshSpacetimeDB, type ChatRoom } from "@/lib/spacetimedb";
 import { toast } from "sonner";
 import { MessageCircle } from "lucide-react";
 
@@ -15,20 +19,59 @@ export function GlobalChatListener() {
     const myRooms = useRef<Map<string, ChatRoom>>(new Map());
     const processedMessages = useRef<Set<number>>(new Set());
     const readyForNotifications = useRef(false);
+    const companyChatIds = useRef<Set<string>>(new Set());
 
     useEffect(() => {
         if (!account) return;
 
         const client = initSpacetimeDB();
 
-        const refreshMyRooms = () => {
-            getAllChatsForUser(account.address, { includeProjectChats: true }).forEach(room => {
+        const refreshCompanyChatIds = async () => {
+            const nextIds = new Set<string>();
+
+            try {
+                const companyRegistry = getContract({
+                    client: thirdwebClient,
+                    chain: CHAIN,
+                    address: DEPLOYED_CONTRACTS.addresses.CompanyRegistry as `0x${string}`,
+                });
+                const founderCompanyId = await readContract({
+                    contract: companyRegistry,
+                    method: "function ownerToCompanyId(address) view returns (uint256)",
+                    params: [account.address],
+                }).catch(() => 0n) as bigint;
+                if (founderCompanyId > 0n) nextIds.add(getCompanyChatId(founderCompanyId));
+            } catch {}
+
+            try {
+                const investorRegistry = getContract({
+                    client: thirdwebClient,
+                    chain: CHAIN,
+                    address: DEPLOYED_CONTRACTS.addresses.InvestorRegistry as `0x${string}`,
+                });
+                const companyIds = await readContract({
+                    contract: investorRegistry,
+                    method: "function getPortfolio(address) view returns (uint256[])",
+                    params: [account.address],
+                }).catch(() => []) as bigint[];
+                companyIds.forEach((companyId) => nextIds.add(getCompanyChatId(companyId)));
+            } catch {}
+
+            companyChatIds.current = nextIds;
+        };
+
+        const refreshMyRooms = async () => {
+            await refreshCompanyChatIds();
+            getAllChatsForUser(account.address, {
+                includeProjectChats: true,
+                includeCompanyChatIds: Array.from(companyChatIds.current),
+            }).forEach(room => {
                 myRooms.current.set(room.job_id, room);
             });
         };
 
-        const markExistingMessagesSeen = () => {
-            refreshMyRooms();
+        const markExistingMessagesSeen = async () => {
+            await refreshMyRooms();
             getCachedMessages().forEach(message => {
                 if (myRooms.current.has(message.job_id)) {
                     processedMessages.current.add(message.id);
@@ -45,17 +88,19 @@ export function GlobalChatListener() {
             refreshSpacetimeDB().then(markExistingMessagesSeen);
         };
 
-        const onRoomInsert = (row: any) => {
+        const onRoomInsert = async (row: any) => {
+            await refreshCompanyChatIds();
             if (
                 row.client_address.toLowerCase() === account.address.toLowerCase() ||
-                row.freelancer_address.toLowerCase() === account.address.toLowerCase()
+                row.freelancer_address.toLowerCase() === account.address.toLowerCase() ||
+                companyChatIds.current.has(row.job_id)
             ) {
                 myRooms.current.set(row.job_id, row);
             }
         };
 
-        const onMessageInsert = (msg: any) => {
-            refreshMyRooms();
+        const onMessageInsert = async (msg: any) => {
+            await refreshMyRooms();
             const room = myRooms.current.get(msg.job_id);
 
             // Is this message in one of our rooms?
@@ -71,18 +116,24 @@ export function GlobalChatListener() {
                     // Are we NOT already looking at this chat?
                     const activeChatId = new URLSearchParams(window.location.search).get("chatId");
                     const projectJobId = isProjectChatId(msg.job_id) ? getJobIdFromProjectChatId(msg.job_id) : null;
+                    const companyId = isCompanyChatId(msg.job_id) ? getCompanyIdFromChatId(msg.job_id) : null;
                     const isViewingProjectChat = projectJobId
                         ? window.location.pathname === `/client/jobs/${projectJobId}` || window.location.pathname === `/freelancer/jobs/${projectJobId}`
                         : false;
-                    const isViewingChat = window.location.pathname === `/chat/${msg.job_id}` || activeChatId === msg.job_id || isViewingProjectChat;
+                    const isViewingCompanyChat = companyId
+                        ? activeChatId === msg.job_id || new URLSearchParams(window.location.search).get("tab") === "chat"
+                        : false;
+                    const isViewingChat = window.location.pathname === `/chat/${msg.job_id}` || activeChatId === msg.job_id || isViewingProjectChat || isViewingCompanyChat;
                     
                     if (!isViewingChat) {
                         const isClientViewer = room.client_address.toLowerCase() === account.address.toLowerCase();
                         const chatPath = projectJobId
                             ? (isClientViewer ? `/client/jobs/${projectJobId}` : `/freelancer/jobs/${projectJobId}`)
+                            : companyId
+                                ? (isClientViewer ? `/founder?tab=chat&chatId=${msg.job_id}` : `/investor?tab=chat&chatId=${msg.job_id}`)
                             : (isClientViewer ? `/client/chat?chatId=${msg.job_id}` : `/freelancer/chat?chatId=${msg.job_id}`);
 
-                        toast(projectJobId ? "New project message received" : "New message received", {
+                        toast(companyId ? "New company chat message" : projectJobId ? "New project message received" : "New message received", {
                             description: msg.content.length > 50 ? msg.content.substring(0, 50) + "..." : msg.content,
                             icon: <MessageCircle className="w-4 h-4 text-primary" />,
                             action: {
@@ -102,13 +153,16 @@ export function GlobalChatListener() {
         const offConnect = client.onConnect(onConnect);
         const offRoomInsert = client.on("ChatRoom", "insert", onRoomInsert);
         const offMessageInsert = client.on("Message", "insert", onMessageInsert);
-        window.addEventListener("spacetime_update", refreshMyRooms);
+        const handleSpacetimeUpdate = () => {
+            void refreshMyRooms();
+        };
+        window.addEventListener("spacetime_update", handleSpacetimeUpdate);
 
         // Auto connect if not connected
         client.connect();
 
         return () => {
-            window.removeEventListener("spacetime_update", refreshMyRooms);
+            window.removeEventListener("spacetime_update", handleSpacetimeUpdate);
             offConnect();
             offRoomInsert();
             offMessageInsert();

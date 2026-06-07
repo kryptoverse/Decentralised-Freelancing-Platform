@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Building2, Rocket, Settings, Wallet, RefreshCw,
   TrendingUp, CircleDollarSign, Loader2, AlertCircle,
   CheckCircle2, X, ExternalLink, Users, BarChart3,
   PieChart, DollarSign, Coins, Activity, User, Copy, ChevronDown,
-  Landmark, ArrowDownToLine, ArrowUpFromLine, Clock, Shield, Receipt, Info
+  Landmark, ArrowDownToLine, ArrowUpFromLine, Clock, Shield, Receipt, Info, MessageSquare
 } from "lucide-react";
 
 import {
@@ -23,6 +23,8 @@ import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { useIPFSUpload } from "@/hooks/useIPFSUpload";
 import { useChatContext } from "@/components/chat/ChatContext";
+import { SpacetimeChat } from "@/components/chat/SpacetimeChat";
+import { getCompanyChatId, getCompanyChatParticipantAddress } from "@/lib/spacetimedb";
 
 // --- Types ---
 
@@ -118,7 +120,7 @@ function copyToClipboard(text: string) {
   navigator.clipboard.writeText(text);
 }
 
-type TabId = "home" | "round" | "vault" | "investors";
+type TabId = "home" | "round" | "vault" | "investors" | "chat";
 // --- Modals ---
 
 function StartRoundModal({
@@ -518,6 +520,7 @@ export default function FounderDashboard() {
   const account = useActiveAccount();
   const activeWallet = useActiveWallet();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [company, setCompany] = useState<CompanyDetails | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
@@ -581,6 +584,12 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
   const [transferDirection, setTransferDirection] = useState<"EOA_TO_SW" | "SW_TO_EOA">("EOA_TO_SW");
   const [transferLoading, setTransferLoading] = useState(false);
   const [isFirstLoad, setIsFirstLoad] = useState(true);
+
+  useEffect(() => {
+    if (searchParams.get("tab") === "chat") {
+      setActiveTab("chat");
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (!activeWallet) return;
@@ -1079,6 +1088,7 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
     { id: "home", label: "Overview", icon: BarChart3 },
     { id: "round", label: "Round", icon: CircleDollarSign },
     { id: "investors", label: "Investors", icon: Users },
+    { id: "chat", label: "Chat", icon: MessageSquare },
     { id: "vault", label: "Vault", icon: Landmark },
   ];
   // --- RENDER ---
@@ -1459,6 +1469,20 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
                   <p className="text-sm text-muted-foreground max-w-sm mx-auto">Start a funding round to attract investors and distribute equity.</p>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ========== COMPANY GROUP CHAT TAB ========== */}
+          {activeTab === "chat" && (
+            <div className="bg-surface border border-border rounded-[1.5rem] md:rounded-[2rem] overflow-hidden shadow-sm h-[calc(100dvh-15rem)] min-h-[560px]">
+              <SpacetimeChat
+                jobId={getCompanyChatId(company.id)}
+                clientAddress={company.owner}
+                freelancerAddress={getCompanyChatParticipantAddress(company.id)}
+                currentUserRole="founder"
+                title={`${company.meta?.name || `Company #${company.id.toString()}`} Group Chat`}
+                ensureRoom
+              />
             </div>
           )}
 

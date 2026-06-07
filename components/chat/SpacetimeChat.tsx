@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useActiveAccount } from "thirdweb/react";
-import { getChatRoomById, getMessagesForChat, initSpacetimeDB, initiateChat, refreshSpacetimeDB, registerUser, sendMessage, type Message } from "@/lib/spacetimedb";
+import { getChatRoomById, getMessagesForChat, initSpacetimeDB, initiateChat, isCompanyChatId, refreshSpacetimeDB, registerUser, sendMessage, type Message } from "@/lib/spacetimedb";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -19,7 +19,7 @@ interface SpacetimeChatProps {
     jobId: string;
     clientAddress: string;
     freelancerAddress: string;
-    currentUserRole: "client" | "freelancer" | "admin";
+    currentUserRole: "client" | "freelancer" | "founder" | "investor" | "admin";
     title?: string;
     ensureRoom?: boolean;
     disabled?: boolean;
@@ -64,7 +64,7 @@ export function SpacetimeChat({
             const displayName = "User " + account.address.slice(0, 4); // In memory URI simulation
             registerUser(account.address, displayName, currentUserRole);
             
-            // Direct chats start from the client. Project chats opt in so both parties can open the job page safely.
+            // Direct chats start from the client. Project/company chats opt in so participants can open safely.
             if (currentUserRole === "client" || ensureRoom) {
                 initiateChat(jobId, freelancerAddress, clientAddress, ensureRoom ? "client" : currentUserRole);
             }
@@ -140,9 +140,12 @@ export function SpacetimeChat({
                             const isClient = msg.sender_address.toLowerCase() === clientAddress.toLowerCase();
                             const isFreelancer = msg.sender_address.toLowerCase() === freelancerAddress.toLowerCase();
                             
-                            let senderLabel = "Admin";
-                            if (isClient) senderLabel = "Client";
-                            if (isFreelancer) senderLabel = "Freelancer";
+                            const isCompanyRoom = isCompanyChatId(jobId);
+                            let senderLabel = isCompanyRoom ? "Member" : "Admin";
+                            if (isCompanyRoom && isClient) senderLabel = "Founder";
+                            if (!isCompanyRoom && isClient) senderLabel = "Client";
+                            if (!isCompanyRoom && isFreelancer) senderLabel = "Freelancer";
+                            if (isCompanyRoom && !isClient) senderLabel = "Investor";
 
                             return (
                                 <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>

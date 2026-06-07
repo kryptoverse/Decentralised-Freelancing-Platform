@@ -753,13 +753,12 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
         };
         const ds: DistributorStatus = { totalDeposited: distStatus[0], totalClaimed: distStatus[1], balance: distStatus[2] };
 
-        // Fetch investors asynchronously later to not block rendering
-        let investors: InvestorData[] = [];
-        
         // Asynchronously fetch investor details in the background
         const fetchInvestors = async () => {
           try {
             const sharesBoughtEvent = prepareEvent({ signature: "event SharesBought(uint256 indexed roundId, address indexed buyer, uint256 usdtPaid, uint256 sharesReceived)" });
+            const investmentRecordedEvent = prepareEvent({ signature: "event CompanyInvestmentRecorded(address indexed investor, uint256 indexed companyId, uint256 amount)" });
+            const invRegistryC = getContract({ client, chain: CHAIN, address: DEPLOYED_CONTRACTS.addresses.InvestorRegistry as any });
             
             // Try fetching events - Insight API requires fromBlock > 0
             let events: any[] = [];
@@ -784,7 +783,24 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
               }
             });
 
-            const invRegistryC = getContract({ client, chain: CHAIN, address: DEPLOYED_CONTRACTS.addresses.InvestorRegistry as any });
+            try {
+              const registryEvents = await getContractEvents({
+                contract: invRegistryC,
+                events: [investmentRecordedEvent],
+                fromBlock: BigInt(1),
+              });
+              registryEvents.forEach((ev: any) => {
+                const eventCompanyId = ev.args?.companyId;
+                const investor = ev.args?.investor;
+                if (investor && eventCompanyId !== undefined && BigInt(eventCompanyId) === found.id) {
+                  uniqueBuyers.set(investor.toLowerCase(), true);
+                }
+              });
+              console.log("[INVESTORS] Found registry investment events:", registryEvents.length);
+            } catch (registryErr) {
+              console.warn("[INVESTORS] Registry event query failed:", registryErr);
+            }
+
             const buyerAddresses = Array.from(uniqueBuyers.keys());
 
             // Batch fetch all investor data
@@ -823,9 +839,6 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
             console.error("Failed to fetch investors in background:", e);
           }
         };
-
-        // Fire and forget
-        fetchInvestors();
 
         // Fetch Job Budgets for 60% rule
         let jobBudgetSum = BigInt(0);
@@ -899,7 +912,18 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
           }
         } catch (e) { console.error("Failed to fetch job budgets:", e); }
 
-        setAnalytics({ tokenSupply: totalSupply, sharesSold, vaultStatus: vs, distributorStatus: ds, vaultBalance, investors, jobBudgetSum });
+        setAnalytics(prev => ({
+          tokenSupply,
+          sharesSold,
+          vaultStatus: vs,
+          distributorStatus: ds,
+          vaultBalance,
+          investors: prev?.investors ?? [],
+          jobBudgetSum,
+        }));
+
+        // Fire and forget after base analytics exists, so investor data cannot be dropped.
+        fetchInvestors();
       }
     } catch (err) { console.error(err); } finally { setLoading(false); setRefreshing(false); setIsFirstLoad(false); }
   }, [account, eoaAddress]);

@@ -926,10 +926,7 @@ Hired (Active) Jobs: ${hiredJobs.length}
             <RefreshCw className={`w-5 h-5 text-primary ${loadingBalance ? "animate-spin" : ""}`} />
           </button>
         </div>
-        {loadingBalance ? (
-          <p className="text-foreground-secondary">Fetching balance…</p>
-        ) : (
-          <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4">
             <div className="flex bg-black/20 p-1 rounded-lg w-fit overflow-x-auto">
               <button
                 onClick={() => setWalletView("eoa")}
@@ -1003,7 +1000,6 @@ Hired (Active) Jobs: ${hiredJobs.length}
             </div>
           </div>
           </div>
-        )}
       </motion.div>
 
       {/* ================================

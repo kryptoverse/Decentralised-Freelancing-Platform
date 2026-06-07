@@ -4,19 +4,16 @@ import { useEffect, useState, useCallback } from "react";
 import { getContract, readContract, prepareContractCall, sendTransaction } from "thirdweb";
 import { smartWallet } from "thirdweb/wallets";
 import { useActiveAccount, useActiveWallet } from "thirdweb/react";
-import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
     Loader2, TrendingUp, DollarSign, RefreshCw, CheckCircle2,
-    AlertCircle, Clock, Gift, RotateCcw, Building2, ExternalLink, MessageSquare
+    AlertCircle, Clock, Gift, RotateCcw, Building2, ExternalLink
 } from "lucide-react";
 import { client } from "@/lib/thirdweb-client";
 import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { CompanyPreviewModal } from "@/components/investor/CompanyPreviewModal";
 import { useChatContext } from "@/components/chat/ChatContext";
-import { SpacetimeChat } from "@/components/chat/SpacetimeChat";
-import { getCompanyChatId, getCompanyChatParticipantAddress } from "@/lib/spacetimedb";
 
 /* ─── Types ─────────────────────────────────────────────── */
 interface MyInvestment {
@@ -67,13 +64,11 @@ const getGatewayUrl = (uri: string) => {
 export default function InvestorPortfolioPage() {
     const account = useActiveAccount();
     const activeWallet = useActiveWallet();
-    const searchParams = useSearchParams();
     const { setChatContext } = useChatContext();
 
-    const [activeTab, setActiveTab] = useState<"jobs" | "companies" | "chat">("jobs");
+    const [activeTab, setActiveTab] = useState<"jobs" | "companies">("jobs");
     const [jobInvestments, setJobInvestments] = useState<MyInvestment[]>([]);
     const [companyInvestments, setCompanyInvestments] = useState<MyCompanyInvestment[]>([]);
-    const [selectedCompanyChatId, setSelectedCompanyChatId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [txLoading, setTxLoading] = useState<string | null>(null);
@@ -234,14 +229,6 @@ export default function InvestorPortfolioPage() {
 
     useEffect(() => { setLoading(true); fetchInvestments().finally(() => setLoading(false)); }, [fetchInvestments]);
 
-    useEffect(() => {
-        if (searchParams.get("tab") === "chat") {
-            setActiveTab("chat");
-            const chatId = searchParams.get("chatId");
-            if (chatId) setSelectedCompanyChatId(chatId);
-        }
-    }, [searchParams]);
-
     async function refresh() { setRefreshing(true); await fetchInvestments(); setRefreshing(false); }
 
     async function doClaim(addr: string, method: "function claimInvestor()" | "function claimRefund()") {
@@ -386,13 +373,6 @@ Company Shares Owned: ${companyInvestments.length}`;
                 >
                     Company Shares ({companyInvestments.length})
                 </button>
-                <button
-                    onClick={() => setActiveTab("chat")}
-                    className={`px-4 sm:px-6 py-2.5 sm:py-3 font-medium text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === "chat" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
-                >
-                    <MessageSquare className="w-4 h-4" />
-                    Company Chat
-                </button>
             </div>
 
             {/* Investment List */}
@@ -400,93 +380,6 @@ Company Shares Owned: ${companyInvestments.length}`;
                 <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
             ) : !account ? (
                 <div className="text-center py-20 text-muted-foreground">Connect your wallet to view your portfolio.</div>
-            ) : activeTab === "chat" ? (
-                companyInvestments.length === 0 ? (
-                    <div className="text-center py-20 space-y-3">
-                        <MessageSquare className="w-12 h-12 text-muted-foreground mx-auto" />
-                        <p className="text-muted-foreground">Buy company shares to join that company group chat.</p>
-                        <a href="/investor/companies" className="text-primary text-sm hover:underline">Find a company →</a>
-                    </div>
-                ) : (
-                    <div className="flex h-[calc(100dvh-16rem)] min-h-[560px] bg-surface border border-border rounded-2xl overflow-hidden shadow-sm">
-                        <div className="w-full md:w-80 border-r border-border bg-surface-secondary flex flex-col">
-                            <div className="p-4 border-b border-border">
-                                <h2 className="text-lg font-bold flex items-center gap-2">
-                                    <MessageSquare className="w-5 h-5 text-primary" />
-                                    Company Chats
-                                </h2>
-                            </div>
-                            <div className="flex-1 overflow-y-auto">
-                                {companyInvestments.map((company) => {
-                                    const chatId = getCompanyChatId(company.companyId);
-                                    const active = selectedCompanyChatId === chatId;
-                                    return (
-                                        <button
-                                            key={chatId}
-                                            onClick={() => setSelectedCompanyChatId(chatId)}
-                                            className={`w-full text-left p-4 border-b border-border/50 hover:bg-muted/50 transition-colors flex gap-3 items-center ${active ? "bg-muted/80 border-l-4 border-l-primary" : "border-l-4 border-l-transparent"}`}
-                                        >
-                                            <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 overflow-hidden">
-                                                {getGatewayUrl(company.meta?.image) ? (
-                                                    <img src={getGatewayUrl(company.meta.image)} alt="" className="w-full h-full object-cover" />
-                                                ) : (
-                                                    <Building2 className="w-5 h-5 text-primary" />
-                                                )}
-                                            </div>
-                                            <div className="min-w-0">
-                                                <p className="font-semibold text-sm truncate">{company.meta?.name || `Company #${company.companyId.toString()}`}</p>
-                                                <p className="text-xs text-muted-foreground truncate">{company.sector}</p>
-                                            </div>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                        <div className="hidden md:flex flex-1 min-w-0">
-                            {(() => {
-                                const selectedCompany = companyInvestments.find((company) => getCompanyChatId(company.companyId) === selectedCompanyChatId) || companyInvestments[0];
-                                return (
-                                    <div className="flex-1 min-h-0">
-                                        <SpacetimeChat
-                                            jobId={getCompanyChatId(selectedCompany.companyId)}
-                                            clientAddress={selectedCompany.owner}
-                                            freelancerAddress={getCompanyChatParticipantAddress(selectedCompany.companyId)}
-                                            currentUserRole="investor"
-                                            title={`${selectedCompany.meta?.name || `Company #${selectedCompany.companyId.toString()}`} Group Chat`}
-                                            ensureRoom
-                                        />
-                                    </div>
-                                );
-                            })()}
-                        </div>
-                        <div className="md:hidden fixed inset-x-0 bottom-0 top-24 z-50 bg-background p-3" hidden={!selectedCompanyChatId}>
-                            {(() => {
-                                const selectedCompany = companyInvestments.find((company) => getCompanyChatId(company.companyId) === selectedCompanyChatId);
-                                if (!selectedCompany) return null;
-                                return (
-                                    <div className="h-full flex flex-col">
-                                        <button
-                                            onClick={() => setSelectedCompanyChatId(null)}
-                                            className="mb-3 text-left text-sm text-muted-foreground"
-                                        >
-                                            ← Back to company chats
-                                        </button>
-                                        <div className="flex-1 min-h-0">
-                                            <SpacetimeChat
-                                                jobId={getCompanyChatId(selectedCompany.companyId)}
-                                                clientAddress={selectedCompany.owner}
-                                                freelancerAddress={getCompanyChatParticipantAddress(selectedCompany.companyId)}
-                                                currentUserRole="investor"
-                                                title={`${selectedCompany.meta?.name || `Company #${selectedCompany.companyId.toString()}`} Group Chat`}
-                                                ensureRoom
-                                            />
-                                        </div>
-                                    </div>
-                                );
-                            })()}
-                        </div>
-                    </div>
-                )
             ) : activeTab === "jobs" ? (
                 jobInvestments.length === 0 ? (
                     <div className="text-center py-20 space-y-3">

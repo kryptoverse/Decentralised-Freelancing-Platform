@@ -30,7 +30,8 @@ export default function InvestorLayout({
   // ✅ Detect active tab by route
   useEffect(() => {
     const current = pathname.toLowerCase();
-    if (current.includes("/explore")) setActiveTab("explore");
+    if (current.includes("/chat")) setActiveTab("chat");
+    else if (current.includes("/explore")) setActiveTab("explore");
     else if (current.includes("/profile")) setActiveTab("profile");
     else if (current.includes("/wallet")) setActiveTab("wallet");
     else setActiveTab("portfolio");

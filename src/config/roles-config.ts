@@ -151,6 +151,13 @@ export const ROLE_TABS: Record<
       path: "/founder/wallet",
       match: "startsWith",
     },
+    {
+      id: "chat",
+      label: "Chat",
+      icon: MessageSquare,
+      path: "/founder/chat",
+      match: "startsWith",
+    },
   ],
 
   investor: [
@@ -187,6 +194,13 @@ export const ROLE_TABS: Record<
       label: "Wallet",
       icon: Wallet,
       path: "/investor/wallet",
+      match: "startsWith",
+    },
+    {
+      id: "chat",
+      label: "Chat",
+      icon: MessageSquare,
+      path: "/investor/chat",
       match: "startsWith",
     },
   ],

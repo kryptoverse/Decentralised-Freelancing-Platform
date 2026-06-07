@@ -121,7 +121,7 @@ export function GlobalChatListener() {
                         ? window.location.pathname === `/client/jobs/${projectJobId}` || window.location.pathname === `/freelancer/jobs/${projectJobId}`
                         : false;
                     const isViewingCompanyChat = companyId
-                        ? activeChatId === msg.job_id || new URLSearchParams(window.location.search).get("tab") === "chat"
+                        ? (window.location.pathname === "/founder/chat" || window.location.pathname === "/investor/chat") && (!activeChatId || activeChatId === msg.job_id)
                         : false;
                     const isViewingChat = window.location.pathname === `/chat/${msg.job_id}` || activeChatId === msg.job_id || isViewingProjectChat || isViewingCompanyChat;
                     
@@ -130,7 +130,7 @@ export function GlobalChatListener() {
                         const chatPath = projectJobId
                             ? (isClientViewer ? `/client/jobs/${projectJobId}` : `/freelancer/jobs/${projectJobId}`)
                             : companyId
-                                ? (isClientViewer ? `/founder?tab=chat&chatId=${msg.job_id}` : `/investor?tab=chat&chatId=${msg.job_id}`)
+                                ? (isClientViewer ? `/founder/chat?chatId=${msg.job_id}` : `/investor/chat?chatId=${msg.job_id}`)
                             : (isClientViewer ? `/client/chat?chatId=${msg.job_id}` : `/freelancer/chat?chatId=${msg.job_id}`);
 
                         toast(companyId ? "New company chat message" : projectJobId ? "New project message received" : "New message received", {

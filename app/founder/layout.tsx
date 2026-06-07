@@ -39,6 +39,7 @@ export default function FounderLayout({
   // ✅ Detect active tab by path
   useEffect(() => {
     if (pathname.includes("/projects")) setActiveTab("projects");
+    else if (pathname.toLowerCase().includes("/chat")) setActiveTab("chat");
     else if (pathname.toLowerCase().includes("/profile")) setActiveTab("profile");
     else if (pathname.toLowerCase().includes("/wallet")) setActiveTab("wallet");
     else if (pathname.includes("/Company/")) setActiveTab("home"); // Keep home active or define new

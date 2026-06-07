@@ -162,8 +162,8 @@ export function CompanyGroupChatDashboard({ role }: { role: "founder" | "investo
   const showMobileChat = mobileChatOpen;
 
   return (
-    <div className="flex h-[calc(100dvh-8rem)] min-h-[560px] bg-surface border border-border rounded-2xl overflow-hidden shadow-sm">
-      <div className={`w-full md:w-80 border-r border-border bg-surface-secondary flex flex-col ${showMobileChat ? "hidden md:flex" : "flex"}`}>
+    <div className="flex md:grid md:grid-cols-[20rem_minmax(0,1fr)] h-[calc(100dvh-8rem)] min-h-[560px] bg-surface border border-border rounded-2xl overflow-hidden shadow-sm">
+      <div className={`w-full md:w-auto border-r border-border bg-surface-secondary flex flex-col ${showMobileChat ? "hidden md:flex" : "flex"}`}>
         <div className="p-4 border-b border-border">
           <h2 className="text-lg font-bold flex items-center gap-2">
             <MessageSquare className="w-5 h-5 text-primary" />

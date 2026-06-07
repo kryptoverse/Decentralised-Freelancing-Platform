@@ -913,7 +913,7 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
         } catch (e) { console.error("Failed to fetch job budgets:", e); }
 
         setAnalytics(prev => ({
-          tokenSupply,
+          tokenSupply: totalSupply,
           sharesSold,
           vaultStatus: vs,
           distributorStatus: ds,

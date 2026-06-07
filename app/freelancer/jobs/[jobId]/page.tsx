@@ -192,12 +192,8 @@ export default function FreelancerJobDetailPage() {
   const activeWallet = useActiveWallet();
   const { uploadMetadata } = useIPFSUpload();
 
-
-
-  if (!account)
-    return <main className="p-8">Connecting to your smart wallet...</main>;
-
   const walletAccount = account;
+  const walletAddress = account?.address ?? "";
 
   // Non-sponsored execution account (same smart wallet, no paymaster)
   async function getExecutionAccount() {
@@ -254,7 +250,7 @@ export default function FreelancerJobDetailPage() {
      LOAD DATA
   ============================================================ */
   useEffect(() => {
-    if (!walletAccount.address || jobId === 0n) return;
+    if (!walletAddress || jobId === 0n) return;
 
     async function load() {
       try {
@@ -268,7 +264,7 @@ export default function FreelancerJobDetailPage() {
         const profileAddr = await readContract({
           contract: factory,
           method: "function freelancerProfile(address) view returns (address)",
-          params: [walletAccount.address as `0x${string}`],
+          params: [walletAddress as `0x${string}`],
         });
 
         const ZERO = "0x0000000000000000000000000000000000000000";
@@ -377,7 +373,7 @@ export default function FreelancerJobDetailPage() {
             contract: jobBoard,
             method:
               "function getApplicantDetails(uint256,address) view returns (address,uint64,string,uint256,uint64)",
-            params: [jobId, walletAccount.address as `0x${string}`],
+            params: [jobId, walletAddress as `0x${string}`],
           });
 
           const [
@@ -513,7 +509,7 @@ export default function FreelancerJobDetailPage() {
     return () => {
       setChatContext(defaultContext);
     };
-  }, [walletAccount.address, jobId, setChatContext]);
+  }, [walletAddress, jobId, setChatContext]);
 
   /* ============================================================
      AI CONTEXT INJECTION
@@ -866,6 +862,9 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
      RENDER
   ============================================================ */
 
+
+  if (!walletAccount)
+    return <main className="p-8">Connecting to your smart wallet...</main>;
 
   if (loading || !job) {
     return (

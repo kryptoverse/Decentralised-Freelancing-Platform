@@ -213,6 +213,7 @@ export default function FreelancerJobDetailPage() {
   const [description, setDescription] = useState("");
   const [escrowData, setEscrowData] = useState<EscrowData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [isKYCVerified, setIsKYCVerified] = useState<boolean | null>(null);
   const [showKYCModal, setShowKYCModal] = useState(false);
@@ -259,6 +260,7 @@ export default function FreelancerJobDetailPage() {
 
     async function load() {
       try {
+        setLoadError("");
         // First check KYC status
         const factory = getContract({
           client,
@@ -300,21 +302,15 @@ export default function FreelancerJobDetailPage() {
             // If KYC is not verified, show modal and stop loading
             if (!kycStatus) {
               setShowKYCModal(true);
-              setLoading(false);
-              return;
             }
           } catch (e) {
             console.error("KYC check failed:", e);
             setIsKYCVerified(false);
             setShowKYCModal(true);
-            setLoading(false);
-            return;
           }
         } else {
           setIsKYCVerified(false);
           setShowKYCModal(true);
-          setLoading(false);
-          return;
         }
 
         const jobBoard = getContract({
@@ -504,6 +500,7 @@ export default function FreelancerJobDetailPage() {
         }
       } catch (err) {
         console.error(err);
+        setLoadError(err instanceof Error ? err.message : "Could not load this job.");
       } finally {
         setLoading(false);
       }
@@ -871,10 +868,37 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
   if (!walletAccount)
     return <main className="p-8">Connecting to your smart wallet...</main>;
 
-  if (loading || !job) {
+  if (loading) {
     return (
       <main className="p-8 flex justify-center">
         <Loader2 className="w-6 h-6 animate-spin" />
+      </main>
+    );
+  }
+
+  if (!job) {
+    return (
+      <main className="p-8">
+        <div className="max-w-2xl mx-auto p-6 border rounded-2xl bg-surface space-y-4">
+          <button
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+            onClick={() => router.back()}
+          >
+            <ArrowLeft className="w-4 h-4" /> Back
+          </button>
+          <div>
+            <h1 className="text-xl font-bold mb-2">Job details unavailable</h1>
+            <p className="text-sm text-muted-foreground">
+              {loadError || "This job could not be loaded. Refresh the page or open it again from your jobs list."}
+            </p>
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
+          >
+            Refresh
+          </button>
+        </div>
       </main>
     );
   }

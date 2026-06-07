@@ -384,7 +384,7 @@ function ProposalCard({
                         <Clock className="w-3 h-3" /> Client needs to fund this job to start.
                     </span>
                 )}
-                {isActive && (
+                {(isActive || isArchived) && (
                     <Button variant="secondary" size="sm" asChild>
                         <a href={`/freelancer/jobs/${offer.jobId}`}>View Job Details</a>
                     </Button>

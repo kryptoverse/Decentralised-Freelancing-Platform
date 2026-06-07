@@ -203,6 +203,11 @@ export default function FreelancerJobDetailPage() {
     return await smartWallet({ chain: CHAIN, sponsorGas: false }).connect({ client, personalAccount: personal });
   }
 
+  function requireWalletAccount() {
+    if (!account) throw new Error("Wallet not connected");
+    return account;
+  }
+
   const [job, setJob] = useState<Job | null>(null);
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [description, setDescription] = useState("");
@@ -549,7 +554,7 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
   ============================================================ */
 
   async function uploadJSON(data: any, suffix = "delivery"): Promise<string> {
-    const walletPrefix = walletAccount.address
+    const walletPrefix = walletAddress
       .replace("0x", "")
       .toLowerCase()
       .slice(0, 10);
@@ -576,7 +581,7 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
         params: [],
       });
 
-      await sendTransaction({ account: walletAccount, transaction: tx });
+      await sendTransaction({ account: requireWalletAccount(), transaction: tx });
 
       setCancelModal(false);
       router.refresh();
@@ -605,7 +610,7 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
         params: [],
       });
 
-      await sendTransaction({ account: walletAccount, transaction: tx });
+      await sendTransaction({ account: requireWalletAccount(), transaction: tx });
 
       router.refresh();
     } catch (err) {
@@ -644,7 +649,7 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
         params: [metadataUri],
       });
 
-      await sendTransaction({ account: walletAccount, transaction: tx });
+      await sendTransaction({ account: requireWalletAccount(), transaction: tx });
 
       setDeliverModal(false);
       
@@ -696,7 +701,7 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
         params: [uri],
       });
 
-      const transaction = await sendTransaction({ account: walletAccount, transaction: tx });
+      const transaction = await sendTransaction({ account: requireWalletAccount(), transaction: tx });
 
       setDisputeModal(false);
       router.refresh();

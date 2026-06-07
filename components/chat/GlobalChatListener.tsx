@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getContract, readContract } from "thirdweb";
-import { useActiveAccount, useActiveWallet } from "thirdweb/react";
+import { useActiveAccount } from "thirdweb/react";
 import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { client as thirdwebClient } from "@/lib/thirdweb-client";
@@ -13,7 +13,6 @@ import { MessageCircle } from "lucide-react";
 
 export function GlobalChatListener() {
     const account = useActiveAccount();
-    const activeWallet = useActiveWallet();
     const router = useRouter();
     
     // Use refs to avoid re-binding callbacks and messing up SpacetimeDB listeners
@@ -29,13 +28,6 @@ export function GlobalChatListener() {
 
         const refreshCompanyChatIds = async () => {
             const nextIds = new Set<string>();
-            const ownerAddresses = [account.address];
-            try {
-                const personal = (activeWallet as any)?.getAdminAccount?.();
-                if (personal?.address && personal.address.toLowerCase() !== account.address.toLowerCase()) {
-                    ownerAddresses.push(personal.address);
-                }
-            } catch {}
 
             try {
                 const companyRegistry = getContract({
@@ -43,14 +35,12 @@ export function GlobalChatListener() {
                     chain: CHAIN,
                     address: DEPLOYED_CONTRACTS.addresses.CompanyRegistry as `0x${string}`,
                 });
-                for (const ownerAddress of ownerAddresses) {
-                    const founderCompanyId = await readContract({
-                        contract: companyRegistry,
-                        method: "function ownerToCompanyId(address) view returns (uint256)",
-                        params: [ownerAddress],
-                    }).catch(() => 0n) as bigint;
-                    if (founderCompanyId > 0n) nextIds.add(getCompanyChatId(founderCompanyId));
-                }
+                const founderCompanyId = await readContract({
+                    contract: companyRegistry,
+                    method: "function ownerToCompanyId(address) view returns (uint256)",
+                    params: [account.address],
+                }).catch(() => 0n) as bigint;
+                if (founderCompanyId > 0n) nextIds.add(getCompanyChatId(founderCompanyId));
             } catch {}
 
             try {
@@ -59,14 +49,12 @@ export function GlobalChatListener() {
                     chain: CHAIN,
                     address: DEPLOYED_CONTRACTS.addresses.InvestorRegistry as `0x${string}`,
                 });
-                for (const ownerAddress of ownerAddresses) {
-                    const companyIds = await readContract({
-                        contract: investorRegistry,
-                        method: "function getPortfolio(address) view returns (uint256[])",
-                        params: [ownerAddress],
-                    }).catch(() => []) as bigint[];
-                    companyIds.forEach((companyId) => nextIds.add(getCompanyChatId(companyId)));
-                }
+                const companyIds = await readContract({
+                    contract: investorRegistry,
+                    method: "function getPortfolio(address) view returns (uint256[])",
+                    params: [account.address],
+                }).catch(() => []) as bigint[];
+                companyIds.forEach((companyId) => nextIds.add(getCompanyChatId(companyId)));
             } catch {}
 
             companyChatIds.current = nextIds;
@@ -181,7 +169,7 @@ export function GlobalChatListener() {
             // Cleanup listeners if the component unmounts
             // Not strictly disconnecting here because other components (like SpacetimeChat) might share the instance
         };
-    }, [account, activeWallet, router]);
+    }, [account, router]);
 
     return null; // This is a background listener component
 }

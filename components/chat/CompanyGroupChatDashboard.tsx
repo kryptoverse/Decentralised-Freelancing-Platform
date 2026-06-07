@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getContract, readContract } from "thirdweb";
-import { useActiveAccount, useActiveWallet } from "thirdweb/react";
+import { useActiveAccount } from "thirdweb/react";
 import { Building2, Loader2, MessageSquare } from "lucide-react";
 import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
@@ -29,12 +29,10 @@ const getGatewayUrl = (uri?: string) => {
 
 export function CompanyGroupChatDashboard({ role }: { role: "founder" | "investor" }) {
   const account = useActiveAccount();
-  const activeWallet = useActiveWallet();
   const searchParams = useSearchParams();
   const requestedChatId = searchParams.get("chatId");
   const [companies, setCompanies] = useState<CompanyChatItem[]>([]);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
-  const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const loadCompanies = useCallback(async () => {
@@ -53,40 +51,25 @@ export function CompanyGroupChatDashboard({ role }: { role: "founder" | "investo
       });
 
       let companyIds: bigint[] = [];
-      const ownerAddresses = [account.address];
-      try {
-        const personal = (activeWallet as any)?.getAdminAccount?.();
-        if (personal?.address && personal.address.toLowerCase() !== account.address.toLowerCase()) {
-          ownerAddresses.push(personal.address);
-        }
-      } catch {}
 
       if (role === "founder") {
-        for (const ownerAddress of ownerAddresses) {
-          const companyId = await readContract({
-            contract: companyRegistry,
-            method: "function ownerToCompanyId(address) view returns (uint256)",
-            params: [ownerAddress],
-          }).catch(() => 0n) as bigint;
-          if (companyId > 0n) {
-            companyIds = [companyId];
-            break;
-          }
-        }
+        const companyId = await readContract({
+          contract: companyRegistry,
+          method: "function ownerToCompanyId(address) view returns (uint256)",
+          params: [account.address],
+        }).catch(() => 0n) as bigint;
+        if (companyId > 0n) companyIds = [companyId];
       } else {
         const investorRegistry = getContract({
           client,
           chain: CHAIN,
           address: DEPLOYED_CONTRACTS.addresses.InvestorRegistry as `0x${string}`,
         });
-        const portfolioResults = await Promise.all(ownerAddresses.map((ownerAddress) => (
-          readContract({
-            contract: investorRegistry,
-            method: "function getPortfolio(address) view returns (uint256[])",
-            params: [ownerAddress],
-          }).catch(() => []) as Promise<bigint[]>
-        )));
-        companyIds = Array.from(new Set(portfolioResults.flat().map((companyId) => companyId.toString()))).map((companyId) => BigInt(companyId));
+        companyIds = await readContract({
+          contract: investorRegistry,
+          method: "function getPortfolio(address) view returns (uint256[])",
+          params: [account.address],
+        }).catch(() => []) as bigint[];
       }
 
       const loaded = await Promise.all(companyIds.map(async (companyId) => {
@@ -122,18 +105,18 @@ export function CompanyGroupChatDashboard({ role }: { role: "founder" | "investo
         if (requestedChatId && nextCompanies.some((company) => getCompanyChatId(company.id) === requestedChatId)) {
           return requestedChatId;
         }
+        if (role === "founder" && nextCompanies[0]) {
+          return getCompanyChatId(nextCompanies[0].id);
+        }
         if (current && nextCompanies.some((company) => getCompanyChatId(company.id) === current)) {
           return current;
-        }
-        if (nextCompanies[0]) {
-          return getCompanyChatId(nextCompanies[0].id);
         }
         return null;
       });
     } finally {
       setLoading(false);
     }
-  }, [account, activeWallet, role, requestedChatId]);
+  }, [account, role, requestedChatId]);
 
   useEffect(() => {
     loadCompanies();
@@ -159,11 +142,11 @@ export function CompanyGroupChatDashboard({ role }: { role: "founder" | "investo
   }
 
   const selectedCompany = companies.find((company) => getCompanyChatId(company.id) === selectedChatId) || companies[0];
-  const showMobileChat = mobileChatOpen;
+  const showMobileChat = Boolean(selectedChatId);
 
   return (
-    <div className="flex md:grid md:grid-cols-[20rem_minmax(0,1fr)] h-[calc(100dvh-8rem)] min-h-[560px] bg-surface border border-border rounded-2xl overflow-hidden shadow-sm">
-      <div className={`w-full md:w-auto border-r border-border bg-surface-secondary flex flex-col ${showMobileChat ? "hidden md:flex" : "flex"}`}>
+    <div className="flex h-[calc(100dvh-8rem)] min-h-[560px] bg-surface border border-border rounded-2xl overflow-hidden shadow-sm">
+      <div className={`w-full md:w-80 border-r border-border bg-surface-secondary flex-col ${showMobileChat ? "hidden md:flex" : "flex"}`}>
         <div className="p-4 border-b border-border">
           <h2 className="text-lg font-bold flex items-center gap-2">
             <MessageSquare className="w-5 h-5 text-primary" />
@@ -178,10 +161,7 @@ export function CompanyGroupChatDashboard({ role }: { role: "founder" | "investo
             return (
               <button
                 key={chatId}
-                onClick={() => {
-                  setSelectedChatId(chatId);
-                  setMobileChatOpen(true);
-                }}
+                onClick={() => setSelectedChatId(chatId)}
                 className={`w-full text-left p-4 border-b border-border/50 hover:bg-muted/50 transition-colors flex gap-3 items-center ${active ? "bg-muted/80 border-l-4 border-l-primary" : "border-l-4 border-l-transparent"}`}
               >
                 <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 overflow-hidden">
@@ -200,7 +180,7 @@ export function CompanyGroupChatDashboard({ role }: { role: "founder" | "investo
       <div className={`flex-1 min-w-0 ${showMobileChat ? "flex" : "hidden md:flex"}`}>
         <div className="flex-1 min-h-0 flex flex-col">
           <button
-            onClick={() => setMobileChatOpen(false)}
+            onClick={() => setSelectedChatId(null)}
             className="md:hidden p-3 text-left text-sm text-muted-foreground border-b border-border"
           >
             Back to company chats

@@ -20,7 +20,6 @@ export function ChatDashboard({ currentUserRole }: ChatDashboardProps) {
     const [chats, setChats] = useState<ChatRoom[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
-    const [mobileChatOpen, setMobileChatOpen] = useState(false);
     const [lastMessages, setLastMessages] = useState<Record<string, Message>>({});
 
     useEffect(() => {
@@ -44,16 +43,17 @@ export function ChatDashboard({ currentUserRole }: ChatDashboardProps) {
             
             setLastMessages(messagesMap);
 
-            const chatIdParam = searchParams.get("chatId");
-            setSelectedChatId((current) => {
-                if (chatIdParam && userChats.some((chat) => chat.job_id === chatIdParam)) {
-                    return chatIdParam;
+            // Check if there is a specific chat requested in the URL initially
+            if (!selectedChatId) {
+                const chatIdParam = searchParams.get("chatId");
+                if (chatIdParam) {
+                    setSelectedChatId(chatIdParam);
+                } else if (userChats.length > 0) {
+                    if (typeof window !== "undefined" && window.innerWidth >= 768) {
+                        setSelectedChatId(userChats[0].job_id);
+                    }
                 }
-                if (current && userChats.some((chat) => chat.job_id === current)) {
-                    return current;
-                }
-                return userChats[0]?.job_id || null;
-            });
+            }
         };
 
         loadData();
@@ -68,7 +68,7 @@ export function ChatDashboard({ currentUserRole }: ChatDashboardProps) {
             window.removeEventListener("spacetime_update", handleUpdate);
             window.removeEventListener("storage", handleUpdate);
         };
-    }, [account, searchParams]);
+    }, [account, searchParams, selectedChatId]);
 
     const filteredChats = chats.filter(chat => {
         const otherParty = currentUserRole === "client" ? chat.freelancer_address : chat.client_address;
@@ -82,10 +82,10 @@ export function ChatDashboard({ currentUserRole }: ChatDashboardProps) {
     const selectedChat = chats.find(c => c.job_id === selectedChatId);
 
     return (
-        <div className="flex md:grid md:grid-cols-[20rem_minmax(0,1fr)] h-[calc(100dvh-7rem)] min-h-[520px] mb-4 bg-surface border border-border rounded-xl overflow-hidden shadow-lg mx-auto w-full max-w-7xl">
+        <div className="flex h-[calc(100dvh-7rem)] min-h-[520px] mb-4 bg-surface border border-border rounded-xl overflow-hidden shadow-lg mx-auto w-full max-w-7xl">
             
             {/* LEFT SIDEBAR - CHAT LIST */}
-            <div className={`w-full md:w-auto border-r border-border bg-surface-secondary flex flex-col ${mobileChatOpen ? 'hidden md:flex' : 'flex'}`}>
+            <div className={`w-full md:w-80 border-r border-border bg-surface-secondary flex-col ${selectedChatId ? 'hidden md:flex' : 'flex'}`}>
                 <div className="p-4 border-b border-border">
                     <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
                         <MessageSquare className="w-5 h-5 text-primary" /> 
@@ -119,7 +119,6 @@ export function ChatDashboard({ currentUserRole }: ChatDashboardProps) {
                                         key={chat.job_id}
                                         onClick={() => {
                                             setSelectedChatId(chat.job_id);
-                                            setMobileChatOpen(true);
                                             // Optionally update URL so it can be shared
                                             router.push(`/${currentUserRole}/chat?chatId=${chat.job_id}`);
                                         }}
@@ -152,14 +151,14 @@ export function ChatDashboard({ currentUserRole }: ChatDashboardProps) {
             </div>
 
             {/* RIGHT PANE - ACTIVE CHAT */}
-            <div className={`min-w-0 flex-1 flex-col bg-background ${mobileChatOpen ? 'flex' : 'hidden md:flex'}`}>
+            <div className={`min-w-0 flex-1 flex-col bg-background ${!selectedChatId ? 'hidden md:flex' : 'flex'}`}>
                 {selectedChatId && selectedChat ? (
                     <div className="flex-1 min-h-0 flex flex-col h-full relative">
                         {/* Mobile back button header */}
                         <div className="md:hidden p-3 border-b border-border flex items-center bg-surface-secondary">
                             <button 
                                 onClick={() => {
-                                    setMobileChatOpen(false);
+                                    setSelectedChatId(null);
                                     router.push(`/${currentUserRole}/chat`);
                                 }}
                                 className="mr-3 text-muted-foreground hover:text-foreground"

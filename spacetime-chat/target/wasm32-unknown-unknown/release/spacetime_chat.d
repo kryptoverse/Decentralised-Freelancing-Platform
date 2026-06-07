@@ -1,0 +1,1 @@
+D:\WEB_Development\Vercel\ deployed\ project\FinalYearProject\spacetime-chat\target\wasm32-unknown-unknown\release\spacetime_chat.wasm: D:\WEB_Development\Vercel\ deployed\ project\FinalYearProject\spacetime-chat\src\lib.rs

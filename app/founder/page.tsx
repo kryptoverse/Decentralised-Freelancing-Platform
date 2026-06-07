@@ -162,16 +162,16 @@ function StartRoundModal({
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
         <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
           className="bg-surface/80 backdrop-blur-xl border border-white/10 rounded-[2rem] p-8 w-full max-w-md shadow-2xl relative overflow-hidden">
-          
+
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-blue-500"></div>
-          
+
           <button onClick={onClose} className="absolute top-6 right-6 text-muted-foreground hover:text-white transition-colors bg-white/5 w-8 h-8 rounded-full flex items-center justify-center border border-white/10">
             <X className="w-4 h-4" />
           </button>
-          
+
           <div className="mb-8">
             <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30 text-primary mb-4 shadow-[0_0_20px_rgba(var(--primary-rgb),0.3)]">
-               <Rocket className="w-6 h-6" />
+              <Rocket className="w-6 h-6" />
             </div>
             <h2 className="text-2xl font-black text-white">Initialize Round</h2>
             <p className="text-sm text-muted-foreground mt-1">Configure parameters for capital injection.</p>
@@ -188,19 +188,19 @@ function StartRoundModal({
               <input type="number" step="0.000001" required value={price} onChange={e => setPrice(e.target.value)}
                 className="w-full bg-background/50 border border-white/10 rounded-xl px-4 py-3.5 outline-none focus:border-primary/50 focus:bg-background transition-all text-white font-mono" placeholder="e.g. 0.05" />
             </div>
-            
+
             <div className="p-4 bg-primary/5 rounded-2xl border border-primary/20">
               <div className="flex justify-between items-center mb-1">
-                 <span className="text-[10px] font-bold uppercase tracking-widest text-primary">Target Capital Raise</span>
-                 <CircleDollarSign className="w-4 h-4 text-primary" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-primary">Target Capital Raise</span>
+                <CircleDollarSign className="w-4 h-4 text-primary" />
               </div>
               <p className="font-black text-2xl text-foreground font-mono">
-                 {shares && price ? (parseFloat(shares) * parseFloat(price)).toLocaleString(undefined, { maximumFractionDigits: 2 }) : "0.00"} <span className="text-sm text-muted-foreground font-sans">USDT</span>
+                {shares && price ? (parseFloat(shares) * parseFloat(price)).toLocaleString(undefined, { maximumFractionDigits: 2 }) : "0.00"} <span className="text-sm text-muted-foreground font-sans">USDT</span>
               </p>
             </div>
-            
+
             {errorMsg && <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3 text-red-500 text-sm font-medium"><AlertCircle className="w-5 h-5 shrink-0" /><p>{errorMsg}</p></div>}
-            
+
             <button type="submit" disabled={loading}
               className="w-full py-4 bg-primary text-white font-black text-sm uppercase tracking-[0.2em] rounded-xl hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:scale-100 flex justify-center items-center gap-2 shadow-[0_0_30px_rgba(var(--primary-rgb),0.3)]">
               {loading ? <><Loader2 className="w-5 h-5 animate-spin" /> PROVISIONING...</> : "OPEN FOR PUBLIC FUNDING"}
@@ -219,7 +219,7 @@ function InvestorPopup({ investor, onClose }: { investor: InvestorData; onClose:
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4" onClick={onClose}>
         <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
           className="bg-surface/80 backdrop-blur-xl border border-white/10 rounded-[2rem] p-8 w-full max-w-sm shadow-2xl relative overflow-hidden" onClick={e => e.stopPropagation()}>
-          
+
           <div className="absolute top-0 right-0 p-8 opacity-5">
             <Users className="w-32 h-32 text-primary" />
           </div>
@@ -227,10 +227,10 @@ function InvestorPopup({ investor, onClose }: { investor: InvestorData; onClose:
           <button onClick={onClose} className="absolute top-6 right-6 text-muted-foreground hover:text-white transition-colors bg-white/5 w-8 h-8 rounded-full flex items-center justify-center border border-white/10 z-10">
             <X className="w-4 h-4" />
           </button>
-          
+
           <div className="flex flex-col items-center text-center gap-4 mb-8 relative z-10">
             <div className="w-20 h-20 rounded-[1.5rem] bg-gradient-to-br from-emerald-500/20 to-teal-600/20 flex items-center justify-center text-emerald-400 font-bold text-3xl border border-emerald-500/30 shadow-[0_0_30px_rgba(16,185,129,0.2)]">
-               {investor.meta?.name ? investor.meta.name.substring(0,2).toUpperCase() : <User className="w-8 h-8" />}
+              {investor.meta?.name ? investor.meta.name.substring(0, 2).toUpperCase() : <User className="w-8 h-8" />}
             </div>
             <div>
               <h3 className="font-black text-xl text-white mb-1">{investor.meta?.name || "Anonymous Entity"}</h3>
@@ -239,13 +239,13 @@ function InvestorPopup({ investor, onClose }: { investor: InvestorData; onClose:
               </button>
             </div>
           </div>
-          
+
           {investor.meta?.bio && (
             <div className="mb-6 bg-white/5 border border-white/5 rounded-2xl p-4 relative z-10">
               <p className="text-xs text-muted-foreground leading-relaxed text-center">{investor.meta.bio}</p>
             </div>
           )}
-          
+
           <div className="space-y-3 relative z-10">
             <div className="flex justify-between items-center p-4 bg-background/50 rounded-2xl border border-white/5">
               <span className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground flex items-center gap-2"><PieChart className="w-3 h-3" /> Shares Held</span>
@@ -261,8 +261,8 @@ function InvestorPopup({ investor, onClose }: { investor: InvestorData; onClose:
             </div>
           </div>
           <a href={`https://amoy.polygonscan.com/address/${investor.address}`} target="_blank" rel="noopener noreferrer"
-             className="mt-6 w-full flex items-center justify-center gap-2 text-[10px] uppercase font-bold tracking-widest text-primary hover:text-white transition-colors py-2 group">
-             View on Block Explorer <ExternalLink className="w-3 h-3 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+            className="mt-6 w-full flex items-center justify-center gap-2 text-[10px] uppercase font-bold tracking-widest text-primary hover:text-white transition-colors py-2 group">
+            View on Block Explorer <ExternalLink className="w-3 h-3 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
           </a>
         </motion.div>
       </motion.div>
@@ -276,8 +276,8 @@ function CreateCompanyForm({ account, onSuccess, buildExecAccount }: { account: 
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
-  const [form, setForm] = useState({ 
-    name: "", symbol: "", description: "", sector: "Technology", 
+  const [form, setForm] = useState({
+    name: "", symbol: "", description: "", sector: "Technology",
     website: "", twitter: "", ceoName: "", services: ""
   });
   const [productsList, setProductsList] = useState([{ name: "", link: "" }]);
@@ -297,7 +297,7 @@ function CreateCompanyForm({ account, onSuccess, buildExecAccount }: { account: 
     if (!account) return;
     try {
       setLoading(true); setErrorMsg(""); setSuccessMsg("");
-      
+
       if (!logoFile) throw new Error("Entity Symbol / Logo is required.");
       if (!tokenImageFile) throw new Error("Token Asset Logo is required.");
       if (form.description.length < 50) throw new Error("Corporate Charter must be at least 50 characters.");
@@ -305,25 +305,25 @@ function CreateCompanyForm({ account, onSuccess, buildExecAccount }: { account: 
 
       const execAccount = buildExecAccount();
       setSuccessMsg("Uploading entity visual assets to IPFS...");
-      
+
       const logoUrl = await uploadFile(logoFile, { name: `${form.name} Logo` });
       setSuccessMsg("Uploading token visual assets to IPFS...");
       const tokenImageUrl = await uploadFile(tokenImageFile, { name: `${form.name} Token Logo` });
 
       setSuccessMsg("Generating and pinning corporate metadata...");
-      const metadata = { 
-        name: form.name, 
-        description: form.description, 
-        website: form.website, 
+      const metadata = {
+        name: form.name,
+        description: form.description,
+        website: form.website,
         twitter: form.twitter,
         ceoName: form.ceoName,
         services: form.services,
         productsList: productsList.filter(p => p.name.trim() !== ""),
         image: logoUrl,
         tokenImage: tokenImageUrl,
-        createdVia: "WORQS_DApp" 
+        createdVia: "WORQS_DApp"
       };
-      
+
       const uri = await uploadMetadata(metadata, { name: form.name });
       const registry = getContract({ client, chain: CHAIN, address: DEPLOYED_CONTRACTS.addresses.CompanyRegistry as any });
       const tx = prepareContractCall({
@@ -341,7 +341,7 @@ function CreateCompanyForm({ account, onSuccess, buildExecAccount }: { account: 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
       className="max-w-2xl mx-auto bg-surface backdrop-blur-xl rounded-[2.5rem] p-8 md:p-12 border border-border shadow-2xl relative overflow-hidden">
-      
+
       {/* Decorative gradient overlay */}
       <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-bl from-primary/10 via-transparent to-transparent pointer-events-none"></div>
 
@@ -354,156 +354,156 @@ function CreateCompanyForm({ account, onSuccess, buildExecAccount }: { account: 
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6 relative z-10">
-        
+
         {/* Core Identity */}
         <div className="bg-surface-secondary rounded-[2rem] p-6 md:p-8 border border-border space-y-6">
-           <h3 className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground mb-4 flex items-center gap-2">
-             <span className="w-2 h-2 rounded-full bg-primary/50"></span> Brand Identity
-           </h3>
-           
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-             <div className="space-y-2">
-               <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Entity Name *</label>
-               <input required type="text" value={form.name} onChange={e => setForm({...form, name: e.target.value})}
-                 className="w-full bg-background border border-border rounded-xl px-4 py-3.5 text-sm focus:border-primary/50 outline-none transition-all text-foreground placeholder:text-muted-foreground/40" placeholder="e.g. Acme Innovations" />
-             </div>
-             <div className="space-y-2">
-               <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Asset Ticker *</label>
-               <input required type="text" value={form.symbol} onChange={e => setForm({...form, symbol: e.target.value})} maxLength={6}
-                 className="w-full bg-background border border-border rounded-xl px-4 py-3.5 text-sm focus:border-primary/50 outline-none transition-all text-foreground uppercase placeholder:text-muted-foreground/40" placeholder="e.g. ACME" />
-             </div>
-           </div>
+          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground mb-4 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary/50"></span> Brand Identity
+          </h3>
 
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-               <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Entity Symbol / Logo *</label>
-                  <div className="relative border-2 border-dashed border-border rounded-[1.5rem] p-6 text-center hover:bg-surface hover:border-primary/30 transition-all group overflow-hidden bg-background">
-                    <input type="file" accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={e => {
-                      if (e.target.files && e.target.files[0]) setLogoFile(e.target.files[0]);
-                    }} />
-                    
-                    {logoFile ? (
-                      <div className="flex flex-col items-center gap-2">
-                        <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center border border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
-                          <CheckCircle2 className="w-6 h-6" />
-                        </div>
-                        <p className="text-sm text-emerald-600 dark:text-emerald-400 font-bold truncate max-w-[200px]">{logoFile.name}</p>
-                        <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">Click to change</p>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center gap-3 opacity-70 group-hover:opacity-100 transition-opacity">
-                        <div className="w-12 h-12 rounded-xl bg-surface-secondary flex items-center justify-center border border-border text-muted-foreground">
-                          <Building2 className="w-5 h-5" />
-                        </div>
-                        <div>
-                           <p className="text-sm font-bold text-foreground mb-1">Select an image file</p>
-                           <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">PNG, JPG (Max 5MB)</p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-               </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Entity Name *</label>
+              <input required type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
+                className="w-full bg-background border border-border rounded-xl px-4 py-3.5 text-sm focus:border-primary/50 outline-none transition-all text-foreground placeholder:text-muted-foreground/40" placeholder="e.g. Acme Innovations" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Asset Ticker *</label>
+              <input required type="text" value={form.symbol} onChange={e => setForm({ ...form, symbol: e.target.value })} maxLength={6}
+                className="w-full bg-background border border-border rounded-xl px-4 py-3.5 text-sm focus:border-primary/50 outline-none transition-all text-foreground uppercase placeholder:text-muted-foreground/40" placeholder="e.g. ACME" />
+            </div>
+          </div>
 
-               <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Token Asset Logo *</label>
-                  <div className="relative border-2 border-dashed border-border rounded-[1.5rem] p-6 text-center hover:bg-surface hover:border-primary/30 transition-all group overflow-hidden bg-background">
-                    <input type="file" accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={e => {
-                      if (e.target.files && e.target.files[0]) setTokenImageFile(e.target.files[0]);
-                    }} />
-                    
-                    {tokenImageFile ? (
-                      <div className="flex flex-col items-center gap-2">
-                        <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center border border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
-                          <CheckCircle2 className="w-6 h-6" />
-                        </div>
-                        <p className="text-sm text-emerald-600 dark:text-emerald-400 font-bold truncate max-w-[200px]">{tokenImageFile.name}</p>
-                        <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">Click to change</p>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center gap-3 opacity-70 group-hover:opacity-100 transition-opacity">
-                        <div className="w-12 h-12 rounded-xl bg-surface-secondary flex items-center justify-center border border-border text-muted-foreground">
-                          <CircleDollarSign className="w-5 h-5" />
-                        </div>
-                        <div>
-                           <p className="text-sm font-bold text-foreground mb-1">Select an image file</p>
-                           <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">PNG, JPG (Max 5MB)</p>
-                        </div>
-                      </div>
-                    )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Entity Symbol / Logo *</label>
+              <div className="relative border-2 border-dashed border-border rounded-[1.5rem] p-6 text-center hover:bg-surface hover:border-primary/30 transition-all group overflow-hidden bg-background">
+                <input type="file" accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={e => {
+                  if (e.target.files && e.target.files[0]) setLogoFile(e.target.files[0]);
+                }} />
+
+                {logoFile ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center border border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle2 className="w-6 h-6" />
+                    </div>
+                    <p className="text-sm text-emerald-600 dark:text-emerald-400 font-bold truncate max-w-[200px]">{logoFile.name}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">Click to change</p>
                   </div>
-               </div>
-           </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-3 opacity-70 group-hover:opacity-100 transition-opacity">
+                    <div className="w-12 h-12 rounded-xl bg-surface-secondary flex items-center justify-center border border-border text-muted-foreground">
+                      <Building2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-foreground mb-1">Select an image file</p>
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">PNG, JPG (Max 5MB)</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Token Asset Logo *</label>
+              <div className="relative border-2 border-dashed border-border rounded-[1.5rem] p-6 text-center hover:bg-surface hover:border-primary/30 transition-all group overflow-hidden bg-background">
+                <input type="file" accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={e => {
+                  if (e.target.files && e.target.files[0]) setTokenImageFile(e.target.files[0]);
+                }} />
+
+                {tokenImageFile ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center border border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle2 className="w-6 h-6" />
+                    </div>
+                    <p className="text-sm text-emerald-600 dark:text-emerald-400 font-bold truncate max-w-[200px]">{tokenImageFile.name}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">Click to change</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-3 opacity-70 group-hover:opacity-100 transition-opacity">
+                    <div className="w-12 h-12 rounded-xl bg-surface-secondary flex items-center justify-center border border-border text-muted-foreground">
+                      <CircleDollarSign className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-foreground mb-1">Select an image file</p>
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">PNG, JPG (Max 5MB)</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Operational Profile */}
         <div className="bg-surface-secondary rounded-[2rem] p-6 md:p-8 border border-border space-y-6">
-           <h3 className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground mb-4 flex items-center gap-2">
-             <span className="w-2 h-2 rounded-full bg-emerald-500/50"></span> Operational Profile
-           </h3>
-           
-           <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Corporate Charter / Mission (Min 50 chars) *</label>
-              <textarea required rows={3} minLength={50} value={form.description} onChange={e => setForm({...form, description: e.target.value})}
-                className="w-full bg-background border border-border rounded-xl px-4 py-3.5 text-sm focus:border-primary/50 outline-none transition-all text-foreground resize-none placeholder:text-muted-foreground/40" placeholder="Describe the operational mandate..." />
-           </div>
+          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground mb-4 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500/50"></span> Operational Profile
+          </h3>
 
-           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-             <div className="space-y-2">
-               <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Executive Director *</label>
-               <input required type="text" value={form.ceoName} onChange={e => setForm({...form, ceoName: e.target.value})}
-                 className="w-full bg-background border border-border rounded-xl px-4 py-3.5 text-sm focus:border-primary/50 outline-none transition-all text-foreground placeholder:text-muted-foreground/40" placeholder="e.g. Satoshi" />
-             </div>
-             <div className="space-y-2">
-               <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Primary Sector *</label>
-               <select required value={form.sector} onChange={e => setForm({...form, sector: e.target.value})}
-                 className="w-full bg-background border border-border rounded-xl px-4 py-3.5 text-sm focus:border-primary/50 outline-none appearance-none transition-all text-foreground">
-                 {['Technology','Design','Finance','Web3','Marketing','Writing','Consulting','Other'].map(s => <option key={s} value={s} className="text-foreground">{s}</option>)}
-               </select>
-             </div>
-           </div>
-           
-           <div className="space-y-4 pt-4 border-t border-border">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block mb-2">Flagship Products * (At least 1 required)</label>
-              
-              {productsList.map((prod, i) => (
-                 <div key={i} className="flex flex-col sm:flex-row gap-4 relative bg-background p-4 rounded-[1.5rem] border border-border">
-                    <div className="flex-1 space-y-2">
-                      <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Product Name</label>
-                      <input type="text" value={prod.name} onChange={e => handleProductChange(i, "name", e.target.value)} required={i === 0}
-                        className="w-full bg-surface-secondary border border-border rounded-lg px-3 py-2 text-sm focus:border-primary/50 outline-none transition-all text-foreground placeholder:text-muted-foreground/40" placeholder="e.g. Decentralized Search" />
-                    </div>
-                    <div className="flex-1 space-y-2">
-                      <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Product Gateway (URL)</label>
-                      <input type="url" value={prod.link} onChange={e => handleProductChange(i, "link", e.target.value)}
-                        className="w-full bg-surface-secondary border border-border rounded-lg px-3 py-2 text-sm focus:border-primary/50 outline-none transition-all text-foreground placeholder:text-muted-foreground/40" placeholder="https://..." />
-                    </div>
-                    
-                    {productsList.length > 1 && (
-                      <button type="button" onClick={() => handleRemoveProduct(i)} className="sm:mt-7 mx-auto shrink-0 w-8 h-8 flex items-center justify-center bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-lg transition-colors border border-red-500/20" title="Remove Product">
-                        <X className="w-4 h-4" />
-                      </button>
-                    )}
-                 </div>
-              ))}
-              
-              <button type="button" onClick={handleAddProduct} className="text-xs font-bold uppercase tracking-widest text-primary hover:text-primary/80 transition-colors flex items-center gap-1">
-                 <RefreshCw className="w-3 h-3" /> Add Another Product
-              </button>
-           </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Corporate Charter / Mission (Min 50 chars) *</label>
+            <textarea required rows={3} minLength={50} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
+              className="w-full bg-background border border-border rounded-xl px-4 py-3.5 text-sm focus:border-primary/50 outline-none transition-all text-foreground resize-none placeholder:text-muted-foreground/40" placeholder="Describe the operational mandate..." />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Executive Director *</label>
+              <input required type="text" value={form.ceoName} onChange={e => setForm({ ...form, ceoName: e.target.value })}
+                className="w-full bg-background border border-border rounded-xl px-4 py-3.5 text-sm focus:border-primary/50 outline-none transition-all text-foreground placeholder:text-muted-foreground/40" placeholder="e.g. Satoshi" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Primary Sector *</label>
+              <select required value={form.sector} onChange={e => setForm({ ...form, sector: e.target.value })}
+                className="w-full bg-background border border-border rounded-xl px-4 py-3.5 text-sm focus:border-primary/50 outline-none appearance-none transition-all text-foreground">
+                {['Technology', 'Design', 'Finance', 'Web3', 'Marketing', 'Writing', 'Consulting', 'Other'].map(s => <option key={s} value={s} className="text-foreground">{s}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-4 pt-4 border-t border-border">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block mb-2">Flagship Products * (At least 1 required)</label>
+
+            {productsList.map((prod, i) => (
+              <div key={i} className="flex flex-col sm:flex-row gap-4 relative bg-background p-4 rounded-[1.5rem] border border-border">
+                <div className="flex-1 space-y-2">
+                  <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Product Name</label>
+                  <input type="text" value={prod.name} onChange={e => handleProductChange(i, "name", e.target.value)} required={i === 0}
+                    className="w-full bg-surface-secondary border border-border rounded-lg px-3 py-2 text-sm focus:border-primary/50 outline-none transition-all text-foreground placeholder:text-muted-foreground/40" placeholder="e.g. Decentralized Search" />
+                </div>
+                <div className="flex-1 space-y-2">
+                  <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Product Gateway (URL)</label>
+                  <input type="url" value={prod.link} onChange={e => handleProductChange(i, "link", e.target.value)}
+                    className="w-full bg-surface-secondary border border-border rounded-lg px-3 py-2 text-sm focus:border-primary/50 outline-none transition-all text-foreground placeholder:text-muted-foreground/40" placeholder="https://..." />
+                </div>
+
+                {productsList.length > 1 && (
+                  <button type="button" onClick={() => handleRemoveProduct(i)} className="sm:mt-7 mx-auto shrink-0 w-8 h-8 flex items-center justify-center bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-lg transition-colors border border-red-500/20" title="Remove Product">
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+
+            <button type="button" onClick={handleAddProduct} className="text-xs font-bold uppercase tracking-widest text-primary hover:text-primary/80 transition-colors flex items-center gap-1">
+              <RefreshCw className="w-3 h-3" /> Add Another Product
+            </button>
+          </div>
         </div>
 
         {/* System Warnings */}
         <div className="bg-primary/10 border border-primary/20 rounded-2xl p-5 flex gap-4">
-           <Wallet className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-           <div>
-             <p className="font-bold text-primary text-sm mb-1">Deployment Gas Required</p>
-             <p className="text-foreground text-xs leading-relaxed">Incorporation executes multiple smart contracts onto the Polygon network. Standard fees will be deducted.</p>
-           </div>
+          <Wallet className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+          <div>
+            <p className="font-bold text-primary text-sm mb-1">Deployment Gas Required</p>
+            <p className="text-foreground text-xs leading-relaxed">Incorporation executes multiple smart contracts onto the Polygon network. Standard fees will be deducted.</p>
+          </div>
         </div>
 
         {errorMsg && <div className="bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 rounded-xl p-4 text-sm font-medium flex gap-3 items-center shadow-lg"><AlertCircle className="w-5 h-5 shrink-0" /><p>{errorMsg}</p></div>}
         {successMsg && <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl p-4 text-sm font-medium flex gap-3 items-center shadow-lg"><Loader2 className="w-5 h-5 shrink-0 animate-spin" /><p>{successMsg}</p></div>}
-        
+
         <button type="submit" disabled={loading}
           className="w-full py-5 bg-primary text-primary-foreground font-black text-sm uppercase tracking-[0.2em] rounded-2xl hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-3 shadow-md mt-8">
           {loading ? <><Loader2 className="w-5 h-5 animate-spin" /> EXECUTING PROTOCOL...</> : <><Rocket className="w-5 h-5" /> INITIALIZE CORPORATION</>}
@@ -526,16 +526,16 @@ export default function FounderDashboard() {
   const [activeTab, setActiveTab] = useState<TabId>("home");
   const [selectedInvestor, setSelectedInvestor] = useState<InvestorData | null>(null);
   const [showStartRound, setShowStartRound] = useState(false);
-  
+
   const { setChatContext } = useChatContext();
 
   useEffect(() => {
     if (!company) {
-       setChatContext((prev) => {
-         const base = prev.split('--- CURRENT USER CONTEXT ---')[0].trim();
-         return base + '\n\n--- CURRENT USER CONTEXT ---\nRole: Founder\nStatus: Has not yet incorporated an entity on-chain.';
-       });
-       return;
+      setChatContext((prev) => {
+        const base = prev.split('--- CURRENT USER CONTEXT ---')[0].trim();
+        return base + '\n\n--- CURRENT USER CONTEXT ---\nRole: Founder\nStatus: Has not yet incorporated an entity on-chain.';
+      });
+      return;
     }
     const ctx = `--- CURRENT USER CONTEXT ---
 Role: Founder
@@ -587,7 +587,7 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
     try {
       const pa = (activeWallet as any).getAdminAccount?.();
       if (pa?.address) setEoaAddress(pa.address);
-    } catch {}
+    } catch { }
   }, [activeWallet]);
 
   const getExecutionAccount = () => {
@@ -629,14 +629,14 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
     if (!account) return;
     try {
       const registry = getContract({ client, chain: CHAIN, address: DEPLOYED_CONTRACTS.addresses.CompanyRegistry as any });
-      
+
       // Get EOA address directly if state hasn't updated yet
       let currentEoa = eoaAddress;
       if (!currentEoa && activeWallet) {
         try {
           const pa = (activeWallet as any).getAdminAccount?.();
           if (pa?.address) currentEoa = pa.address;
-        } catch {}
+        } catch { }
       }
 
       // 1. Try to find company by Smart Wallet
@@ -682,7 +682,7 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
         try {
           const r = await fetch(`https://gateway.pinata.cloud/ipfs/${c.metadataURI.replace("ipfs://", "")}`);
           meta = await r.json();
-        } catch {}
+        } catch { }
       }
 
       // Check link status
@@ -705,7 +705,7 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
         const saleC = getContract({ client, chain: CHAIN, address: c.sale as any });
         const r = await readContract({ contract: saleC, method: "function getRoundInfo() view returns (uint256, uint256, uint256, bool)" }) as any;
         roundInfo = { roundId: r[0], pricePerShare: r[1], sharesRemaining: r[2], active: r[3] };
-      } catch {}
+      } catch { }
 
       const found: CompanyDetails = { id: companyId, owner: c.owner, token: c.token, sale: c.sale, vault: c.vault, distributor: c.distributor, metadataURI: c.metadataURI, sector: c.sector, exists: c.exists, meta, round: roundInfo };
 
@@ -772,15 +772,15 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
                 let meta = {};
                 const metadataURI = profileRaw ? (profileRaw[0] || profileRaw?.metadataURI || "") : "";
                 const profileExists = profileRaw ? (profileRaw[1] ?? profileRaw?.exists ?? false) : false;
-                
+
                 if (metadataURI && profileExists) {
                   try {
-                    const ipfsUrl = metadataURI.startsWith("ipfs://") 
+                    const ipfsUrl = metadataURI.startsWith("ipfs://")
                       ? `https://gateway.pinata.cloud/ipfs/${metadataURI.replace("ipfs://", "")}`
                       : metadataURI;
                     const r = await fetch(ipfsUrl);
                     meta = await r.json();
-                  } catch {}
+                  } catch { }
                 }
 
                 return { address: addr, sharesHeld: balance || BigInt(0), totalInvested: stats?.[0] || BigInt(0), totalPayouts: stats?.[1] || BigInt(0), metadataURI, meta } as InvestorData;
@@ -801,25 +801,25 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
         let jobBudgetSum = BigInt(0);
         try {
           const jobBoard = getContract({ client, chain: CHAIN, address: DEPLOYED_CONTRACTS.addresses.JobBoard as any });
-          
+
           // Identify all possible addresses the user might have used as Client OR Freelancer
           const identityAddresses = [account.address.toLowerCase()];
           if (currentEoa) identityAddresses.push(currentEoa.toLowerCase());
-          
+
           // Re-fetch profile address if not in scope (though we updated pAddr scope, safety first)
           let finalPAddr = pAddr;
           if (!finalPAddr) {
             try {
               const factory = getContract({ client, chain: CHAIN, address: DEPLOYED_CONTRACTS.addresses.FreelancerFactory as any });
               finalPAddr = await readContract({ contract: factory, method: "function freelancerProfile(address) view returns (address)", params: [account.address] }) as string;
-            } catch {}
+            } catch { }
           }
           if (finalPAddr && finalPAddr !== "0x0000000000000000000000000000000000000000") identityAddresses.push(finalPAddr.toLowerCase());
 
           // Unique addresses only
           const uniqueIdentities = Array.from(new Set(identityAddresses));
           console.log("[JOBS] Scanning identities:", uniqueIdentities);
-          
+
           const allJobIds: bigint[] = [];
           for (const addr of uniqueIdentities) {
             try {
@@ -829,22 +829,22 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
                 readContract({ contract: jobBoard, method: "function getJobsAppliedBy(address) view returns (uint256[])", params: [addr] }).catch(() => []),
                 readContract({ contract: jobBoard, method: "function getOffersToFreelancer(address) view returns (uint256[])", params: [addr] }).catch(() => [])
               ]) as [bigint[], bigint[], bigint[]];
-              
+
               if (clientJobs) allJobIds.push(...clientJobs);
               if (appliedJobs) allJobIds.push(...appliedJobs);
               if (directOffers) allJobIds.push(...directOffers);
             } catch (e) { console.warn(`Failed to fetch jobs for ${addr}:`, e); }
           }
-          
+
           const uniqueJobIds = Array.from(new Set(allJobIds));
 
           if (uniqueJobIds.length > 0) {
             const jobData = await Promise.all(uniqueJobIds.map(async (id) => {
               try {
-                const res = await readContract({ 
-                  contract: jobBoard, 
-                  method: "function getJob(uint256) view returns (address,string,string,uint256,uint8,address,address,uint64,uint64,uint64,bytes32[],uint256)", 
-                  params: [id] 
+                const res = await readContract({
+                  contract: jobBoard,
+                  method: "function getJob(uint256) view returns (address,string,string,uint256,uint8,address,address,uint64,uint64,uint64,bytes32[],uint256)",
+                  params: [id]
                 }) as any;
 
                 if (res && (Number(res[4]) === 2 || Number(res[4]) === 4)) { // Hired or Completed
@@ -885,15 +885,15 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
     } catch (err) { console.error(err); } finally { setLoading(false); setRefreshing(false); setIsFirstLoad(false); }
   }, [account, eoaAddress]);
 
-  useEffect(() => { 
-    if (account) { 
-      fetchAll(); 
-      fetchBalances(); 
-    } else { 
+  useEffect(() => {
+    if (account) {
+      fetchAll();
+      fetchBalances();
+    } else {
       // If no account, we can't be loading a company
-      setLoading(false); 
-      setIsFirstLoad(false); 
-    } 
+      setLoading(false);
+      setIsFirstLoad(false);
+    }
   }, [account, eoaAddress, fetchAll]);
 
   const handleRefresh = async () => { setRefreshing(true); await Promise.all([fetchAll(), fetchBalances()]); };
@@ -1089,47 +1089,47 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 md:gap-8 pb-4 border-b border-border">
         <div className="space-y-2 md:space-y-4 min-w-0">
           <div className="flex items-center gap-3 md:gap-6">
-             <div className="relative group/logo translate-y-0 md:translate-y-2 shrink-0">
-                <div className="absolute -inset-1 bg-primary/20 rounded-2xl blur-lg group-hover/logo:opacity-100 opacity-50 transition duration-700"></div>
-                <div className="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-xl md:rounded-2xl bg-background border border-border flex items-center justify-center shadow-sm relative overflow-hidden">
-                  {getGatewayUrl(company.meta?.image) ? (
-                    <img src={getGatewayUrl(company.meta.image)} alt={company.meta.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-tr from-primary via-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-base md:text-2xl italic">
-                       {company.meta?.name ? company.meta.name.substring(0, 2).toUpperCase() : "V"}
-                    </div>
-                  )}
-                </div>
-             </div>
-             <div className="space-y-0.5 md:space-y-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-2 md:gap-4">
-                  <h1 className="text-xl sm:text-2xl md:text-4xl lg:text-5xl font-black tracking-tighter text-foreground leading-tight">
-                    {company.meta?.name || `Venture #${company.id.toString()}`}
-                  </h1>
-                  <span className="px-2 py-1 md:px-5 md:py-2 rounded-full bg-primary/10 border border-primary/20 text-primary text-[9px] md:text-[10px] font-black uppercase tracking-[0.15em] md:tracking-[0.2em] shadow-inner shrink-0">
-                    {company.sector}
-                  </span>
-                </div>
+            <div className="relative group/logo translate-y-0 md:translate-y-2 shrink-0">
+              <div className="absolute -inset-1 bg-primary/20 rounded-2xl blur-lg group-hover/logo:opacity-100 opacity-50 transition duration-700"></div>
+              <div className="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-xl md:rounded-2xl bg-background border border-border flex items-center justify-center shadow-sm relative overflow-hidden">
+                {getGatewayUrl(company.meta?.image) ? (
+                  <img src={getGatewayUrl(company.meta.image)} alt={company.meta.name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-tr from-primary via-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-base md:text-2xl italic">
+                    {company.meta?.name ? company.meta.name.substring(0, 2).toUpperCase() : "V"}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="space-y-0.5 md:space-y-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2 md:gap-4">
+                <h1 className="text-xl sm:text-2xl md:text-4xl lg:text-5xl font-black tracking-tighter text-foreground leading-tight">
+                  {company.meta?.name || `Venture #${company.id.toString()}`}
+                </h1>
+                <span className="px-2 py-1 md:px-5 md:py-2 rounded-full bg-primary/10 border border-primary/20 text-primary text-[9px] md:text-[10px] font-black uppercase tracking-[0.15em] md:tracking-[0.2em] shadow-inner shrink-0">
+                  {company.sector}
+                </span>
+              </div>
 
-             </div>
+            </div>
           </div>
         </div>
 
         <div className="flex items-center gap-2 md:gap-4 bg-surface backdrop-blur-3xl p-1.5 md:p-2 rounded-2xl md:rounded-[2.5rem] border border-border shadow-sm self-start md:self-auto">
-           <button 
-             onClick={handleRefresh}
-             disabled={refreshing}
-             className="flex items-center gap-1.5 md:gap-2 px-3 md:px-6 py-2 md:py-3 text-[10px] md:text-[11px] font-black tracking-[0.15em] md:tracking-[0.2em] text-muted-foreground rounded-full hover:bg-surface-secondary hover:text-foreground transition-all active:scale-95 disabled:opacity-50 uppercase"
-           >
-             <RefreshCw className={`w-3 h-3 md:w-3.5 md:h-3.5 ${refreshing ? "animate-spin" : ""}`} />
-             Sync
-           </button>
-           <button onClick={() => setShowStartRound(!showStartRound)} disabled={company.round.active || !isLinked}
-             className="px-4 md:px-8 py-2 md:py-3 bg-primary text-primary-foreground rounded-full font-black text-[10px] md:text-[11px] tracking-[0.15em] md:tracking-[0.2em] uppercase transition-all flex items-center gap-2 md:gap-3 hover:shadow-sm hover:-translate-y-1 active:translate-y-0 disabled:opacity-50 disabled:translate-y-0">
-             <Rocket className="w-3 h-3 md:w-4 md:h-4" />
-             <span className="hidden sm:inline">{!isLinked ? "Link Profile" : company.round.active ? "Round Active" : "Launch Round"}</span>
-             <span className="sm:hidden">{!isLinked ? "Link" : company.round.active ? "Active" : "Launch"}</span>
-           </button>
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 md:gap-2 px-3 md:px-6 py-2 md:py-3 text-[10px] md:text-[11px] font-black tracking-[0.15em] md:tracking-[0.2em] text-muted-foreground rounded-full hover:bg-surface-secondary hover:text-foreground transition-all active:scale-95 disabled:opacity-50 uppercase"
+          >
+            <RefreshCw className={`w-3 h-3 md:w-3.5 md:h-3.5 ${refreshing ? "animate-spin" : ""}`} />
+            Sync
+          </button>
+          <button onClick={() => setShowStartRound(!showStartRound)} disabled={company.round.active || !isLinked}
+            className="px-4 md:px-8 py-2 md:py-3 bg-primary text-primary-foreground rounded-full font-black text-[10px] md:text-[11px] tracking-[0.15em] md:tracking-[0.2em] uppercase transition-all flex items-center gap-2 md:gap-3 hover:shadow-sm hover:-translate-y-1 active:translate-y-0 disabled:opacity-50 disabled:translate-y-0">
+            <Rocket className="w-3 h-3 md:w-4 md:h-4" />
+            <span className="hidden sm:inline">{!isLinked ? "Link Profile" : company.round.active ? "Round Active" : "Launch Round"}</span>
+            <span className="sm:hidden">{!isLinked ? "Link" : company.round.active ? "Active" : "Launch"}</span>
+          </button>
         </div>
       </div>
 
@@ -1147,7 +1147,7 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
                 <p className="text-sm text-amber-500/70 font-medium">Business operations are restricted until your Freelancer Profile is linked to this treasury.</p>
               </div>
             </div>
-            <button onClick={handleLinkWallet} disabled={linkLoading} 
+            <button onClick={handleLinkWallet} disabled={linkLoading}
               className="px-10 py-4 bg-amber-500 text-black font-black text-xs uppercase tracking-[0.2em] rounded-2xl hover:bg-amber-400 transition-all shadow-xl active:scale-95 disabled:opacity-50">
               {linkLoading ? "Syncing..." : "Link Profile Now"}
             </button>
@@ -1163,7 +1163,7 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
             {activeTab === t.id && (
               <motion.div layoutId="nav-glow" className="absolute inset-0 rounded-xl md:rounded-2xl bg-primary/20 blur-xl -z-10" />
             )}
-            <t.icon className={`w-3.5 h-3.5 md:w-4 md:h-4 shrink-0 ${activeTab === t.id ? "text-primary-foreground" : "text-muted-foreground/60"}`} /> 
+            <t.icon className={`w-3.5 h-3.5 md:w-4 md:h-4 shrink-0 ${activeTab === t.id ? "text-primary-foreground" : "text-muted-foreground/60"}`} />
             <span className="hidden xs:inline sm:inline">{t.label}</span>
             {t.id === "investors" && analytics?.investors?.length ? (
               <span className={`text-[8px] md:text-[9px] px-1 md:px-2 py-0.5 rounded-full ${activeTab === t.id ? "bg-background/20 text-primary-foreground" : "bg-primary/20 text-primary"}`}>
@@ -1197,8 +1197,8 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
                       <p className="text-[9px] md:text-xs text-muted-foreground font-medium uppercase tracking-wider leading-tight">{card.label}</p>
                     </div>
                     <div className="flex items-baseline gap-1 md:gap-2">
-                       <p className={`text-base md:text-2xl font-bold font-mono ${card.color}`}>{card.value}</p>
-                       <span className="text-[9px] md:text-xs text-muted-foreground font-medium">{card.suffix}</span>
+                      <p className={`text-base md:text-2xl font-bold font-mono ${card.color}`}>{card.value}</p>
+                      <span className="text-[9px] md:text-xs text-muted-foreground font-medium">{card.suffix}</span>
                     </div>
                   </div>
                 ))}
@@ -1214,22 +1214,22 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
                     </div>
                     <h3 className="text-base md:text-xl font-bold">Ecosystem Analytics</h3>
                   </div>
-                  
+
                   <div className="space-y-3 md:space-y-4 relative z-10">
-                     <div className="bg-surface-secondary/50 rounded-xl md:rounded-2xl p-4 md:p-5 border border-border/50 flex justify-between items-center group hover:bg-surface transition-colors">
-                        <div>
-                           <p className="text-xs text-muted-foreground mb-1">Total Shareholders</p>
-                           <p className="text-xl md:text-2xl font-bold text-foreground">{analytics?.investors?.length || "0"}</p>
-                        </div>
-                        <Users className="w-7 h-7 md:w-8 md:h-8 text-muted-foreground/30 group-hover:text-primary transition-colors" />
-                     </div>
-                     <div className="bg-surface-secondary/50 rounded-xl md:rounded-2xl p-4 md:p-5 border border-border/50 flex justify-between items-center group hover:bg-surface transition-colors">
-                        <div>
-                           <p className="text-xs text-muted-foreground mb-1">Valuation Rate</p>
-                           <p className="text-base md:text-lg font-bold text-emerald-500">Stable</p>
-                        </div>
-                        <Activity className="w-7 h-7 md:w-8 md:h-8 text-muted-foreground/30 group-hover:text-emerald-500 transition-colors" />
-                     </div>
+                    <div className="bg-surface-secondary/50 rounded-xl md:rounded-2xl p-4 md:p-5 border border-border/50 flex justify-between items-center group hover:bg-surface transition-colors">
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Total Shareholders</p>
+                        <p className="text-xl md:text-2xl font-bold text-foreground">{analytics?.investors?.length || "0"}</p>
+                      </div>
+                      <Users className="w-7 h-7 md:w-8 md:h-8 text-muted-foreground/30 group-hover:text-primary transition-colors" />
+                    </div>
+                    <div className="bg-surface-secondary/50 rounded-xl md:rounded-2xl p-4 md:p-5 border border-border/50 flex justify-between items-center group hover:bg-surface transition-colors">
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Valuation Rate</p>
+                        <p className="text-base md:text-lg font-bold text-emerald-500">Stable</p>
+                      </div>
+                      <Activity className="w-7 h-7 md:w-8 md:h-8 text-muted-foreground/30 group-hover:text-emerald-500 transition-colors" />
+                    </div>
                   </div>
                 </div>
 
@@ -1284,16 +1284,16 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
                     </div>
                     <div className="grid grid-cols-2 gap-2 md:gap-4 w-full sm:w-auto">
                       <div className="bg-surface/80 backdrop-blur-sm rounded-xl md:rounded-2xl p-3 md:px-6 md:py-5 border border-border text-center">
-                         <p className="text-[9px] md:text-[10px] font-medium text-muted-foreground uppercase tracking-widest mb-1">Current Valuation</p>
-                         <p className="text-base md:text-xl font-bold font-mono text-emerald-500">{fmtPrice(company.round.pricePerShare)} <span className="text-[9px] md:text-xs">USDT</span></p>
+                        <p className="text-[9px] md:text-[10px] font-medium text-muted-foreground uppercase tracking-widest mb-1">Current Valuation</p>
+                        <p className="text-base md:text-xl font-bold font-mono text-emerald-500">{fmtPrice(company.round.pricePerShare)} <span className="text-[9px] md:text-xs">USDT</span></p>
                       </div>
                       <div className="bg-surface/80 backdrop-blur-sm rounded-xl md:rounded-2xl p-3 md:px-6 md:py-5 border border-border text-center">
-                         <p className="text-[9px] md:text-[10px] font-medium text-muted-foreground uppercase tracking-widest mb-1">Available Shares</p>
-                         <p className="text-base md:text-xl font-bold font-mono text-foreground">{fmtShares(company.round.sharesRemaining)}</p>
+                        <p className="text-[9px] md:text-[10px] font-medium text-muted-foreground uppercase tracking-widest mb-1">Available Shares</p>
+                        <p className="text-base md:text-xl font-bold font-mono text-foreground">{fmtShares(company.round.sharesRemaining)}</p>
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="mt-4 md:mt-8 flex justify-end">
                     <button onClick={() => setActiveTab("round")} className="flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors">
                       Manage Round Details <ChevronDown className="w-4 h-4 -rotate-90" />
@@ -1308,7 +1308,7 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
           {activeTab === "round" && (
             <div className="space-y-6">
               <div className="bg-surface border border-border rounded-[1.5rem] md:rounded-[2rem] p-5 md:p-8 lg:p-10 shadow-sm relative overflow-hidden h-full">
-                
+
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10 relative z-10">
                   <div className="space-y-2">
                     <h3 className="text-2xl font-bold flex items-center gap-3">
@@ -1350,8 +1350,8 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
                       <div className="p-6 sm:p-8 bg-surface-secondary rounded-[2rem] border border-border shadow-sm">
                         <div className="flex justify-between items-end mb-4">
                           <div>
-                             <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-1">Market Reception</p>
-                             <p className="text-lg font-bold text-foreground">Absorption Progress</p>
+                            <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-1">Market Reception</p>
+                            <p className="text-lg font-bold text-foreground">Absorption Progress</p>
                           </div>
                           <p className="font-mono text-2xl font-bold text-primary">
                             {Math.min(100, Number(analytics.sharesSold * BigInt(100) / analytics.tokenSupply))}%
@@ -1362,22 +1362,22 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
                             className="h-full bg-primary rounded-full"></motion.div>
                         </div>
                         <div className="flex justify-between mt-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                           <span>Allocated: {fmtShares(analytics.sharesSold)}</span>
-                           <span>Total Supply: {fmtShares(analytics.tokenSupply)}</span>
+                          <span>Allocated: {fmtShares(analytics.sharesSold)}</span>
+                          <span>Total Supply: {fmtShares(analytics.tokenSupply)}</span>
                         </div>
                       </div>
                     )}
 
                     <button onClick={handleEndRound} disabled={endRoundLoading}
                       className="w-full py-4 bg-red-500/10 text-red-500 border border-red-500/20 font-bold text-sm rounded-xl hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center gap-2 group shadow-sm">
-                      {endRoundLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4 group-hover:rotate-90 transition-transform" />} 
+                      {endRoundLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4 group-hover:rotate-90 transition-transform" />}
                       Terminate Current Round
                     </button>
                   </div>
                 ) : (
                   <div className="py-20 text-center relative z-10 flex flex-col items-center">
                     <div className="w-20 h-20 bg-surface-secondary rounded-full flex items-center justify-center border border-border mb-6">
-                       <CircleDollarSign className="w-10 h-10 text-muted-foreground/30" />
+                      <CircleDollarSign className="w-10 h-10 text-muted-foreground/30" />
                     </div>
                     <p className="text-muted-foreground text-lg font-medium mb-8 max-w-sm">No active funding rounds. Configure a new round to raise seed capital.</p>
                     <button onClick={() => setShowStartRound(true)} disabled={!isLinked}
@@ -1431,7 +1431,7 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
                         </div>
                         <ExternalLink className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                       </div>
-                      
+
                       {/* Stats */}
                       <div className="grid grid-cols-3 gap-2">
                         <div className="bg-surface-secondary/50 rounded-xl p-3 border border-border/50 text-center">
@@ -1518,7 +1518,7 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
                   </div>
                 </div>
               )}
-              
+
               {/* Vault Overview Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
                 {[
@@ -1546,13 +1546,13 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
 
               {/* Operations and Accounting Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                
+
                 {/* Main Content (Left) */}
                 <div className="lg:col-span-8 flex flex-col gap-6">
-                  
+
                   {/* Current Period Accounting (Horizontal Banner) */}
                   <div className="bg-surface border border-border rounded-[2rem] p-6 lg:p-8 shadow-sm relative overflow-hidden shrink-0">
-                    
+
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 relative z-10">
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-2xl bg-teal-500/10 flex items-center justify-center border border-teal-500/20 shadow-inner shrink-0">
@@ -1598,29 +1598,29 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
 
                   {/* Treasury Operations Grid - 2 columns side-by-side on md+ */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 min-h-0">
-                    
+
                     {/* Withdraw Business Profits */}
                     <div className="bg-surface border border-border rounded-[2rem] p-6 shadow-sm flex flex-col h-full">
                       <div className="flex items-center gap-3 mb-2 mt-2">
-                         <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shrink-0">
-                            <Wallet className="w-5 h-5 text-emerald-500" />
-                         </div>
-                         <div>
-                           <h4 className="font-bold text-lg leading-tight">Withdraw Profit</h4>
-                           <p className="text-[10px] text-muted-foreground mt-0.5">Transfer accumulated owner share to your EOA.</p>
-                         </div>
+                        <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shrink-0">
+                          <Wallet className="w-5 h-5 text-emerald-500" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-lg leading-tight">Withdraw Profit</h4>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">Transfer accumulated owner share to your EOA.</p>
+                        </div>
                       </div>
-                      
+
                       <div className="bg-emerald-500/5 rounded-2xl p-5 border border-emerald-500/10 mb-6 mt-6 flex-grow flex flex-col justify-center">
                         <div className="flex items-center justify-between mb-2">
-                           <p className="text-[10px] font-bold text-emerald-600/80 uppercase tracking-widest">Available to Withdraw</p>
-                           <button onClick={() => setWithdrawBusinessAmt(fmtUSDT(analytics?.vaultStatus?.ownerWithdrawable).replaceAll(",", ""))} className="text-[9px] font-bold text-emerald-600 hover:text-white hover:bg-emerald-500 transition-colors uppercase tracking-wider bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/20 active:scale-95">MAX</button>
+                          <p className="text-[10px] font-bold text-emerald-600/80 uppercase tracking-widest">Available to Withdraw</p>
+                          <button onClick={() => setWithdrawBusinessAmt(fmtUSDT(analytics?.vaultStatus?.ownerWithdrawable).replaceAll(",", ""))} className="text-[9px] font-bold text-emerald-600 hover:text-white hover:bg-emerald-500 transition-colors uppercase tracking-wider bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/20 active:scale-95">MAX</button>
                         </div>
                         <p className="text-2xl sm:text-3xl font-black font-mono text-emerald-600">{fmtUSDT(analytics?.vaultStatus?.ownerWithdrawable)} <span className="text-[10px] sm:text-xs text-emerald-600/60 font-sans tracking-normal">USDT</span></p>
                       </div>
 
                       <div className="flex gap-2">
-                        <input type="number" placeholder="0.00" value={withdrawBusinessAmt} 
+                        <input type="number" placeholder="0.00" value={withdrawBusinessAmt}
                           onChange={e => {
                             const val = e.target.value;
                             const max = Number(analytics?.vaultStatus?.ownerWithdrawable || 0) / 1e6;
@@ -1637,38 +1637,38 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
                     {/* Withdraw Raised Funds */}
                     <div className="bg-surface border border-border rounded-[2rem] p-6 shadow-sm flex flex-col h-full">
                       <div className="flex items-center gap-3 mb-2 mt-2">
-                         <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center border border-amber-500/20 shrink-0">
-                            <Rocket className="w-5 h-5 text-amber-500" />
-                         </div>
-                         <div>
-                           <h4 className="font-bold text-lg leading-tight">Deploy Capital</h4>
-                           <p className="text-[10px] text-muted-foreground mt-0.5">Withdraw funds up to 60% of your hired budgets.</p>
-                         </div>
+                        <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center border border-amber-500/20 shrink-0">
+                          <Rocket className="w-5 h-5 text-amber-500" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-lg leading-tight">Deploy Capital</h4>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">Withdraw funds up to 60% of your hired budgets.</p>
+                        </div>
                       </div>
-                      
+
                       <div className="bg-amber-500/5 rounded-2xl p-5 border border-amber-500/10 mb-6 mt-6 flex-grow flex flex-col justify-center">
                         <div className="flex items-center justify-between mb-2">
-                           <p className="text-[10px] font-bold text-amber-600/80 uppercase tracking-widest">Available Allowance</p>
-                           <button onClick={() => {
-                              const totalHiredBudget = Number(analytics?.jobBudgetSum || 0);
-                              const totalWithdrawn = Number(analytics?.vaultStatus?.raisedWithdrawn || 0);
-                              const remainingAllowance = Math.max(0, (totalHiredBudget * 0.6) - totalWithdrawn);
-                              const cashLimit = Number(analytics?.vaultStatus?.raisedWithdrawableAmt || 0) / 1e6;
-                              setWithdrawAmt(Math.min(remainingAllowance / 1e6, cashLimit).toFixed(2));
-                            }} className="text-[9px] font-bold text-amber-600 hover:text-white hover:bg-amber-500 transition-colors uppercase tracking-wider bg-amber-500/10 px-2 py-1 rounded-md border border-amber-500/20 active:scale-95">MAX</button>
+                          <p className="text-[10px] font-bold text-amber-600/80 uppercase tracking-widest">Available Allowance</p>
+                          <button onClick={() => {
+                            const totalHiredBudget = Number(analytics?.jobBudgetSum || 0);
+                            const totalWithdrawn = Number(analytics?.vaultStatus?.raisedWithdrawn || 0);
+                            const remainingAllowance = Math.max(0, (totalHiredBudget * 0.6) - totalWithdrawn);
+                            const cashLimit = Number(analytics?.vaultStatus?.raisedWithdrawableAmt || 0) / 1e6;
+                            setWithdrawAmt(Math.min(remainingAllowance / 1e6, cashLimit).toFixed(2));
+                          }} className="text-[9px] font-bold text-amber-600 hover:text-white hover:bg-amber-500 transition-colors uppercase tracking-wider bg-amber-500/10 px-2 py-1 rounded-md border border-amber-500/20 active:scale-95">MAX</button>
                         </div>
                         <p className="text-2xl sm:text-3xl font-black font-mono text-amber-600">
                           {fmtUSDT(BigInt(Math.max(0, (Number(analytics?.jobBudgetSum || 0) * 0.6) - Number(analytics?.vaultStatus?.raisedWithdrawn || 0))))}
                           <span className="text-[10px] sm:text-xs text-amber-600/60 font-sans ml-1 tracking-normal">USDT</span>
                         </p>
                         <p className="text-[10px] text-amber-600/80 mt-2 font-medium flex justify-between uppercase tracking-wider">
-                           <span>Vault Max: <span className="font-bold font-mono text-amber-600">{fmtUSDT(analytics?.vaultStatus?.raisedWithdrawableAmt)}</span></span>
-                           <span>Hired: <span className="font-bold font-mono text-amber-600">{fmtUSDT(analytics?.jobBudgetSum)}</span></span>
+                          <span>Vault Max: <span className="font-bold font-mono text-amber-600">{fmtUSDT(analytics?.vaultStatus?.raisedWithdrawableAmt)}</span></span>
+                          <span>Hired: <span className="font-bold font-mono text-amber-600">{fmtUSDT(analytics?.jobBudgetSum)}</span></span>
                         </p>
                       </div>
 
                       <div className="flex gap-2 relative">
-                        <input type="number" placeholder="0.00" value={withdrawAmt} 
+                        <input type="number" placeholder="0.00" value={withdrawAmt}
                           onChange={e => {
                             const val = e.target.value;
                             const totalHiredBudget = Number(analytics?.jobBudgetSum || 0);
@@ -1705,43 +1705,43 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
 
                     <div className="flex-grow flex flex-col gap-4 relative z-10">
                       <div className="p-5 bg-background rounded-[1.5rem] border border-border flex items-center gap-5 hover:border-emerald-500/30 transition-colors group">
-                         <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0 border border-emerald-500/20 text-emerald-500">
-                            <ArrowDownToLine className="w-5 h-5 group-hover:scale-110 group-hover:text-emerald-400 transition-all" />
-                         </div>
-                         <div>
-                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Revenue Floor</p>
-                            <p className="text-sm font-bold text-foreground">10% of Total Revenue</p>
-                         </div>
+                        <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0 border border-emerald-500/20 text-emerald-500">
+                          <ArrowDownToLine className="w-5 h-5 group-hover:scale-110 group-hover:text-emerald-400 transition-all" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Revenue Floor</p>
+                          <p className="text-sm font-bold text-foreground">10% of Total Revenue</p>
+                        </div>
                       </div>
-                      
+
                       <div className="p-5 bg-background rounded-[1.5rem] border border-border flex items-center gap-5 hover:border-blue-500/30 transition-colors group">
-                         <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center shrink-0 border border-blue-500/20 text-blue-500">
-                            <PieChart className="w-5 h-5 group-hover:scale-110 group-hover:text-blue-400 transition-all" />
-                         </div>
-                         <div>
-                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Profit Share</p>
-                            <p className="text-sm font-bold text-foreground">40% of Net Profit</p>
-                         </div>
+                        <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center shrink-0 border border-blue-500/20 text-blue-500">
+                          <PieChart className="w-5 h-5 group-hover:scale-110 group-hover:text-blue-400 transition-all" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Profit Share</p>
+                          <p className="text-sm font-bold text-foreground">40% of Net Profit</p>
+                        </div>
                       </div>
-                      
+
                       <div className="p-5 bg-background rounded-[1.5rem] border border-border flex items-center gap-5 hover:border-amber-500/30 transition-colors group">
-                         <div className="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0 border border-amber-500/20 text-amber-500">
-                            <Receipt className="w-5 h-5 group-hover:scale-110 group-hover:text-amber-400 transition-all" />
-                         </div>
-                         <div>
-                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Expense Cap</p>
-                            <p className="text-sm font-bold text-foreground">Max 70% of Revenue</p>
-                         </div>
+                        <div className="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0 border border-amber-500/20 text-amber-500">
+                          <Receipt className="w-5 h-5 group-hover:scale-110 group-hover:text-amber-400 transition-all" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Expense Cap</p>
+                          <p className="text-sm font-bold text-foreground">Max 70% of Revenue</p>
+                        </div>
                       </div>
-                      
+
                       <div className="p-5 bg-background rounded-[1.5rem] border border-border flex items-center gap-5 hover:border-violet-500/30 transition-colors group">
-                         <div className="w-12 h-12 rounded-xl bg-violet-500/10 flex items-center justify-center shrink-0 border border-violet-500/20 text-violet-500">
-                            <Clock className="w-5 h-5 group-hover:scale-110 group-hover:text-violet-400 transition-all" />
-                         </div>
-                         <div>
-                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Solo Job Claim</p>
-                            <p className="text-sm font-bold text-foreground">Permitted Every 30 Days</p>
-                         </div>
+                        <div className="w-12 h-12 rounded-xl bg-violet-500/10 flex items-center justify-center shrink-0 border border-violet-500/20 text-violet-500">
+                          <Clock className="w-5 h-5 group-hover:scale-110 group-hover:text-violet-400 transition-all" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Solo Job Claim</p>
+                          <p className="text-sm font-bold text-foreground">Permitted Every 30 Days</p>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1752,7 +1752,7 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
               {/* Contract Addresses */}
               <div className="bg-surface border border-border rounded-[2rem] p-8 shadow-sm">
                 <h3 className="font-bold text-lg mb-6 flex items-center gap-2">
-                   <Settings className="w-5 h-5 text-muted-foreground" /> Infrastructure Contracts
+                  <Settings className="w-5 h-5 text-muted-foreground" /> Infrastructure Contracts
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
                   {[

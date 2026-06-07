@@ -66,7 +66,7 @@ export function SpacetimeChat({
             
             // Direct chats start from the client. Project/company chats opt in so participants can open safely.
             if (currentUserRole === "client" || ensureRoom) {
-                initiateChat(jobId, freelancerAddress, clientAddress, ensureRoom ? "client" : currentUserRole);
+                initiateChat(jobId, freelancerAddress, clientAddress, ensureRoom && isCompanyChatId(jobId) ? currentUserRole : "client");
             }
 
             // Subscribe to queries
@@ -132,7 +132,7 @@ export function SpacetimeChat({
                 <div className="space-y-4 p-4 pb-6">
                     {messages.length === 0 ? (
                         <div className="text-center text-muted-foreground text-sm mt-10">
-                            No messages yet. {currentUserRole === "client" ? "Start the conversation!" : "Waiting for client to initiate."}
+                            No messages yet. {isCompanyChatId(jobId) || currentUserRole === "client" ? "Start the conversation!" : "Waiting for client to initiate."}
                         </div>
                     ) : (
                         messages.map(msg => {

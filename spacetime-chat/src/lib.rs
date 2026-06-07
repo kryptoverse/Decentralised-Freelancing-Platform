@@ -54,6 +54,15 @@ fn same_wallet(a: &str, b: &str) -> bool {
     a.eq_ignore_ascii_case(b)
 }
 
+fn is_company_room(job_id: &str, freelancer_address: &str) -> bool {
+    if !job_id.starts_with("company-") {
+        return false;
+    }
+
+    let company_id = job_id.trim_start_matches("company-");
+    freelancer_address == format!("company-group-{}", company_id)
+}
+
 // Client initiates a chat for a specific job/proposal
 #[reducer]
 pub fn initiate_chat(
@@ -93,7 +102,11 @@ pub fn initiate_chat(
 
     let can_initiate = effective_role == "client"
         || is_registered_admin
-        || same_wallet(&registered_wallet, &room_client_address);
+        || same_wallet(&registered_wallet, &room_client_address)
+        || (
+            is_company_room(&job_id, &freelancer_address)
+                && (effective_role == "founder" || effective_role == "investor")
+        );
 
     if !can_initiate {
         panic!("Only clients can initiate chat rooms");
@@ -136,7 +149,11 @@ pub fn send_message(ctx: &ReducerContext, job_id: String, content: String, sende
 
     let is_authorized = same_wallet(&wallet_address, &room.client_address)
         || same_wallet(&wallet_address, &room.freelancer_address)
-        || role == "admin";
+        || role == "admin"
+        || (
+            is_company_room(&room.job_id, &room.freelancer_address)
+                && (role == "founder" || role == "investor")
+        );
         
     if !is_authorized {
         panic!("Not authorized to send messages in this room");

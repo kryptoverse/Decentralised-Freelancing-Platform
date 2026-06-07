@@ -47,6 +47,12 @@ const JOB_STATUS_LABEL: Record<number, string> = {
   5: "Expired",
 };
 
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
+const isRealAddress = (address?: string | null) => {
+  return Boolean(address && address !== ZERO_ADDRESS);
+};
+
 export default function FreelancerHome() {
   const router = useRouter();
   const account = useActiveAccount();
@@ -54,7 +60,7 @@ export default function FreelancerHome() {
   const { setChatContext } = useChatContext();
 
   const [eoaAddress, setEoaAddress] = useState<string | null>(null);
-  const [walletView, setWalletView] = useState<"smart" | "eoa" | "company">("eoa");
+  const [walletView, setWalletView] = useState<"smart" | "eoa" | "company">("smart");
 
   const [balance, setBalance] = useState<{ displayValue: string; symbol: string } | null>(null);
   const [usdtBalance, setUsdtBalance] = useState<string | null>(null);
@@ -71,6 +77,14 @@ export default function FreelancerHome() {
       if (pa?.address) setEoaAddress(pa.address);
     } catch {}
   }, [activeWallet]);
+
+  useEffect(() => {
+    if (companyVaultAddress) {
+      setWalletView("company");
+    } else {
+      setWalletView((currentView) => currentView === "company" ? "smart" : currentView);
+    }
+  }, [companyVaultAddress]);
 
   const [profile, setProfile] = useState<any>(null);
   const [stats, setStats] = useState({
@@ -100,6 +114,39 @@ export default function FreelancerHome() {
 
   // ===== 1) Fetch Platform Fee & Balance (Manual Refresh) =====
   const [platformFeeBps, setPlatformFeeBps] = useState<number>(0);
+
+  const findCompanyVaultAddress = async (smartAddress: string, ownerEoa?: string | null) => {
+    try {
+      const registry = getContract({
+        client,
+        chain: CHAIN,
+        address: DEPLOYED_CONTRACTS.addresses.CompanyRegistry as `0x${string}`,
+      });
+
+      const findByOwner = async (ownerAddress: string) => {
+        const companyId = await readContract({
+          contract: registry,
+          method: "function ownerToCompanyId(address) view returns (uint256)",
+          params: [ownerAddress],
+        }).catch(() => 0n) as bigint;
+
+        if (!companyId || companyId === 0n) return null;
+
+        const company = await readContract({
+          contract: registry,
+          method: "function getCompany(uint256) view returns ((address owner, address token, address sale, address vault, address distributor, string metadataURI, string sector, bool exists))",
+          params: [companyId],
+        }).catch(() => null) as any;
+
+        return company?.exists && isRealAddress(company.vault) ? String(company.vault) : null;
+      };
+
+      return await findByOwner(smartAddress) || (ownerEoa ? await findByOwner(ownerEoa) : null);
+    } catch (err) {
+      console.error("Company vault lookup failed:", err);
+      return null;
+    }
+  };
 
   const fetchBalance = async () => {
     if (!account?.address) return;
@@ -174,7 +221,7 @@ export default function FreelancerHome() {
       }
 
       // Fetch Company Vault Balances
-      if (companyVaultAddress && companyVaultAddress !== "0x0000000000000000000000000000000000000000") {
+      if (isRealAddress(companyVaultAddress)) {
         try {
           const cvMaticRes = await getWalletBalance({
             client,
@@ -193,6 +240,9 @@ export default function FreelancerHome() {
         } catch (err) {
           console.error("Company Vault Balance fetch failed:", err);
         }
+      } else {
+        setCompanyVaultMatic(null);
+        setCompanyVaultUsdt(null);
       }
 
     } catch (err) {
@@ -224,8 +274,12 @@ export default function FreelancerHome() {
         params: [addr],
       });
 
-      if (!profileAddr || profileAddr === "0x0000000000000000000000000000000000000000")
+      if (!profileAddr || profileAddr === ZERO_ADDRESS) {
+        setCompanyVaultAddress(null);
+        setCompanyVaultMatic(null);
+        setCompanyVaultUsdt(null);
         return;
+      }
 
       const profileContract = getContract({
         client,
@@ -256,6 +310,7 @@ export default function FreelancerHome() {
         levelOnChainRaw,
         disputedJobsRaw,
         cancelledJobsRaw,
+        profileCompanyVaultRaw,
       ] = await Promise.all([
         safeRead("function name() view returns (string)"),
         safeRead("function bio() view returns (string)"),
@@ -293,6 +348,19 @@ export default function FreelancerHome() {
         ratingPercent = Math.round((totalPoints / (completedJobs * 5)) * 100);
 
       const totalEarningsNum = totalEarningsRaw != null ? Number(totalEarningsRaw) / 1e6 : 0;
+      const profileCompanyVault = String(profileCompanyVaultRaw || "");
+      const registryCompanyVault = isRealAddress(profileCompanyVault)
+        ? null
+        : await findCompanyVaultAddress(addr, eoaAddress);
+      const resolvedCompanyVault = isRealAddress(profileCompanyVault)
+        ? profileCompanyVault
+        : registryCompanyVault;
+
+      setCompanyVaultAddress(resolvedCompanyVault || null);
+      if (!resolvedCompanyVault) {
+        setCompanyVaultMatic(null);
+        setCompanyVaultUsdt(null);
+      }
 
       setProfile({ name: name || "Unnamed", bio: bio || "No bio yet", profileAddress: profileAddr });
       setStats({ totalEarnings: totalEarningsNum, completedJobs, rating: ratingPercent, isKYCVerified: Boolean(isKYCVerifiedRaw), level, stars });
@@ -306,7 +374,7 @@ export default function FreelancerHome() {
   useEffect(() => {
     if (!account?.address) return;
     loadProfile(account.address);
-  }, [account?.address]);
+  }, [account?.address, eoaAddress]);
 
   // ===== 3) Fetch Applied & Hired Jobs (Optimized with Promise.all) =====
   const loadJobs = async () => {
@@ -590,7 +658,9 @@ Total Earnings: ${stats.totalEarnings.toFixed(2)} USDT
 Completed Jobs: ${stats.completedJobs}
 Disputed Jobs: ${disputedCount}
 Cancelled Jobs: ${cancelledCount}
-Wallet Balances: MATIC: ${balance?.displayValue} ${balance?.symbol}, USDT: ${usdtBalance} USDT
+Smart Wallet Balance: MATIC: ${balance?.displayValue ?? "0"} ${balance?.symbol ?? "MATIC"}, USDT: ${usdtBalance ?? "0"} USDT
+Company Vault: ${companyVaultAddress ? companyVaultAddress : "Not created"}
+Company Vault Balance: MATIC: ${companyVaultMatic ?? "0"} MATIC, USDT: ${companyVaultUsdt ?? "0"} USDT
 Pending/Applied Jobs: ${appliedJobs.length}
 Hired (Active) Jobs: ${hiredJobs.length}
     `;
@@ -598,7 +668,7 @@ Hired (Active) Jobs: ${hiredJobs.length}
       const base = prev.split('--- CURRENT USER CONTEXT ---')[0].trim();
       return base + '\n\n' + contextData;
     });
-  }, [account, profile, stats, disputedCount, cancelledCount, balance, usdtBalance, appliedJobs.length, hiredJobs.length, setChatContext]);
+  }, [account, profile, stats, disputedCount, cancelledCount, balance, usdtBalance, companyVaultAddress, companyVaultMatic, companyVaultUsdt, appliedJobs.length, hiredJobs.length, setChatContext]);
 
   if (!account)
     return (
@@ -606,6 +676,13 @@ Hired (Active) Jobs: ${hiredJobs.length}
         Please connect your wallet to view dashboard.
       </div>
     );
+
+  const smartMaticDisplay = balance ? parseFloat(balance.displayValue).toFixed(3) : "0";
+  const smartUsdtDisplay = usdtBalance ?? "0";
+  const eoaMaticDisplay = eoaMatic ? parseFloat(eoaMatic).toFixed(3) : "0";
+  const eoaUsdtDisplay = eoaUsdt ?? "0";
+  const companyMaticDisplay = companyVaultMatic ? parseFloat(companyVaultMatic).toFixed(3) : "0";
+  const companyUsdtDisplay = companyVaultUsdt ?? "0";
 
   return (
     <main className="flex-1 p-4 md:p-8 overflow-y-auto space-y-6 md:space-y-8">
@@ -660,14 +737,24 @@ Hired (Active) Jobs: ${hiredJobs.length}
             >
               Freelance Smart
             </button>
-            {companyVaultAddress && (
-              <button
-                onClick={() => setWalletView("company")}
-                className={`flex-shrink-0 px-3 text-xs py-1.5 rounded-md font-medium transition-colors ${walletView === "company" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
-              >
-                Company Vault
-              </button>
-            )}
+            <button
+              onClick={() => setWalletView("company")}
+              className={`flex-shrink-0 px-3 text-xs py-1.5 rounded-md font-medium transition-colors ${walletView === "company" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+            >
+              Company Vault
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <div className="rounded-xl bg-black/25 p-3 border border-border/40">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Smart Personal Wallet</p>
+              <p className="text-sm font-bold text-primary truncate">{smartUsdtDisplay} USDT</p>
+              <p className="text-[10px] text-muted-foreground truncate">{smartMaticDisplay} {balance?.symbol ?? "MATIC"}</p>
+            </div>
+            <div className="rounded-xl bg-black/25 p-3 border border-border/40">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Company Vault</p>
+              <p className="text-sm font-bold text-primary truncate">{companyUsdtDisplay} USDT</p>
+              <p className="text-[10px] text-muted-foreground truncate">{companyVaultAddress ? `${companyMaticDisplay} MATIC` : "Not created"}</p>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-2 mb-3">
             <div className="rounded-xl bg-black/25 p-3">
@@ -677,10 +764,10 @@ Hired (Active) Jobs: ${hiredJobs.length}
               ) : (
                 <p className="text-sm font-bold text-primary truncate">
                   {walletView === "smart"
-                    ? (balance ? parseFloat(balance.displayValue).toFixed(3) : "0")
+                    ? smartMaticDisplay
                     : walletView === "eoa"
-                      ? (eoaMatic ? parseFloat(eoaMatic).toFixed(3) : "0")
-                      : (companyVaultMatic ? parseFloat(companyVaultMatic).toFixed(3) : "0")}
+                      ? eoaMaticDisplay
+                      : companyMaticDisplay}
                 </p>
               )}
             </div>
@@ -690,7 +777,7 @@ Hired (Active) Jobs: ${hiredJobs.length}
                 <div className="h-5 w-14 bg-white/10 rounded animate-pulse" />
               ) : (
                 <p className="text-sm font-bold text-primary truncate">
-                  {walletView === "smart" ? (usdtBalance ?? "0") : walletView === "eoa" ? (eoaUsdt ?? "0") : (companyVaultUsdt ?? "0")} USDT
+                  {walletView === "smart" ? smartUsdtDisplay : walletView === "eoa" ? eoaUsdtDisplay : companyUsdtDisplay} USDT
                 </p>
               )}
             </div>
@@ -856,30 +943,42 @@ Hired (Active) Jobs: ${hiredJobs.length}
               >
                 Freelance Smart
               </button>
-              {companyVaultAddress && (
-                <button
-                  onClick={() => setWalletView("company")}
-                  className={`px-4 text-xs py-1.5 rounded-md font-medium transition-colors ${walletView === "company" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                >
-                  Company Vault
-                </button>
-              )}
+              <button
+                onClick={() => setWalletView("company")}
+                className={`px-4 text-xs py-1.5 rounded-md font-medium transition-colors ${walletView === "company" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Company Vault
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="rounded-2xl bg-black/20 border border-border/60 p-4">
+                <p className="text-xs text-foreground-secondary uppercase tracking-wider mb-2">Smart Personal Wallet</p>
+                <p className="text-2xl font-bold text-primary">{smartUsdtDisplay} USDT</p>
+                <p className="text-sm text-muted-foreground">{smartMaticDisplay} {balance?.symbol ?? "MATIC"}</p>
+                <p className="text-[11px] text-muted-foreground mt-2 break-all">{account.address}</p>
+              </div>
+              <div className="rounded-2xl bg-black/20 border border-border/60 p-4">
+                <p className="text-xs text-foreground-secondary uppercase tracking-wider mb-2">Company Vault</p>
+                <p className="text-2xl font-bold text-primary">{companyUsdtDisplay} USDT</p>
+                <p className="text-sm text-muted-foreground">{companyVaultAddress ? `${companyMaticDisplay} MATIC` : "Not created"}</p>
+                <p className="text-[11px] text-muted-foreground mt-2 break-all">{companyVaultAddress ?? "Create a company to receive completed-job funds here."}</p>
+              </div>
             </div>
             <div className="flex gap-8">
               <div>
                 <p className="text-sm text-foreground-secondary">MATIC</p>
                 <p className="text-2xl font-bold text-primary">
                   {walletView === "smart"
-                    ? (balance ? `${parseFloat(balance.displayValue).toFixed(4)} ${balance.symbol}` : "0")
+                    ? `${smartMaticDisplay} ${balance?.symbol ?? "MATIC"}`
                     : walletView === "eoa"
-                      ? (eoaMatic ? `${parseFloat(eoaMatic).toFixed(4)} MATIC` : "0")
-                      : (companyVaultMatic ? `${parseFloat(companyVaultMatic).toFixed(4)} MATIC` : "0")}
+                      ? `${eoaMaticDisplay} MATIC`
+                      : `${companyMaticDisplay} MATIC`}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-foreground-secondary">USDT</p>
                 <p className="text-2xl font-bold text-primary">
-                  {walletView === "smart" ? (usdtBalance ?? "0") : walletView === "eoa" ? (eoaUsdt ?? "0") : (companyVaultUsdt ?? "0")} USDT
+                  {walletView === "smart" ? smartUsdtDisplay : walletView === "eoa" ? eoaUsdtDisplay : companyUsdtDisplay} USDT
                 </p>
               </div>
               <div className="ml-auto flex flex-col justify-end gap-2">

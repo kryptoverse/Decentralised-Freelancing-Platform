@@ -28,6 +28,12 @@ contract InvestorRegistry is Ownable {
     // Investor Address => Company ID => Stats
     mapping(address => mapping(uint256 => InvestmentStats)) public companyInvestmentStats;
 
+    // Company ID => List of investors in that company
+    mapping(uint256 => address[]) private companyInvestors;
+
+    // Company ID => Investor Address => Already Added?
+    mapping(uint256 => mapping(address => bool)) private hasCompanyInvestor;
+
     // ==========================================
     // JOB FUNDRAISE TRACKING
     // ==========================================
@@ -99,6 +105,11 @@ contract InvestorRegistry is Ownable {
             hasInvestedInCompany[investor][companyId] = true;
         }
 
+        if (!hasCompanyInvestor[companyId][investor]) {
+            companyInvestors[companyId].push(investor);
+            hasCompanyInvestor[companyId][investor] = true;
+        }
+
         companyInvestmentStats[investor][companyId].totalInvested += amount;
         emit CompanyInvestmentRecorded(investor, companyId, amount);
     }
@@ -157,6 +168,10 @@ contract InvestorRegistry is Ownable {
     function getInvestmentStats(address investor, uint256 companyId) external view returns (uint256, uint256) {
         InvestmentStats memory stats = companyInvestmentStats[investor][companyId];
         return (stats.totalInvested, stats.totalPayouts);
+    }
+
+    function getCompanyInvestors(uint256 companyId) external view returns (address[] memory) {
+        return companyInvestors[companyId];
     }
 
     function getJobPortfolio(address investor) external view returns (address[] memory) {

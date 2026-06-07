@@ -13,7 +13,6 @@ import {
 
 import {
   getContract, readContract, prepareContractCall, sendTransaction, waitForReceipt,
-  getContractEvents, prepareEvent
 } from "thirdweb";
 import { useActiveAccount, useActiveWallet } from "thirdweb/react";
 import { getWalletBalance } from "thirdweb/wallets";
@@ -718,8 +717,6 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
         const vaultC = getContract({ client, chain: CHAIN, address: found.vault as any });
         const distC = getContract({ client, chain: CHAIN, address: found.distributor as any });
         const usdtC = getContract({ client, chain: CHAIN, address: DEPLOYED_CONTRACTS.addresses.MockUSDT as any });
-        const saleC = getContract({ client, chain: CHAIN, address: found.sale as any });
-
         // Batch all reads
         const [totalSupply, saleBalance, vaultBalance, vaultStatus, distStatus, ownerWithdrawable, totalExpenses, raisedWithdrawableAmt, lastSoloClaim] = await Promise.all([
           readContract({ contract: tokenC, method: "function totalSupply() view returns (uint256)" }) as Promise<bigint>,
@@ -756,52 +753,12 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
         // Asynchronously fetch investor details in the background
         const fetchInvestors = async () => {
           try {
-            const sharesBoughtEvent = prepareEvent({ signature: "event SharesBought(uint256 indexed roundId, address indexed buyer, uint256 usdtPaid, uint256 sharesReceived)" });
-            const investmentRecordedEvent = prepareEvent({ signature: "event CompanyInvestmentRecorded(address indexed investor, uint256 indexed companyId, uint256 amount)" });
             const invRegistryC = getContract({ client, chain: CHAIN, address: DEPLOYED_CONTRACTS.addresses.InvestorRegistry as any });
-            
-            // Try fetching events - Insight API requires fromBlock > 0
-            let events: any[] = [];
-            try {
-              events = await getContractEvents({ contract: saleC, events: [sharesBoughtEvent], fromBlock: BigInt(1) });
-              console.log("[INVESTORS] Found events:", events.length);
-            } catch (evErr) {
-              console.warn("[INVESTORS] Event query failed, trying without fromBlock:", evErr);
-              try {
-                events = await getContractEvents({ contract: saleC, events: [sharesBoughtEvent] });
-                console.log("[INVESTORS] Found events (no fromBlock):", events.length);
-              } catch (evErr2) {
-                console.error("[INVESTORS] All event queries failed:", evErr2);
-              }
-            }
-
-            const uniqueBuyers = new Map<string, boolean>();
-            events.forEach((ev: any) => {
-              const buyer = ev.args?.buyer;
-              if (buyer) {
-                uniqueBuyers.set(buyer.toLowerCase(), true);
-              }
-            });
-
-            try {
-              const registryEvents = await getContractEvents({
-                contract: invRegistryC,
-                events: [investmentRecordedEvent],
-                fromBlock: BigInt(1),
-              });
-              registryEvents.forEach((ev: any) => {
-                const eventCompanyId = ev.args?.companyId;
-                const investor = ev.args?.investor;
-                if (investor && eventCompanyId !== undefined && BigInt(eventCompanyId) === found.id) {
-                  uniqueBuyers.set(investor.toLowerCase(), true);
-                }
-              });
-              console.log("[INVESTORS] Found registry investment events:", registryEvents.length);
-            } catch (registryErr) {
-              console.warn("[INVESTORS] Registry event query failed:", registryErr);
-            }
-
-            const buyerAddresses = Array.from(uniqueBuyers.keys());
+            const buyerAddresses = await readContract({
+              contract: invRegistryC,
+              method: "function getCompanyInvestors(uint256) view returns (address[])",
+              params: [found.id],
+            }) as string[];
 
             // Batch fetch all investor data
             const investorPromises = buyerAddresses.map(async (addr) => {

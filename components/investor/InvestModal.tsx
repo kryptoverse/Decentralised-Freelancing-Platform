@@ -20,6 +20,7 @@ import {
 import { client } from "@/lib/thirdweb-client";
 import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
+import { setupCompanyGroupChat } from "@/lib/spacetimedb";
 
 interface RoundInfo {
   roundId: bigint;
@@ -133,6 +134,30 @@ export function InvestModal({
       });
 
       await sendTransaction({ transaction: buyTx, account: activeAccount });
+
+      try {
+        const companyRegistry = getContract({
+          client,
+          chain: CHAIN,
+          address: DEPLOYED_CONTRACTS.addresses.CompanyRegistry as `0x${string}`,
+        });
+        const companyData = await readContract({
+          contract: companyRegistry,
+          method: "function getCompany(uint256) view returns ((address owner, address token, address sale, address vault, address distributor, string metadataURI, string sector, bool exists))",
+          params: [company.id],
+        }) as { owner: string; exists: boolean };
+
+        if (companyData?.exists) {
+          await setupCompanyGroupChat({
+            companyId: company.id,
+            founderAddress: companyData.owner,
+            walletAddress: activeAccount.address,
+            memberRole: "investor",
+          });
+        }
+      } catch (chatErr) {
+        console.error("Failed to join company group chat after investment:", chatErr);
+      }
 
       setSuccessMsg("Successfully invested!");
       setTimeout(() => {

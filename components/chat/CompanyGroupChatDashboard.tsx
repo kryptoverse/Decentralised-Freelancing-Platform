@@ -8,7 +8,7 @@ import { Building2, Loader2, MessageSquare } from "lucide-react";
 import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { client } from "@/lib/thirdweb-client";
-import { getCompanyChatId, getCompanyChatParticipantAddress } from "@/lib/spacetimedb";
+import { getCompanyChatId, getCompanyChatParticipantAddress, setupCompanyGroupChat } from "@/lib/spacetimedb";
 import { SpacetimeChat } from "@/components/chat/SpacetimeChat";
 
 type CompanyChatItem = {
@@ -100,6 +100,19 @@ export function CompanyGroupChatDashboard({ role }: { role: "founder" | "investo
 
       const nextCompanies = loaded.filter((company): company is CompanyChatItem => Boolean(company));
       setCompanies(nextCompanies);
+
+      if (account) {
+        nextCompanies.forEach((company) => {
+          void setupCompanyGroupChat({
+            companyId: company.id,
+            founderAddress: company.owner,
+            walletAddress: account.address,
+            memberRole: role === "founder" ? "founder" : "investor",
+          }).catch((err) => {
+            console.error("Failed to sync company group chat membership:", err);
+          });
+        });
+      }
 
       setSelectedChatId((current) => {
         if (requestedChatId && nextCompanies.some((company) => getCompanyChatId(company.id) === requestedChatId)) {

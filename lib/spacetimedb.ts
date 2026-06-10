@@ -21,6 +21,13 @@ export type Message = {
   timestamp: number | string;
 };
 
+export type ChatMember = {
+  member_key: string;
+  job_id: string;
+  wallet_address: string;
+  member_role: string;
+};
+
 const DEFAULT_SPACETIMEDB_API = "https://maincloud.spacetimedb.com/v1/database";
 
 const normalizeSpacetimeApi = (uri?: string) => {
@@ -127,6 +134,7 @@ export class SpacetimeDBClient {
   public rooms: ChatRoom[] = [];
   public messages: Message[] = [];
   public users: User[] = [];
+  public chatMembers: ChatMember[] = [];
 
   constructor() {}
 
@@ -242,6 +250,16 @@ export class SpacetimeDBClient {
           }
         });
       }
+
+      // Fetch company chat members
+      const membersData = await this.query("SELECT * FROM ChatMember");
+      if (Array.isArray(membersData)) {
+        membersData.forEach(member => {
+          if (this.upsertChatMember(member)) {
+            this.emit("ChatMember", "insert", member);
+          }
+        });
+      }
     } catch (err) {
       console.error("Polling error:", err);
     } finally {
@@ -349,6 +367,29 @@ export class SpacetimeDBClient {
       window.dispatchEvent(new CustomEvent("spacetime_update"));
     }
   }
+
+  upsertChatMember(member: ChatMember) {
+    const existingIndex = this.chatMembers.findIndex(existing => existing.member_key === member.member_key);
+    const isNew = existingIndex === -1;
+    if (isNew) {
+      this.chatMembers.push(member);
+    } else {
+      this.chatMembers[existingIndex] = member;
+    }
+
+    if (typeof window !== 'undefined') {
+      const stored = readStorageArray<ChatMember>("spacetime_chat_members");
+      const storedIndex = stored.findIndex((s: ChatMember) => s.member_key === member.member_key);
+      if (storedIndex === -1) {
+        stored.push(member);
+      } else {
+        stored[storedIndex] = member;
+      }
+      localStorage.setItem("spacetime_chat_members", JSON.stringify(stored));
+    }
+
+    return isNew;
+  }
 }
 
 let client: SpacetimeDBClient | null = null;
@@ -412,6 +453,47 @@ export const initiateCompanyChat = (companyId: string | number | bigint, founder
   );
 };
 
+export const ensureChatMember = (jobId: string, walletAddress: string, memberRole: string) => {
+  if (!client) return Promise.resolve(false);
+  return client.call("ensure_chat_member", {
+    job_id: jobId,
+    wallet_address: walletAddress,
+    member_role: memberRole,
+  });
+};
+
+export const setupCompanyGroupChat = async ({
+  companyId,
+  founderAddress,
+  walletAddress,
+  memberRole,
+  displayName,
+}: {
+  companyId: string | number | bigint;
+  founderAddress: string;
+  walletAddress: string;
+  memberRole: "founder" | "investor";
+  displayName?: string;
+}) => {
+  const chatClient = initSpacetimeDB();
+  chatClient.connect();
+
+  await new Promise<void>((resolve) => {
+    const off = chatClient.onConnect(() => {
+      off();
+      resolve();
+    });
+    setTimeout(resolve, 300);
+  });
+
+  registerUser(walletAddress, displayName || `User ${walletAddress.slice(0, 6)}`, memberRole);
+
+  const chatId = getCompanyChatId(companyId);
+  await initiateCompanyChat(companyId, founderAddress);
+  await refreshSpacetimeDB();
+  return ensureChatMember(chatId, walletAddress, memberRole);
+};
+
 export const sendMessage = (jobId: string, content: string, senderAddress?: string) => {
   if (!client) return Promise.resolve(false);
   let optimisticId: number | null = null;
@@ -471,6 +553,19 @@ export const getMessagesForChat = (jobId: string): Message[] => {
   if (typeof window === 'undefined') return [];
   const messages = readStorageArray<Message>("spacetime_messages");
   return sortMessages(messages.filter(m => m.job_id === jobId));
+};
+
+export const getChatMembersForRoom = (jobId: string): ChatMember[] => {
+  if (typeof window === 'undefined') return [];
+  const members = readStorageArray<ChatMember>("spacetime_chat_members");
+  return members.filter(member => member.job_id === jobId);
+};
+
+export const isWalletInCompanyChat = (jobId: string, walletAddress: string): boolean => {
+  const normalized = walletAddress.toLowerCase();
+  return getChatMembersForRoom(jobId).some(
+    member => member.wallet_address.toLowerCase() === normalized
+  );
 };
 
 export const getCachedMessages = (): Message[] => {

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useActiveAccount } from "thirdweb/react";
-import { getChatRoomById, getMessagesForChat, initSpacetimeDB, initiateChat, isCompanyChatId, refreshSpacetimeDB, registerUser, sendMessage, type Message } from "@/lib/spacetimedb";
+import { getChatRoomById, getMessagesForChat, initSpacetimeDB, initiateChat, ensureChatMember, isCompanyChatId, refreshSpacetimeDB, registerUser, sendMessage, type Message } from "@/lib/spacetimedb";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -66,7 +66,18 @@ export function SpacetimeChat({
             
             // Direct chats start from the client. Project/company chats opt in so participants can open safely.
             if (currentUserRole === "client" || ensureRoom) {
-                initiateChat(jobId, freelancerAddress, clientAddress, ensureRoom ? "client" : currentUserRole);
+                const initiatorRole = isCompanyChatId(jobId)
+                    ? currentUserRole
+                    : (ensureRoom ? "client" : currentUserRole);
+                initiateChat(jobId, freelancerAddress, clientAddress, initiatorRole).then((ok) => {
+                    if (ok && isCompanyChatId(jobId) && account?.address) {
+                        ensureChatMember(
+                            jobId,
+                            account.address,
+                            currentUserRole === "founder" ? "founder" : "investor"
+                        );
+                    }
+                });
             }
 
             // Subscribe to queries
@@ -132,7 +143,9 @@ export function SpacetimeChat({
                 <div className="space-y-4 p-4 pb-6">
                     {messages.length === 0 ? (
                         <div className="text-center text-muted-foreground text-sm mt-10">
-                            No messages yet. {currentUserRole === "client" ? "Start the conversation!" : "Waiting for client to initiate."}
+                            {isCompanyChatId(jobId)
+                                ? "No messages yet. Say hello to the group!"
+                                : `No messages yet. ${currentUserRole === "client" ? "Start the conversation!" : "Waiting for client to initiate."}`}
                         </div>
                     ) : (
                         messages.map(msg => {

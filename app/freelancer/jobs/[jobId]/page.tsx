@@ -252,6 +252,31 @@ export default function FreelancerJobDetailPage() {
     }
   }, [params?.jobId]);
 
+  useEffect(() => {
+    if (jobId === 0n) return;
+
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const currentJobId = jobId.toString();
+    const handleRealtimeUpdate = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      const entityTypes = detail?.entityTypes || [];
+      const entityIds = detail?.entityIds || [];
+      if (!entityTypes.includes("job")) return;
+      if (entityIds.length > 0 && !entityIds.includes(currentJobId)) return;
+
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        router.refresh();
+      }, 900);
+    };
+
+    window.addEventListener("worqs:freelancer-realtime-update", handleRealtimeUpdate);
+    return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      window.removeEventListener("worqs:freelancer-realtime-update", handleRealtimeUpdate);
+    };
+  }, [jobId, router]);
+
   /* ============================================================
      LOAD DATA
   ============================================================ */

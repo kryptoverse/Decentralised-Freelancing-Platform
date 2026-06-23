@@ -26,7 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
 import { useChatContext, defaultContext } from "@/components/chat/ChatContext";
-import { initiateChat, initSpacetimeDB } from "@/lib/spacetimedb";
+import { initiateChat, initSpacetimeDB, safeTriggerClientNotification } from "@/lib/spacetimedb";
 
 // ... (Metadata interface)
 
@@ -388,6 +388,20 @@ CURRENT FREELANCER CONTEXT:
         title: "Offer Sent!",
         description: "The freelancer has been notified of your proposal.",
       });
+
+      const freelancerAddress = typeof address === "string" ? address : address?.[0];
+      if (freelancerAddress) {
+        void safeTriggerClientNotification({
+          client_address: freelancerAddress,
+          event_type: "direct_offer_created",
+          entity_type: "job",
+          entity_id: "direct-offer",
+          actor_address: account.address,
+          title: "New direct offer",
+          message: `A client sent you a direct offer for ${offerForm.title}.`,
+          route: "/freelancer/proposals",
+        });
+      }
 
       setIsHireModalOpen(false);
       setOfferForm({ title: "", description: "", budget: "", days: "" });

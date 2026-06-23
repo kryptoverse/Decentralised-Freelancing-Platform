@@ -38,7 +38,7 @@ import { ipfsToHttp } from "@/utils/ipfs";
 import { useIPFSUpload } from "@/hooks/useIPFSUpload";
 import { useChatContext, defaultContext } from "@/components/chat/ChatContext";
 import { SpacetimeChat } from "@/components/chat/SpacetimeChat";
-import { getDirectChatId, getProjectChatId } from "@/lib/spacetimedb";
+import { getDirectChatId, getProjectChatId, safeTriggerClientNotification } from "@/lib/spacetimedb";
 
 import HireSuccessModal from "@/components/client/HireSuccessModal";
 import DisputeModal from "@/components/modals/DisputeModal";
@@ -617,6 +617,18 @@ export default function JobAnalyticsPage() {
         amount: Number(app.bidAmount) / 1e6,
       });
       setSuccessOpen(true);
+      if (job) {
+        void safeTriggerClientNotification({
+          client_address: app.freelancer,
+          event_type: "job_hired",
+          entity_type: "job",
+          entity_id: String(job.jobId),
+          actor_address: smartAddress,
+          title: "Your bid was accepted",
+          message: `The client hired you for ${job.title}.`,
+          route: `/freelancer/jobs/${job.jobId}`,
+        });
+      }
       router.refresh();
 
     } catch (err: any) {
@@ -1083,6 +1095,19 @@ export default function JobAnalyticsPage() {
         transaction: tx,
       });
 
+      if (job?.hiredFreelancer) {
+        void safeTriggerClientNotification({
+          client_address: job.hiredFreelancer,
+          event_type: "work_approved",
+          entity_type: "job",
+          entity_id: String(job.jobId),
+          actor_address: smartAddress,
+          title: "Work approved & payment released",
+          message: `The client approved your work for ${job.title} and released payment.`,
+          route: `/freelancer/jobs/${job.jobId}`,
+        });
+      }
+
       setReviewOpen(false);
       setEscrowData((prev) => prev ? { ...prev, terminal: true, disputed: false } : prev);
       // Wait for React to update the state, router.refresh() handles the rest quietly
@@ -1115,6 +1140,20 @@ export default function JobAnalyticsPage() {
       });
 
       await sendTransaction({ account: execAccount, transaction: tx });
+
+      if (job?.hiredFreelancer) {
+        void safeTriggerClientNotification({
+          client_address: job.hiredFreelancer,
+          event_type: "job_cancel_requested",
+          entity_type: "job",
+          entity_id: String(job.jobId),
+          actor_address: smartAddress,
+          title: "Cancellation requested",
+          message: `The client requested to cancel ${job.title}. Please review and respond.`,
+          route: `/freelancer/jobs/${job.jobId}`,
+        });
+      }
+
       router.refresh();
     } catch (err) {
       alert(getFriendlyError(err));
@@ -1144,6 +1183,20 @@ export default function JobAnalyticsPage() {
       });
 
       await sendTransaction({ account: execAccount, transaction: tx });
+
+      if (job?.hiredFreelancer) {
+        void safeTriggerClientNotification({
+          client_address: job.hiredFreelancer,
+          event_type: "job_cancelled",
+          entity_type: "job",
+          entity_id: String(job.jobId),
+          actor_address: smartAddress,
+          title: "Cancellation accepted",
+          message: `The client accepted the cancellation for ${job.title}.`,
+          route: `/freelancer/jobs/${job.jobId}`,
+        });
+      }
+
       router.refresh();
     } catch (err) {
       alert(getFriendlyError(err));
@@ -1176,6 +1229,19 @@ export default function JobAnalyticsPage() {
       });
 
       const transaction = await sendTransaction({ account: execAccount, transaction: tx });
+
+      if (job?.hiredFreelancer) {
+        void safeTriggerClientNotification({
+          client_address: job.hiredFreelancer,
+          event_type: "dispute_raised",
+          entity_type: "job",
+          entity_id: String(job.jobId),
+          actor_address: smartAddress,
+          title: "Dispute raised",
+          message: `The client raised a dispute on ${job.title}.`,
+          route: `/freelancer/jobs/${job.jobId}`,
+        });
+      }
 
       setDisputeModal(false);
       router.refresh();
@@ -1318,7 +1384,7 @@ ${appsContext}`;
     );
 
   return (
-    <main className="max-w-5xl mx-auto p-4 md:p-6 space-y-6 lg:space-y-8">
+    <main className="max-w-6xl mx-auto p-4 md:p-6 space-y-6 lg:space-y-8">
       {/* Modals placed here */}
       <HireSuccessModal open={successOpen} freelancer={successInfo?.freelancer} amount={successInfo?.amount} onClose={() => setSuccessOpen(false)} onContinue={() => router.push('/client')} />
       <ReviewModal open={reviewOpen} onClose={() => setReviewOpen(false)} onConfirm={handleApproveWork} loading={reviewLoading} anticipatedDestination={destinationAddress} />
@@ -1352,8 +1418,8 @@ ${appsContext}`;
       </Modal>
 
       {/* Page Navigation Header */}
-      <div className="flex items-center justify-between pb-2 border-b border-border/40">
-        <button onClick={() => router.back()} className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition">
+      <div className="flex items-center justify-between pb-3 border-b border-border/60">
+        <button onClick={() => router.back()} className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition rounded-xl px-2 py-1 -ml-2 hover:bg-surface">
           <ArrowLeft className="w-4 h-4" /> Back to Jobs
         </button>
       </div>
@@ -1365,7 +1431,7 @@ ${appsContext}`;
           <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
             {/* Smart Wallet */}
             {isClient && (
-              <div className="bg-surface border rounded-xl p-4 shadow-sm flex flex-col justify-center">
+              <div className="bg-background/85 dark:bg-neutral-950/70 border border-border/70 rounded-2xl p-4 shadow-sm flex flex-col justify-center">
                 <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest mb-2 flex items-center gap-1.5"><DollarSign className="w-3.5 h-3.5 text-emerald-500" /> Your Smart Wallet</p>
                 <div className="flex justify-between items-end gap-2">
                   <div className="min-w-0">
@@ -1405,7 +1471,7 @@ ${appsContext}`;
         )}
 
         {/* Main Job Details Card */}
-        <section className="bg-surface/30 border border-border/60 rounded-2xl p-5 md:p-8 shadow-sm">
+        <section className="bg-background/90 dark:bg-neutral-950/70 border border-border/70 rounded-3xl p-5 md:p-8 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
             <span className={`px-3 py-1 rounded-full text-[10px] font-extrabold tracking-widest uppercase shadow-sm ${isJobOpen ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'}`}>
               {isJobOpen ? "Open for Bids" : "In Progress"}
@@ -1413,15 +1479,15 @@ ${appsContext}`;
             <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Posted {formatTs(job.createdAt)}</span>
           </div>
 
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-foreground leading-tight tracking-tight mb-5">{job.title}</h1>
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-foreground leading-tight tracking-tight mb-5 max-w-4xl">{job.title}</h1>
 
           <div className="flex flex-wrap items-center gap-3 mb-8">
-            <div className="flex items-center gap-2 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 rounded-xl shadow-sm">
+            <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/25 px-4 py-2 rounded-2xl shadow-sm">
               <DollarSign className="w-4 h-4" />
               <span className="font-bold text-base md:text-lg">{(Number(job.budgetUSDC) / 1e6).toFixed(2)} USDT</span>
             </div>
             {job.tags.map((t, i) => (
-              <span key={i} className="px-3 py-2 bg-surface text-muted-foreground text-xs md:text-sm font-medium rounded-xl border flex items-center gap-1.5 shadow-sm">
+              <span key={i} className="px-3 py-2 bg-surface text-muted-foreground text-xs md:text-sm font-medium rounded-2xl border flex items-center gap-1.5 shadow-sm">
                 <Tag className="w-3.5 h-3.5 opacity-70" /> {t}
               </span>
             ))}
@@ -1642,22 +1708,26 @@ ${appsContext}`;
 
         {/* Applicants List - Full Width */}
         {isJobOpen && (
-          <section className="bg-surface/30 border border-border/60 rounded-2xl p-5 md:p-8 shadow-sm">
-            <div className="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
-              <div className="flex items-center gap-2 text-foreground">
-                <Users className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-bold">Proposals</h2>
-                <span className="text-xs font-semibold bg-surface px-3 py-1 border rounded-lg text-muted-foreground shadow-sm ml-2">{applicants.length} Total</span>
+          <section className="bg-background/90 dark:bg-neutral-950/70 border border-border/70 rounded-3xl p-5 md:p-8 shadow-sm">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-6 gap-4">
+              <div className="flex items-start gap-3 text-foreground">
+                <div className="mt-1 h-11 w-11 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                  <Users className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-2xl font-extrabold tracking-tight">Proposals</h2>
+                    <span className="text-xs font-bold bg-surface px-3 py-1 border rounded-full text-muted-foreground shadow-sm">{applicants.length} Total</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">Review bids, compare delivery timelines, and hire the best freelancer.</p>
+                </div>
               </div>
 
               {applicants.length > 0 && (
                 <button
                   onClick={generateHiringRecommendation}
                   disabled={isAnalyzingApplicants}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-white font-semibold transition-all disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-primary/20"
-                  style={{
-                    background: "linear-gradient(135deg, hsl(var(--primary)) 0%, #a855f7 100%)"
-                  }}
+                  className="w-full lg:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-primary text-primary-foreground dark:bg-emerald-400 dark:text-emerald-950 border border-primary/30 dark:border-emerald-300/60 font-extrabold transition-all disabled:opacity-60 hover:shadow-lg hover:shadow-primary/20 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
                 >
                   {isAnalyzingApplicants ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -1677,16 +1747,21 @@ ${appsContext}`;
                   exit={{ opacity: 0, height: 0 }}
                   className="mb-8 overflow-hidden"
                 >
-                  <div className="relative p-6 rounded-2xl border border-primary/20 bg-primary/5 backdrop-blur-sm">
+                  <div className="relative p-5 md:p-6 rounded-3xl border border-primary/25 bg-primary/10 dark:bg-emerald-400/10 dark:border-emerald-300/25 backdrop-blur-sm shadow-sm overflow-hidden">
                     {/* Decorative background element */}
-                    <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
-                      <Brain className="w-24 h-24" />
+                    <div className="absolute -top-4 -right-3 p-4 opacity-10 dark:opacity-15 pointer-events-none">
+                      <Brain className="w-28 h-28 text-primary dark:text-emerald-300" />
                     </div>
 
                     <div className="relative z-10 space-y-4">
-                      <div className="flex items-center gap-2 text-primary">
-                        <Sparkles className="w-5 h-5" />
-                        <h3 className="font-bold uppercase tracking-wider text-xs">AI Recommendation Engine</h3>
+                      <div className="flex items-center gap-3 text-primary dark:text-emerald-300">
+                        <div className="h-9 w-9 rounded-xl bg-background/70 border border-primary/20 flex items-center justify-center shadow-sm">
+                          <Sparkles className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h3 className="font-extrabold uppercase tracking-wider text-xs">AI Recommendation Engine</h3>
+                          <p className="text-xs text-muted-foreground mt-0.5">Generated from bids, freelancer stats, risk signals, and the job description.</p>
+                        </div>
                       </div>
 
                       {isAnalyzingApplicants && !aiHiringAnalysis && (
@@ -1697,7 +1772,7 @@ ${appsContext}`;
                       )}
 
                       {aiHiringAnalysis && (
-                        <div className="text-sm leading-relaxed whitespace-pre-line text-foreground/90">
+                        <div className="text-sm md:text-[15px] leading-7 whitespace-pre-line text-foreground/90 bg-background/55 dark:bg-neutral-950/35 border border-border/50 rounded-2xl p-4">
                           {aiHiringAnalysis}
                         </div>
                       )}
@@ -1721,10 +1796,10 @@ ${appsContext}`;
               <div className="grid gap-4">
                 {applicants.map((app, i) => (
                   <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-                    className="group flex flex-col sm:flex-row sm:items-center justify-between p-4 md:p-5 rounded-2xl border border-border/60 bg-surface/50 hover:bg-surface hover:shadow-md transition-all gap-4 md:gap-5">
+                    className="group flex flex-col xl:flex-row xl:items-center justify-between p-4 md:p-5 rounded-3xl border border-border/70 bg-surface/45 dark:bg-neutral-900/45 hover:bg-surface dark:hover:bg-neutral-900 hover:shadow-md transition-all gap-4 md:gap-5">
 
                     <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
-                      <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0 shadow-sm">
+                      <div className="w-11 h-11 md:w-12 md:h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0 shadow-sm">
                         <Users className="w-4 h-4 md:w-5 md:h-5 text-primary" />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -1736,22 +1811,22 @@ ${appsContext}`;
                       </div>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 flex-shrink-0 border-t sm:border-t-0 pt-4 sm:pt-0 border-border/40">
-                      <div className="flex items-center justify-between sm:justify-end gap-6 sm:px-4 text-sm">
-                        <div className="text-left sm:text-right">
+                    <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4 flex-shrink-0 border-t xl:border-t-0 pt-4 xl:pt-0 border-border/40">
+                      <div className="grid grid-cols-2 gap-3 md:min-w-[260px] text-sm">
+                        <div className="rounded-2xl bg-background/60 border border-border/60 px-4 py-3">
                           <p className="text-[10px] uppercase text-muted-foreground font-bold tracking-widest mb-0.5">Bid</p>
-                          <p className="text-emerald-400 font-bold text-sm md:text-base">{(Number(app.bidAmount) / 1e6).toFixed(2)} USDT</p>
+                          <p className="text-emerald-600 dark:text-emerald-300 font-bold text-sm md:text-base">{(Number(app.bidAmount) / 1e6).toFixed(2)} USDT</p>
                         </div>
-                        <div className="text-right">
+                        <div className="rounded-2xl bg-background/60 border border-border/60 px-4 py-3">
                           <p className="text-[10px] uppercase text-muted-foreground font-bold tracking-widest mb-0.5">Delivery</p>
                           <p className="text-foreground font-bold text-sm md:text-base">{app.deliveryDays.toString()} Days</p>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 md:gap-3 w-full sm:w-auto">
-                        <button onClick={() => setSelectedApplicant(app)} className="flex-1 sm:flex-none px-3 md:px-4 py-2 text-xs font-bold bg-background border rounded-lg hover:bg-muted/50 transition text-foreground whitespace-nowrap shadow-sm">View Details</button>
+                      <div className="flex items-center gap-2 md:gap-3 w-full md:w-auto">
+                        <button onClick={() => setSelectedApplicant(app)} className="flex-1 md:flex-none px-4 py-3 text-xs font-bold bg-background border border-border/70 rounded-2xl hover:bg-muted/50 transition text-foreground whitespace-nowrap shadow-sm">View Details</button>
                         {isClient && (
-                          <button disabled={hiring} onClick={() => handleHire(app)} className="flex-1 sm:flex-none px-4 md:px-6 py-2 text-xs font-bold bg-primary text-primary-foreground rounded-lg hover:opacity-90 disabled:opacity-50 transition whitespace-nowrap shadow-sm shadow-primary/20">
+                          <button disabled={hiring} onClick={() => handleHire(app)} className="flex-1 md:flex-none px-5 md:px-6 py-3 text-xs font-extrabold bg-primary text-primary-foreground rounded-2xl hover:opacity-90 disabled:opacity-50 transition whitespace-nowrap shadow-sm shadow-primary/20">
                             {hiring ? "Hiring..." : "Hire Now"}
                           </button>
                         )}

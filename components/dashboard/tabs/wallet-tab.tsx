@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useActiveAccount, useActiveWallet, useSwitchActiveWalletChain, useSendTransaction, useActiveWalletChain } from "thirdweb/react";
-import { getContract, readContract, prepareContractCall, prepareTransaction, toWei } from "thirdweb";
+import { getContract, readContract, prepareContractCall, prepareTransaction, toWei, sendTransaction } from "thirdweb";
 import { client } from "@/lib/thirdweb-client";
 import { getWalletBalance } from "thirdweb/wallets";
 import { polygon, polygonAmoy } from "thirdweb/chains";
@@ -139,12 +139,12 @@ export function WalletTab() {
       setCrossLoading(true);
       if (crossToken === "MATIC") {
         const tx = prepareTransaction({ client, chain: polygonAmoy, to: toAddr, value: toWei(crossAmt) });
-        await sendTx({ transaction: tx, account: fromAccount } as any);
+        await sendTransaction({ account: fromAccount, transaction: tx });
       } else {
         const usdt = getContract({ client, chain: polygonAmoy, address: USDT_MOCK_ADDRESS });
         const parsedAmt = BigInt(Math.floor(Number(crossAmt) * 1_000_000));
         const tx = prepareContractCall({ contract: usdt, method: "function transfer(address,uint256) returns (bool)", params: [toAddr, parsedAmt] });
-        await sendTx({ transaction: tx, account: fromAccount } as any);
+        await sendTransaction({ account: fromAccount, transaction: tx });
       }
       toast.success(`Sent ${crossAmt} ${crossToken} ${fromEOA ? "from EOA to Smart Wallet" : "from Smart Wallet to EOA"}`);
       setCrossAmt("");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getContract, readContract, prepareContractCall, sendTransaction } from "thirdweb";
 import { smartWallet } from "thirdweb/wallets";
@@ -70,38 +70,37 @@ export default function ClientOffersPage() {
     const [loading, setLoading] = useState(true);
     const [funding, setFunding] = useState<string | null>(null);
 
-    useEffect(() => {
+    const fetchOffers = useCallback(async () => {
         if (!account) return;
 
-        async function fetchOffers() {
-            try {
-                setLoading(true);
-                const jobBoard = getContract({
-                    client,
-                    chain: CHAIN,
-                    address: DEPLOYED_CONTRACTS.addresses.JobBoard,
-                });
+        try {
+            setLoading(true);
+            const jobBoard = getContract({
+                client,
+                chain: CHAIN,
+                address: DEPLOYED_CONTRACTS.addresses.JobBoard,
+            });
 
-                // 1. Get List of Job IDs offered by this client
-                const jobIds = await readContract({
-                    contract: jobBoard,
-                    method: "function getOffersFromClient(address) view returns (uint256[])",
-                    params: [account!.address],
-                });
+            // 1. Get List of Job IDs offered by this client
+            const jobIds = await readContract({
+                contract: jobBoard,
+                method: "function getOffersFromClient(address) view returns (uint256[])",
+                params: [account!.address],
+            });
 
-                if (!jobIds || jobIds.length === 0) {
-                    setOffers([]);
-                    return;
-                }
+            if (!jobIds || jobIds.length === 0) {
+                setOffers([]);
+                return;
+            }
 
-                // 2. Fetch details for each offer
-                const offerPromises = [...jobIds].reverse().map(async (idBig) => {
-                    try {
-                        const offerData = await readContract({
-                            contract: jobBoard,
-                            method: "function getDirectOffer(uint256) view returns ((uint256,address,address,string,string,uint256,uint64,uint64,uint64,bool,bool,bool))",
-                            params: [idBig]
-                        }) as any;
+            // 2. Fetch details for each offer
+            const offerPromises = [...jobIds].reverse().map(async (idBig) => {
+                try {
+                    const offerData = await readContract({
+                        contract: jobBoard,
+                        method: "function getDirectOffer(uint256) view returns ((uint256,address,address,string,string,uint256,uint64,uint64,uint64,bool,bool,bool))",
+                        params: [idBig]
+                    }) as any;
 
                         // offerData is a struct/tuple. Order:
                         // 0: jobId
@@ -119,49 +118,70 @@ export default function ClientOffersPage() {
 
                         // Also check JOB status to see if it's already "Hired" (Funded)
                         // because "accepted" stays true forever.
-                        const jobData = await readContract({
-                            contract: jobBoard,
-                            method: "function getJob(uint256) view returns (address,string,string,uint256,uint8,address,address,uint64,uint64,uint64,bytes32[],uint256)",
-                            params: [idBig]
-                        }) as any;
+                    const jobData = await readContract({
+                        contract: jobBoard,
+                        method: "function getJob(uint256) view returns (address,string,string,uint256,uint8,address,address,uint64,uint64,uint64,bytes32[],uint256)",
+                        params: [idBig]
+                    }) as any;
 
                         // jobData[4] is status enum. 
                         // Unknown=0, Open=1, Hired=2, Cancelled=3, Completed=4, Expired=5
                         // Direct offers start as Unknown(0). Accepted -> Open(1). Hired -> Hired(2).
 
-                        return {
-                            jobId: idBig.toString(),
-                            client: offerData[1],
-                            freelancer: offerData[2],
-                            title: offerData[3],
-                            descriptionURI: offerData[4],
-                            budgetUSDT: offerData[5].toString(),
-                            deliveryDays: offerData[6].toString(),
-                            createdAt: offerData[7].toString(),
-                            expiresAt: offerData[8].toString(),
-                            accepted: offerData[9],
-                            rejected: offerData[10],
-                            cancelled: offerData[11],
-                            jobStatus: Number(jobData[4])
-                        };
-                    } catch (e) {
-                        console.error("Error fetching offer", idBig, e);
-                        return null;
-                    }
-                });
+                    return {
+                        jobId: idBig.toString(),
+                        client: offerData[1],
+                        freelancer: offerData[2],
+                        title: offerData[3],
+                        descriptionURI: offerData[4],
+                        budgetUSDT: offerData[5].toString(),
+                        deliveryDays: offerData[6].toString(),
+                        createdAt: offerData[7].toString(),
+                        expiresAt: offerData[8].toString(),
+                        accepted: offerData[9],
+                        rejected: offerData[10],
+                        cancelled: offerData[11],
+                        jobStatus: Number(jobData[4])
+                    };
+                } catch (e) {
+                    console.error("Error fetching offer", idBig, e);
+                    return null;
+                }
+            });
 
-                const results = await Promise.all(offerPromises);
-                setOffers(results.filter(o => o !== null) as DirectOffer[]);
+            const results = await Promise.all(offerPromises);
+            setOffers(results.filter(o => o !== null) as DirectOffer[]);
 
-            } catch (err) {
-                console.error("Failed to load offers", err);
-            } finally {
-                setLoading(false);
-            }
+        } catch (err) {
+            console.error("Failed to load offers", err);
+        } finally {
+            setLoading(false);
         }
-
-        fetchOffers();
     }, [account]);
+
+    useEffect(() => {
+        fetchOffers();
+    }, [fetchOffers]);
+
+    useEffect(() => {
+        let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+        const handleRealtimeUpdate = (event: Event) => {
+            const detail = (event as CustomEvent).detail;
+            const entityTypes = detail?.entityTypes || [];
+            if (!entityTypes.includes("job")) return;
+
+            if (refreshTimer) clearTimeout(refreshTimer);
+            refreshTimer = setTimeout(() => {
+                fetchOffers();
+            }, 1200);
+        };
+
+        window.addEventListener("worqs:client-realtime-update", handleRealtimeUpdate);
+        return () => {
+            if (refreshTimer) clearTimeout(refreshTimer);
+            window.removeEventListener("worqs:client-realtime-update", handleRealtimeUpdate);
+        };
+    }, [fetchOffers]);
 
     const handleFundJob = async (offer: DirectOffer) => {
         if (!account) return;

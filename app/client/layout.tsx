@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { TopNavbar } from "@/components/dashboard/top-navbar";
 import { WalletSessionGuard } from "@/components/auth/WalletSessionGuard";
+import { ClientRealtimeNotifications } from "@/components/notifications/ClientRealtimeNotifications";
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -41,6 +42,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   return (
     <WalletSessionGuard>
+      <ClientRealtimeNotifications />
       {/* Prevent ANY horizontal overflow */}
       <div className="flex h-screen w-full overflow-hidden">
 

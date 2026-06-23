@@ -10,6 +10,7 @@ import { client as thirdwebClient } from "@/lib/thirdweb-client";
 import { getAllChatsForUser, getCachedMessages, getCompanyChatId, getCompanyIdFromChatId, getJobIdFromProjectChatId, initSpacetimeDB, isCompanyChatId, isProjectChatId, refreshSpacetimeDB, type ChatRoom } from "@/lib/spacetimedb";
 import { toast } from "sonner";
 import { MessageCircle } from "lucide-react";
+import { REALTIME_NOTIFICATIONS_ENABLED } from "@/lib/realtime-config";
 
 export function GlobalChatListener() {
     const account = useActiveAccount();
@@ -127,6 +128,7 @@ export function GlobalChatListener() {
                     
                     if (!isViewingChat) {
                         const isClientViewer = room.client_address.toLowerCase() === account.address.toLowerCase();
+                        if (REALTIME_NOTIFICATIONS_ENABLED && isClientViewer) return;
                         const chatPath = projectJobId
                             ? (isClientViewer ? `/client/jobs/${projectJobId}` : `/freelancer/jobs/${projectJobId}`)
                             : companyId

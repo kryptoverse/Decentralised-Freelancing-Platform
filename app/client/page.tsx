@@ -335,6 +335,30 @@ export default function ClientHome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [account, smartAddress, eoaAddress]);
 
+  useEffect(() => {
+    if (!account || !smartAddress || smartAddress.startsWith("0x0000")) return;
+
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const handleRealtimeUpdate = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      const entityTypes = detail?.entityTypes || [];
+      if (!entityTypes.includes("job") && !entityTypes.includes("chat")) return;
+
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        loadJobs();
+        fetchProfile();
+      }, 900);
+    };
+
+    window.addEventListener("worqs:client-realtime-update", handleRealtimeUpdate);
+    return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      window.removeEventListener("worqs:client-realtime-update", handleRealtimeUpdate);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account, smartAddress]);
+
   /* ------------------------------------
       AI CONTEXT INJECTION
   ------------------------------------ */

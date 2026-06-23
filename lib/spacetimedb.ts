@@ -1,3 +1,5 @@
+import { REALTIME_NOTIFICATIONS_ENABLED } from "@/lib/realtime-config";
+
 export type Identity = string;
 
 export type User = {
@@ -27,6 +29,21 @@ export type ChatMember = {
   wallet_address: string;
   member_role: string;
 };
+
+export type ClientNotificationEvent = {
+  id: number;
+  client_address: string;
+  event_type: string;
+  entity_type: string;
+  entity_id: string;
+  actor_address: string;
+  title: string;
+  message: string;
+  route: string;
+  timestamp: number | string;
+};
+
+export type ClientNotificationPayload = Omit<ClientNotificationEvent, "id" | "timestamp">;
 
 const DEFAULT_SPACETIMEDB_API = "https://maincloud.spacetimedb.com/v1/database";
 
@@ -135,6 +152,7 @@ export class SpacetimeDBClient {
   public messages: Message[] = [];
   public users: User[] = [];
   public chatMembers: ChatMember[] = [];
+  public clientNotifications: ClientNotificationEvent[] = [];
 
   constructor() {}
 
@@ -259,6 +277,17 @@ export class SpacetimeDBClient {
             this.emit("ChatMember", "insert", member);
           }
         });
+      }
+
+      if (REALTIME_NOTIFICATIONS_ENABLED) {
+        const notificationData = await this.query("SELECT * FROM ClientNotificationEvent");
+        if (Array.isArray(notificationData)) {
+          notificationData.forEach(n => {
+            if (this.upsertClientNotification(n)) {
+              this.emit("ClientNotificationEvent", "insert", n);
+            }
+          });
+        }
       }
     } catch (err) {
       console.error("Polling error:", err);
@@ -386,6 +415,24 @@ export class SpacetimeDBClient {
         stored[storedIndex] = member;
       }
       localStorage.setItem("spacetime_chat_members", JSON.stringify(stored));
+    }
+
+    return isNew;
+  }
+
+  upsertClientNotification(notification: ClientNotificationEvent) {
+    const existingIndex = this.clientNotifications.findIndex(existing => existing.id === notification.id);
+    const isNew = existingIndex === -1;
+    if (isNew) {
+      this.clientNotifications.push(notification);
+    } else {
+      this.clientNotifications[existingIndex] = notification;
+    }
+
+    if (this.clientNotifications.length > 250) {
+      this.clientNotifications = [...this.clientNotifications]
+        .sort((a, b) => b.id - a.id)
+        .slice(0, 250);
     }
 
     return isNew;
@@ -521,9 +568,40 @@ export const sendMessage = (jobId: string, content: string, senderAddress?: stri
     if (!ok) {
       if (optimisticId !== null) client?.removeMessage(optimisticId);
       console.error("Failed to send chat message", { jobId, senderAddress });
+    } else if (senderAddress) {
+      const room = client?.rooms.find(r => r.job_id === jobId) || getChatRoomById(jobId);
+      if (room && room.client_address && senderAddress.toLowerCase() !== room.client_address.toLowerCase()) {
+        const projectJobId = isProjectChatId(jobId) ? getJobIdFromProjectChatId(jobId) : null;
+        void safeTriggerClientNotification({
+          client_address: room.client_address,
+          event_type: "message_received",
+          entity_type: "chat",
+          entity_id: jobId,
+          actor_address: senderAddress,
+          title: "New message",
+          message: "A freelancer sent you a message.",
+          route: projectJobId ? `/client/jobs/${projectJobId}` : `/client/chat?chatId=${encodeURIComponent(jobId)}`,
+        });
+      }
     }
     return ok;
   });
+};
+
+export const triggerClientNotification = (payload: ClientNotificationPayload) => {
+  if (!REALTIME_NOTIFICATIONS_ENABLED) return Promise.resolve(false);
+  const spacetime = initSpacetimeDB();
+  return spacetime.call("trigger_client_notification", payload);
+};
+
+export const safeTriggerClientNotification = async (payload: ClientNotificationPayload) => {
+  if (!REALTIME_NOTIFICATIONS_ENABLED) return false;
+  try {
+    return await triggerClientNotification(payload);
+  } catch (err) {
+    console.warn("Realtime client notification skipped:", err);
+    return false;
+  }
 };
 
 // --- HELPERS FOR CHAT DASHBOARD --- //

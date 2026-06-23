@@ -1027,6 +1027,30 @@ export default function JobAnalyticsPage() {
     };
   }, [job?.escrowAddress]);
 
+  useEffect(() => {
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const currentJobId = String(jobId);
+
+    const handleRealtimeUpdate = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      const entityTypes = detail?.entityTypes || [];
+      const entityIds = detail?.entityIds || [];
+      if (!entityTypes.includes("job")) return;
+      if (entityIds.length > 0 && !entityIds.includes(currentJobId)) return;
+
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        router.refresh();
+      }, 900);
+    };
+
+    window.addEventListener("worqs:client-realtime-update", handleRealtimeUpdate);
+    return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      window.removeEventListener("worqs:client-realtime-update", handleRealtimeUpdate);
+    };
+  }, [jobId, router]);
+
   /* ============================================================
       CLIENT ACTIONS ON ESCROW
   ============================================================ */

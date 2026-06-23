@@ -14,6 +14,7 @@ import { useActiveAccount } from "thirdweb/react";
 import { client } from "@/lib/thirdweb-client";
 import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
+import { safeTriggerClientNotification } from "@/lib/spacetimedb";
 import { ipfsToHttp } from "@/utils/ipfs";
 import { useIPFSUpload } from "@/hooks/useIPFSUpload";
 import { useChatContext, defaultContext } from "@/components/chat/ChatContext";
@@ -471,6 +472,16 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
       setHasApplied(true);
       setShowProposalModal(false);
       setTxMsg("Proposal submitted successfully!");
+      void safeTriggerClientNotification({
+        client_address: job.client,
+        event_type: "proposal_created",
+        entity_type: "job",
+        entity_id: String(job.jobId),
+        actor_address: account.address,
+        title: "New proposal received",
+        message: `A freelancer bid ${(Number(bidAmount) || 0).toFixed(2)} USDT on ${job.title}.`,
+        route: `/client/jobs/${job.jobId}`,
+      });
     } catch (err: any) {
       console.error(err);
       setError("Failed to submit proposal.");

@@ -45,7 +45,7 @@ import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { ipfsToHttp } from "@/utils/ipfs";
 import { SpacetimeChat } from "@/components/chat/SpacetimeChat";
-import { getDirectChatId, getProjectChatId } from "@/lib/spacetimedb";
+import { getDirectChatId, getProjectChatId, safeTriggerClientNotification } from "@/lib/spacetimedb";
 
 /* ============================================================
    STRICT TYPES
@@ -581,6 +581,18 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
       await sendTransaction({ account: requireWalletAccount(), transaction: tx });
 
       setCancelModal(false);
+      if (job && walletAccount) {
+        void safeTriggerClientNotification({
+          client_address: job.client,
+          event_type: "job_cancelled",
+          entity_type: "job",
+          entity_id: String(job.jobId),
+          actor_address: walletAccount.address,
+          title: "Cancellation requested",
+          message: `The freelancer requested cancellation for ${job.title}.`,
+          route: `/client/jobs/${job.jobId}`,
+        });
+      }
       router.refresh();
     } catch (err) {
       console.error("requestCancel error:", err);
@@ -609,6 +621,18 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
 
       await sendTransaction({ account: requireWalletAccount(), transaction: tx });
 
+      if (job && walletAccount) {
+        void safeTriggerClientNotification({
+          client_address: job.client,
+          event_type: "job_cancelled",
+          entity_type: "job",
+          entity_id: String(job.jobId),
+          actor_address: walletAccount.address,
+          title: "Job cancelled",
+          message: `Cancellation was accepted for ${job.title}.`,
+          route: `/client/jobs/${job.jobId}`,
+        });
+      }
       router.refresh();
     } catch (err) {
       console.error("acceptCancel error:", err);
@@ -649,6 +673,18 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
       await sendTransaction({ account: requireWalletAccount(), transaction: tx });
 
       setDeliverModal(false);
+      if (job && walletAccount) {
+        void safeTriggerClientNotification({
+          client_address: job.client,
+          event_type: "work_submitted",
+          entity_type: "job",
+          entity_id: String(job.jobId),
+          actor_address: walletAccount.address,
+          title: "Work submitted",
+          message: `The freelancer submitted work for ${job.title}.`,
+          route: `/client/jobs/${job.jobId}`,
+        });
+      }
       
       // OPTIMISTIC UPDATE: Instantly reveal delivery history without a slow RPC refresh
       setEscrowData((prev) => {
@@ -701,6 +737,18 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
       const transaction = await sendTransaction({ account: requireWalletAccount(), transaction: tx });
 
       setDisputeModal(false);
+      if (job && walletAccount) {
+        void safeTriggerClientNotification({
+          client_address: job.client,
+          event_type: "dispute_raised",
+          entity_type: "job",
+          entity_id: String(job.jobId),
+          actor_address: walletAccount.address,
+          title: "Dispute raised",
+          message: `A dispute was raised for ${job.title}.`,
+          route: `/client/jobs/${job.jobId}`,
+        });
+      }
       router.refresh();
     } catch (err: any) {
       console.error("raiseDispute error:", err);

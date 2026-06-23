@@ -56,7 +56,7 @@ export default function FreelancerLayout({
     if (pathname.includes("/profile")) setActiveTab("profile");
     else if (pathname.includes("/wallet")) setActiveTab("wallet");
     else if (pathname.includes("/orders")) setActiveTab("orders");
-    else if (pathname.includes("/find-work")) setActiveTab("find-work");
+    else if (pathname.toLowerCase().includes("/findwork")) setActiveTab("find-work");
     else setActiveTab("home");
   }, [pathname, isPublicProfile]);
 

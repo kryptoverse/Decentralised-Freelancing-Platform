@@ -7,7 +7,7 @@ import { Wallet, FileText, Plus, Briefcase, Copy, CheckCheck, RefreshCw, ArrowRi
 import { getWalletBalance } from "thirdweb/wallets";
 import { polygonAmoy } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb-client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PostJobForm } from "@/components/client/post-job-form";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { getContract, readContract } from "thirdweb";
@@ -67,6 +67,7 @@ export default function ClientHome() {
 
   const [jobs, setJobs] = useState<any[]>([]);
   const [selectedTab, setSelectedTab] = useState("open");
+  const postJobRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Faucet state
   const [faucetLoading, setFaucetLoading] = useState(false);
@@ -391,6 +392,22 @@ Wallet Balances: MATIC: ${balance?.displayValue} ${balance?.symbol}, USDT: ${usd
     fetchBalance();
     fetchUSDTBalance();
   };
+
+  const refreshAfterJobPost = () => {
+    if (postJobRefreshTimer.current) clearTimeout(postJobRefreshTimer.current);
+
+    postJobRefreshTimer.current = setTimeout(() => {
+      loadJobs();
+      fetchProfile();
+      postJobRefreshTimer.current = null;
+    }, 900);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (postJobRefreshTimer.current) clearTimeout(postJobRefreshTimer.current);
+    };
+  }, []);
 
   /* ------------------------------------
       ADDRESS COPY
@@ -832,7 +849,10 @@ Wallet Balances: MATIC: ${balance?.displayValue} ${balance?.symbol}, USDT: ${usd
         <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4">
           <div className="bg-surface rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <PostJobForm
-              onJobPosted={() => setShowPostJob(false)}
+              onJobPosted={() => {
+                setShowPostJob(false);
+                refreshAfterJobPost();
+              }}
               onCancel={() => setShowPostJob(false)}
             />
           </div>

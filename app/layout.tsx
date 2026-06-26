@@ -5,6 +5,7 @@ import "./globals.css";
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThirdwebProvider } from "thirdweb/react";
+import { AutoConnectProvider } from "@/components/auth/AutoConnectProvider";
 import { ChatProvider } from "@/components/chat/ChatContext";
 import { GlobalChatBot } from "@/components/chat/GlobalChatBot";
 import { GlobalChatListener } from "@/components/chat/GlobalChatListener";
@@ -30,6 +31,8 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
         <ThirdwebProvider>
+          {/* Restores the saved wallet session on every route (survives refresh). */}
+          <AutoConnectProvider />
           <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
             <ChatProvider>
               {children}

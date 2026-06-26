@@ -1,4 +1,5 @@
 import { REALTIME_NOTIFICATIONS_ENABLED } from "@/lib/realtime-config";
+import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 
 export type Identity = string;
 
@@ -82,12 +83,21 @@ const sortMessages = (messages: Message[]) => {
   return [...messages].sort((a, b) => messageTime(a) - messageTime(b));
 };
 
-export const getProjectChatId = (jobId: string | number | bigint) => `project-${String(jobId)}`;
+// Deployment salt: makes chat-room ids unique per chain + contract deployment.
+// Without it, redeploying JobBoard resets on-chain job ids (0,1,2…) so a
+// brand-new job's room (`project-0`) would resurface messages from a PREVIOUS
+// deployment's job 0 (messages live in SpacetimeDB, not on-chain). Including
+// the chain id + JobBoard address guarantees a fresh, isolated room set per
+// deployment. Contains no "-" so the trailing job id stays parseable.
+const CHAT_NS = `${DEPLOYED_CONTRACTS.chainId}x${(DEPLOYED_CONTRACTS.addresses.JobBoard || "").slice(2, 10).toLowerCase()}`;
+
+export const getProjectChatId = (jobId: string | number | bigint) => `project-${CHAT_NS}-${String(jobId)}`;
 
 export const isProjectChatId = (jobId: string) => jobId.startsWith("project-");
 
+// The numeric job id is the trailing segment (`project-<ns>-<jobId>`).
 export const getJobIdFromProjectChatId = (jobId: string) => (
-  isProjectChatId(jobId) ? jobId.slice("project-".length) : jobId
+  isProjectChatId(jobId) ? (jobId.split("-").pop() ?? jobId) : jobId
 );
 
 export const getCompanyChatId = (companyId: string | number | bigint) => `company-${String(companyId)}`;
@@ -102,9 +112,16 @@ export const getCompanyChatParticipantAddress = (companyId: string | number | bi
   `company-group-${String(companyId)}`
 );
 
-export const getDirectChatId = (clientAddress: string, freelancerAddress: string) => (
-  `direct-${clientAddress}-${freelancerAddress}`
-);
+// Direct (job-independent) DM room between two wallets. Pair-scoped BY DESIGN:
+// the same room is reused for every conversation between these two people,
+// across all jobs and over time — it is NOT a per-job chat. Addresses are
+// lowercased and ordered so both parties resolve to the SAME room id no matter
+// who opens it or how each address happens to be cased/checksummed (otherwise
+// the pair could end up in two mismatched rooms).
+export const getDirectChatId = (addressA: string, addressB: string) => {
+  const [lo, hi] = [addressA.toLowerCase(), addressB.toLowerCase()].sort();
+  return `direct-${CHAT_NS}-${lo}-${hi}`;
+};
 
 const readStorageArray = <T>(key: string): T[] => {
   if (typeof window === 'undefined') return [];
@@ -449,7 +466,9 @@ let client: SpacetimeDBClient | null = null;
 // Bump this whenever the cached chat data could be stale/corrupt and should be
 // rebuilt from the server. v2: reducer args were previously sent as objects
 // (never persisted server-side), leaving orphaned optimistic rows in cache.
-const CACHE_VERSION = "2";
+// v3: chat-room ids are now namespaced per deployment + direct ids normalized,
+// so rooms/messages cached under the old id scheme must be dropped.
+const CACHE_VERSION = "3";
 const CACHE_VERSION_KEY = "spacetime_cache_version";
 const CACHE_KEYS = ["spacetime_messages", "spacetime_rooms", "spacetime_chat_members"];
 

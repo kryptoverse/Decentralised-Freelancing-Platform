@@ -27,7 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
 import { useChatContext, defaultContext } from "@/components/chat/ChatContext";
-import { initiateChat, initSpacetimeDB } from "@/lib/spacetimedb";
+import { getDirectChatId, initiateChat, initSpacetimeDB } from "@/lib/spacetimedb";
 
 // ... (Metadata interface)
 
@@ -419,7 +419,7 @@ CURRENT FREELANCER CONTEXT:
     if (!address) return;
     
     const addressStr = typeof address === 'string' ? address : address[0];
-    const directChatId = `direct-${account.address}-${addressStr}`;
+    const directChatId = getDirectChatId(account.address, addressStr);
     
     initSpacetimeDB();
     const ok = await initiateChat(directChatId, addressStr, account.address);

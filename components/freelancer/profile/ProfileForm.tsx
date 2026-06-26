@@ -12,6 +12,7 @@ import { CHAIN } from "@/lib/chains";
 import { useIPFSUpload } from "@/hooks/useIPFSUpload";
 import { ipfsToHttp } from "@/utils/ipfs";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
+import { FileUploadButton } from "@/components/ui/file-upload-button";
 
 interface Metadata {
   name: string;
@@ -384,7 +385,13 @@ export function FreelancerProfileForm({
                 />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-muted-foreground mb-2 truncate">Image uploaded</p>
-                  <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, "profileImage")} className="text-xs w-full" />
+                  <FileUploadButton
+                    accept="image/*"
+                    onChange={(e) => handleFileUpload(e, "profileImage")}
+                    label="Upload Image"
+                    hasFile
+                    disabled={uploading}
+                  />
                 </div>
               </div>
             ) : (
@@ -392,7 +399,12 @@ export function FreelancerProfileForm({
                 <div className="flex items-center justify-center h-20 rounded-lg bg-surface-secondary mb-2">
                   <span className="text-xs text-muted-foreground">No image uploaded</span>
                 </div>
-                <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, "profileImage")} className="text-xs w-full" />
+                <FileUploadButton
+                  accept="image/*"
+                  onChange={(e) => handleFileUpload(e, "profileImage")}
+                  label="Upload Image"
+                  disabled={uploading}
+                />
               </div>
             )}
             {errors.profileImage && <p className="text-xs text-red-500">{errors.profileImage}</p>}
@@ -408,11 +420,12 @@ export function FreelancerProfileForm({
                   controls
                   className="rounded-lg border border-border w-full max-h-36"
                 />
-                <input
-                  type="file"
+                <FileUploadButton
                   accept="video/mp4,video/webm,video/quicktime"
                   onChange={(e) => handleFileUpload(e, "introVideo")}
-                  className="text-xs w-full"
+                  label="Upload Video"
+                  hasFile
+                  disabled={uploading}
                 />
               </div>
             ) : (
@@ -420,11 +433,11 @@ export function FreelancerProfileForm({
                 <div className="flex items-center justify-center h-20 rounded-lg bg-surface-secondary mb-2">
                   <span className="text-xs text-muted-foreground">No video uploaded</span>
                 </div>
-                <input
-                  type="file"
+                <FileUploadButton
                   accept="video/mp4,video/webm,video/quicktime"
                   onChange={(e) => handleFileUpload(e, "introVideo")}
-                  className="text-xs w-full"
+                  label="Upload Video"
+                  disabled={uploading}
                 />
               </div>
             )}
@@ -642,9 +655,11 @@ export function FreelancerProfileForm({
                     View Current Certificate &rarr;
                   </a>
                 )}
-                <input
-                  type="file"
+                <FileUploadButton
                   accept=".pdf,.doc,.docx,image/*"
+                  label="Upload File"
+                  hasFile={!!cert.file}
+                  disabled={uploading}
                   onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
@@ -660,7 +675,6 @@ export function FreelancerProfileForm({
                     updateArray("certificates", i, "file", uri);
                     setMsg(`✅ Certificate uploaded`);
                   }}
-                  className="text-xs w-full"
                 />
               </div>
             </div>
@@ -742,9 +756,11 @@ export function FreelancerProfileForm({
                     <span className="text-xs text-muted-foreground">No image uploaded</span>
                   </div>
                 )}
-                <input
-                  type="file"
+                <FileUploadButton
                   accept="image/*"
+                  label="Upload Image"
+                  hasFile={!!item.image}
+                  disabled={uploading}
                   onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
@@ -760,7 +776,6 @@ export function FreelancerProfileForm({
                     updateArray("portfolio", i, "image", uri);
                     setMsg(`✅ Image uploaded`);
                   }}
-                  className="text-xs w-full"
                 />
               </div>
             </div>

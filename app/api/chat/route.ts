@@ -1,11 +1,27 @@
+import { retrieveKnowledge } from "@/lib/worqs-knowledge";
+
 export const maxDuration = 30; // 30 seconds max duration
 
 export async function POST(req: Request) {
   try {
     const { messages, systemContext } = await req.json();
 
+    // Pull in ONLY the platform-knowledge slice relevant to the latest user
+    // question. Data-only questions match nothing → zero extra tokens; FAQ
+    // questions pull in just the matching section(s). The full knowledge base
+    // lives server-side and is never sent on every request.
+    const lastUserMessage = [...messages].reverse().find((m: any) => m.role === "user")?.content || "";
+    const knowledge = retrieveKnowledge(lastUserMessage);
+
+    const systemContent = [
+      systemContext || "You are the WORQS AI Assistant. Be concise, helpful, and use markdown.",
+      knowledge && `--- WORQS PLATFORM KNOWLEDGE (use this to answer platform/FAQ questions) ---\n${knowledge}`,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
     const formattedMessages = [
-      { role: "system", content: systemContext || "You are a helpful AI assistant." },
+      { role: "system", content: systemContent },
       ...messages.map((m: any) => ({ role: m.role, content: m.content }))
     ];
 

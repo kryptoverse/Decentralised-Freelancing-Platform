@@ -156,7 +156,12 @@ export class SpacetimeDBClient {
 
   constructor() {}
 
-  async call(reducer: string, args: any[] | Record<string, any>) {
+  // NOTE: SpacetimeDB's HTTP `/call/:reducer` endpoint expects the body to be a
+  // JSON ARRAY of positional arguments in the order the reducer declares them.
+  // Passing a keyed object makes the module fail to deserialize its args and
+  // return "the instance encountered a fatal error" (HTTP 530). Always pass an
+  // array here, ordered to match the Rust reducer signature.
+  async call(reducer: string, args: any[]) {
     try {
       const res = await fetch(`${SPACETIMEDB_API}/${DB_NAME}/call/${reducer}`, {
         method: 'POST',
@@ -441,11 +446,30 @@ export class SpacetimeDBClient {
 
 let client: SpacetimeDBClient | null = null;
 
+// Bump this whenever the cached chat data could be stale/corrupt and should be
+// rebuilt from the server. v2: reducer args were previously sent as objects
+// (never persisted server-side), leaving orphaned optimistic rows in cache.
+const CACHE_VERSION = "2";
+const CACHE_VERSION_KEY = "spacetime_cache_version";
+const CACHE_KEYS = ["spacetime_messages", "spacetime_rooms", "spacetime_chat_members"];
+
+const purgeStaleCacheOnce = () => {
+  if (typeof window === "undefined") return;
+  try {
+    if (localStorage.getItem(CACHE_VERSION_KEY) === CACHE_VERSION) return;
+    CACHE_KEYS.forEach((key) => localStorage.removeItem(key));
+    localStorage.setItem(CACHE_VERSION_KEY, CACHE_VERSION);
+  } catch (err) {
+    console.warn("Failed to purge stale SpacetimeDB cache:", err);
+  }
+};
+
 export const initSpacetimeDB = (
   url: string = "",
   dbName: string = ""
 ) => {
   if (client) return client;
+  purgeStaleCacheOnce();
   client = new SpacetimeDBClient();
   return client;
 };
@@ -458,11 +482,8 @@ export const getSpacetimeDBClient = () => {
 // Helpers for calling reducers
 export const registerUser = (walletAddress: string, name: string, role: string) => {
   if (!client) return;
-  return client.call("register_user", {
-    wallet_address: walletAddress,
-    name,
-    role,
-  });
+  // register_user(wallet_address, name, role)
+  return client.call("register_user", [walletAddress, name, role]);
 };
 
 export const initiateChat = (jobId: string, freelancerAddress: string, clientAddress?: string, initiatorRole = "client") => {
@@ -477,12 +498,8 @@ export const initiateChat = (jobId: string, freelancerAddress: string, clientAdd
     window.dispatchEvent(new CustomEvent("spacetime_update"));
   }
 
-  return client.call("initiate_chat", {
-    job_id: jobId,
-    freelancer_address: freelancerAddress,
-    client_address: clientAddress || "",
-    initiator_role: initiatorRole,
-  }).then((ok) => {
+  // initiate_chat(job_id, freelancer_address, client_address, initiator_role)
+  return client.call("initiate_chat", [jobId, freelancerAddress, clientAddress || "", initiatorRole]).then((ok) => {
     if (!ok) {
       client?.removeRoom(jobId);
       console.error("Failed to initiate chat room", { jobId, freelancerAddress, clientAddress });
@@ -502,11 +519,8 @@ export const initiateCompanyChat = (companyId: string | number | bigint, founder
 
 export const ensureChatMember = (jobId: string, walletAddress: string, memberRole: string) => {
   if (!client) return Promise.resolve(false);
-  return client.call("ensure_chat_member", {
-    job_id: jobId,
-    wallet_address: walletAddress,
-    member_role: memberRole,
-  });
+  // ensure_chat_member(job_id, wallet_address, member_role)
+  return client.call("ensure_chat_member", [jobId, walletAddress, memberRole]);
 };
 
 export const setupCompanyGroupChat = async ({
@@ -560,11 +574,8 @@ export const sendMessage = (jobId: string, content: string, senderAddress?: stri
     }
   }
 
-  return client.call("send_message", {
-    job_id: jobId,
-    content,
-    sender_address: senderAddress || "",
-  }).then((ok) => {
+  // send_message(job_id, content, sender_address)
+  return client.call("send_message", [jobId, content, senderAddress || ""]).then((ok) => {
     if (!ok) {
       if (optimisticId !== null) client?.removeMessage(optimisticId);
       console.error("Failed to send chat message", { jobId, senderAddress });
@@ -591,7 +602,18 @@ export const sendMessage = (jobId: string, content: string, senderAddress?: stri
 export const triggerClientNotification = (payload: ClientNotificationPayload) => {
   if (!REALTIME_NOTIFICATIONS_ENABLED) return Promise.resolve(false);
   const spacetime = initSpacetimeDB();
-  return spacetime.call("trigger_client_notification", payload);
+  // trigger_client_notification(client_address, event_type, entity_type, entity_id,
+  //                             actor_address, title, message, route)
+  return spacetime.call("trigger_client_notification", [
+    payload.client_address,
+    payload.event_type,
+    payload.entity_type,
+    payload.entity_id,
+    payload.actor_address,
+    payload.title,
+    payload.message,
+    payload.route,
+  ]);
 };
 
 export const safeTriggerClientNotification = async (payload: ClientNotificationPayload) => {

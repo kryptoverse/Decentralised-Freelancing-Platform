@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, DollarSign, Clock, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import { ipfsToHttp } from "@/utils/ipfs";
 import { useToast } from "@/components/ui/use-toast";
-import { getDirectChatId, initiateChat, initSpacetimeDB, safeTriggerClientNotification } from "@/lib/spacetimedb";
+import { getDirectChatId, initiateChat, initSpacetimeDB } from "@/lib/spacetimedb";
 
 interface DirectOffer {
     jobId: string;
@@ -257,17 +257,6 @@ export default function ClientOffersPage() {
                 description: "Escrow created and job started successfully.",
             });
 
-            void safeTriggerClientNotification({
-                client_address: offer.freelancer,
-                event_type: "job_funded",
-                entity_type: "job",
-                entity_id: offer.jobId,
-                actor_address: account.address,
-                title: "Direct offer funded",
-                message: `The client funded ${offer.title}. You can start the job now.`,
-                route: `/freelancer/jobs/${offer.jobId}`,
-            });
-
             // Refresh offers (eager update)
             setOffers(prev => prev.map(o =>
                 o.jobId === offer.jobId ? { ...o, jobStatus: 2 } : o
@@ -305,20 +294,6 @@ export default function ClientOffersPage() {
 
             await sendTransaction({ transaction: tx, account: execAccount });
             toast({ title: "Offer Cancelled" });
-
-            const offer = offers.find(o => o.jobId === jobId);
-            if (offer) {
-                void safeTriggerClientNotification({
-                    client_address: offer.freelancer,
-                    event_type: "direct_offer_cancelled",
-                    entity_type: "job",
-                    entity_id: jobId,
-                    actor_address: account.address,
-                    title: "Direct offer cancelled",
-                    message: `The client cancelled the direct offer for ${offer.title}.`,
-                    route: "/freelancer/proposals",
-                });
-            }
 
             setOffers(prev => prev.map(o => o.jobId === jobId ? { ...o, cancelled: true } : o));
         } catch (err) {

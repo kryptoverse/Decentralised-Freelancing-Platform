@@ -1,17 +1,23 @@
 "use client";
 
-import { useEffect } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useActiveAccount, useActiveWalletConnectionStatus } from "thirdweb/react";
 
 export function WalletSessionGuard({ children }: { children: React.ReactNode }) {
   const account = useActiveAccount();
   const connectionStatus = useActiveWalletConnectionStatus();
   const router = useRouter();
-  const pathname = usePathname();
   
   // Determine if this is a public path that doesn't REQUIRE a wallet
-  const isPublicPath = /^\/founder\/Company\/\d+$/i.test(pathname);
+  const [isPublicPath, setIsPublicPath] = useState(false);
+
+  useEffect(() => {
+    // This effect runs only once on mount to determine if the current path is public.
+    if (typeof window !== "undefined") {
+      setIsPublicPath(/^\/founder\/Company\/\d+$/i.test(window.location.pathname));
+    }
+  }, []);
 
   const isConnecting = connectionStatus === "connecting";
 
@@ -38,18 +44,7 @@ export function WalletSessionGuard({ children }: { children: React.ReactNode }) 
   }
 
   if (!account) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen text-center">
-        <h2 className="text-2xl font-bold">
-          {connectionStatus === "disconnected" ? "Redirecting..." : "Restoring Wallet Session..."}
-        </h2>
-        <p className="text-foreground-secondary mt-2">
-          {connectionStatus === "disconnected"
-            ? "Please reconnect your wallet to continue."
-            : "Please wait a moment."}
-        </p>
-      </div>
-    );
+    return null;
   }
 
   return <>{children}</>;

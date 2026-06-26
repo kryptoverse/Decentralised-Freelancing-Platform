@@ -20,7 +20,7 @@ import {
 import { client } from "@/lib/thirdweb-client";
 import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
-import { setupCompanyGroupChat, safeTriggerClientNotification } from "@/lib/spacetimedb";
+import { setupCompanyGroupChat } from "@/lib/spacetimedb";
 
 interface RoundInfo {
   roundId: bigint;
@@ -153,17 +153,6 @@ export function InvestModal({
             founderAddress: companyData.owner,
             walletAddress: activeAccount.address,
             memberRole: "investor",
-          });
-
-          void safeTriggerClientNotification({
-            client_address: companyData.owner,
-            event_type: "company_investment",
-            entity_type: "company",
-            entity_id: String(company.id),
-            actor_address: activeAccount.address,
-            title: "New investment received",
-            message: `An investor purchased shares in ${company.meta?.name || "your company"}.`,
-            route: "/founder",
           });
         }
       } catch (chatErr) {

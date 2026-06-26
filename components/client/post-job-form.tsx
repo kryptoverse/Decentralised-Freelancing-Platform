@@ -8,6 +8,7 @@ import { client } from "@/lib/thirdweb-client";
 import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { useIPFSUpload } from "@/hooks/useIPFSUpload";
+import { avatarEvents } from "@/avatar/avatarEvents";
 
 interface PostJobFormProps {
   onJobPosted?: (jobId: number) => void;
@@ -114,6 +115,7 @@ export function PostJobForm({ onJobPosted, onCancel }: PostJobFormProps) {
       
       // Extract jobId from events (if available) or use a workaround
       setMsg("✅ Job posted successfully! Waiting for confirmation...");
+      avatarEvents.jobPosted(); // optional avatar reaction (fail-safe, no-op if absent)
       
       // Wait a bit for the transaction to be mined
       setTimeout(() => {

@@ -612,30 +612,6 @@ export default function FreelancerHome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [account?.address, platformFeeBps]); // Re-fetch when fee changes
 
-  useEffect(() => {
-    if (!account?.address) return;
-
-    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
-    const handleRealtimeUpdate = (event: Event) => {
-      const detail = (event as CustomEvent).detail;
-      const entityTypes = detail?.entityTypes || [];
-      if (!entityTypes.includes("job")) return;
-
-      if (refreshTimer) clearTimeout(refreshTimer);
-      refreshTimer = setTimeout(() => {
-        loadJobs();
-        loadProfile(account.address);
-      }, 1200);
-    };
-
-    window.addEventListener("worqs:freelancer-realtime-update", handleRealtimeUpdate);
-    return () => {
-      if (refreshTimer) clearTimeout(refreshTimer);
-      window.removeEventListener("worqs:freelancer-realtime-update", handleRealtimeUpdate);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [account?.address]);
-
   // Faucet handler
   const requestTestTokens = async () => {
     if (!account?.address) return;

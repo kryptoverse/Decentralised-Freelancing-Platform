@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { TopNavbar } from "@/components/dashboard/top-navbar";
 import { WalletSessionGuard } from "@/components/auth/WalletSessionGuard";
-import { FreelancerRealtimeNotifications } from "@/components/notifications/ClientRealtimeNotifications";
 
 export default function FreelancerLayout({
   children,
@@ -57,7 +56,7 @@ export default function FreelancerLayout({
     if (pathname.includes("/profile")) setActiveTab("profile");
     else if (pathname.includes("/wallet")) setActiveTab("wallet");
     else if (pathname.includes("/orders")) setActiveTab("orders");
-    else if (pathname.toLowerCase().includes("/findwork")) setActiveTab("find-work");
+    else if (pathname.includes("/find-work")) setActiveTab("find-work");
     else setActiveTab("home");
   }, [pathname, isPublicProfile]);
 
@@ -69,7 +68,6 @@ export default function FreelancerLayout({
 
   return (
     <WalletSessionGuard>
-      {!isPublicProfile && <FreelancerRealtimeNotifications />}
       <div className="flex h-screen w-full overflow-hidden">
 
         {/* ----------- SIDEBAR (Always Mounted → Fix Mobile Burger!) ----------- */}

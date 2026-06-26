@@ -8,6 +8,7 @@ import { ThirdwebProvider } from "thirdweb/react";
 import { ChatProvider } from "@/components/chat/ChatContext";
 import { GlobalChatBot } from "@/components/chat/GlobalChatBot";
 import { GlobalChatListener } from "@/components/chat/GlobalChatListener";
+import { GlobalAvatar } from "@/components/avatar/GlobalAvatar";
 import { Toaster as SonnerToaster } from "sonner";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -34,6 +35,9 @@ export default function RootLayout({
               {children}
               <GlobalChatBot />
               <GlobalChatListener />
+              {/* Optional, fully isolated 3D avatar. Lazy-loaded and crash-safe;
+                  if it fails or is disabled, the rest of the app is unaffected. */}
+              <GlobalAvatar />
             </ChatProvider>
             <SonnerToaster position="top-right" expand={true} richColors />
           </ThemeProvider>

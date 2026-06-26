@@ -8,11 +8,9 @@ import {
   Bell,
   Briefcase,
   CheckCircle2,
-  Coins,
   MessageSquare,
   Send,
   ShieldAlert,
-  TrendingUp,
   X,
 } from "lucide-react";
 import {
@@ -32,17 +30,6 @@ const MAX_SEEN_IDS = 600;
 
 const eventMeta: Record<string, { icon: any; accent: string }> = {
   proposal_created: { icon: Briefcase, accent: "border-emerald-400/60 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" },
-  direct_offer_created: { icon: Briefcase, accent: "border-emerald-400/60 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" },
-  direct_offer_accepted: { icon: CheckCircle2, accent: "border-emerald-400/60 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" },
-  direct_offer_rejected: { icon: AlertTriangle, accent: "border-red-400/60 bg-red-500/10 text-red-700 dark:text-red-300" },
-  direct_offer_cancelled: { icon: AlertTriangle, accent: "border-amber-400/60 bg-amber-500/10 text-amber-700 dark:text-amber-300" },
-  job_hired: { icon: CheckCircle2, accent: "border-emerald-400/60 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" },
-  job_funded: { icon: CheckCircle2, accent: "border-emerald-400/60 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" },
-  work_approved: { icon: CheckCircle2, accent: "border-emerald-400/60 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" },
-  job_cancel_requested: { icon: AlertTriangle, accent: "border-amber-400/60 bg-amber-500/10 text-amber-700 dark:text-amber-300" },
-  company_investment: { icon: TrendingUp, accent: "border-emerald-400/60 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" },
-  dividend_available: { icon: Coins, accent: "border-emerald-400/60 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" },
-  round_ended: { icon: AlertTriangle, accent: "border-amber-400/60 bg-amber-500/10 text-amber-700 dark:text-amber-300" },
   message_received: { icon: MessageSquare, accent: "border-sky-400/60 bg-sky-500/10 text-sky-700 dark:text-sky-300" },
   work_submitted: { icon: Send, accent: "border-violet-400/60 bg-violet-500/10 text-violet-700 dark:text-violet-300" },
   job_completed: { icon: CheckCircle2, accent: "border-emerald-400/60 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" },
@@ -63,48 +50,6 @@ const shortAddress = (address: string) => {
 };
 
 export function ClientRealtimeNotifications() {
-  return (
-    <RealtimeNotifications
-      updateEventName="worqs:client-realtime-update"
-      workspaceLabel="client"
-    />
-  );
-}
-
-export function FreelancerRealtimeNotifications() {
-  return (
-    <RealtimeNotifications
-      updateEventName="worqs:freelancer-realtime-update"
-      workspaceLabel="freelancer"
-    />
-  );
-}
-
-export function FounderRealtimeNotifications() {
-  return (
-    <RealtimeNotifications
-      updateEventName="worqs:founder-realtime-update"
-      workspaceLabel="founder"
-    />
-  );
-}
-
-export function InvestorRealtimeNotifications() {
-  return (
-    <RealtimeNotifications
-      updateEventName="worqs:investor-realtime-update"
-      workspaceLabel="investor"
-    />
-  );
-}
-
-function RealtimeNotifications({
-  updateEventName,
-  workspaceLabel,
-}: {
-  updateEventName: string;
-  workspaceLabel: string;
-}) {
   const account = useActiveAccount();
   const router = useRouter();
   const [cards, setCards] = useState<NotificationCard[]>([]);
@@ -128,7 +73,7 @@ function RealtimeNotifications({
     };
 
     const dispatchUpdate = (events: ClientNotificationEvent[]) => {
-      window.dispatchEvent(new CustomEvent(updateEventName, {
+      window.dispatchEvent(new CustomEvent("worqs:client-realtime-update", {
         detail: {
           events,
           eventTypes: Array.from(new Set(events.map((event) => event.event_type))),
@@ -162,7 +107,7 @@ function RealtimeNotifications({
           localId: `summary-${Date.now()}`,
           event_type: "summary",
           title: `${overflow} more update${overflow === 1 ? "" : "s"}`,
-          message: `Your ${workspaceLabel} workspace has new activity.`,
+          message: "Your client workspace has new activity.",
           count: overflow,
         });
       }
@@ -204,7 +149,7 @@ function RealtimeNotifications({
       offConnect();
       if (batchTimer.current) window.clearTimeout(batchTimer.current);
     };
-  }, [account?.address, router, updateEventName, workspaceLabel]);
+  }, [account?.address, router]);
 
   if (!REALTIME_NOTIFICATIONS_ENABLED || cards.length === 0) return null;
 

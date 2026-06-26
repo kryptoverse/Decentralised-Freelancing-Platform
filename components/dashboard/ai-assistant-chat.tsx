@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Send, Sparkles, X, Loader2 } from "lucide-react"
 import { useChatContext } from "@/components/chat/ChatContext"
+import { avatarSignals } from "@/avatar/avatarSignals"
 
 export type Message = {
   id: string;
@@ -30,6 +31,8 @@ export function AIAssistantChat({ isOpen, onToggle }: AIAssistantChatProps) {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInput(e.target.value);
+    // Drive the (optional) avatar — no-op if it's disabled/absent.
+    if (e.target.value.trim()) avatarSignals.userTyping();
   };
 
   const append = async (message: { role: "user" | "assistant" | "system", content: string }) => {
@@ -37,6 +40,7 @@ export function AIAssistantChat({ isOpen, onToggle }: AIAssistantChatProps) {
     const newMessages = [...messages, newMessage];
     setMessages(newMessages);
     setIsLoading(true);
+    avatarSignals.userSent();
 
     try {
       const res = await fetch("/api/chat", {
@@ -53,9 +57,14 @@ export function AIAssistantChat({ isOpen, onToggle }: AIAssistantChatProps) {
       const assistantMessage: Message = { id: Date.now().toString() + "-ai", role: "assistant", content: "" };
       setMessages([...newMessages, assistantMessage]);
 
+      let firstToken = true;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        if (firstToken) {
+          firstToken = false;
+          avatarSignals.aiSpeaking();
+        }
         assistantMessage.content += decoder.decode(value, { stream: true });
         setMessages((prev) => {
           const updated = [...prev];
@@ -63,8 +72,10 @@ export function AIAssistantChat({ isOpen, onToggle }: AIAssistantChatProps) {
           return updated;
         });
       }
+      avatarSignals.aiDone(assistantMessage.content);
     } catch (error) {
       console.error(error);
+      avatarSignals.error();
     } finally {
       setIsLoading(false);
     }

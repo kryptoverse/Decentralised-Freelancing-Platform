@@ -23,7 +23,6 @@ import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { useIPFSUpload } from "@/hooks/useIPFSUpload";
 import { useChatContext } from "@/components/chat/ChatContext";
-import { safeTriggerClientNotification } from "@/lib/spacetimedb";
 
 // --- Types ---
 
@@ -899,70 +898,6 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
 
   const handleRefresh = async () => { setRefreshing(true); await Promise.all([fetchAll(), fetchBalances()]); };
 
-  // Broadcast a notification to every investor of the current company.
-  // Reads the authoritative on-chain investor set once (this only runs on a
-  // rare, explicit founder action), so no investor is ever missed. Falls back
-  // to the cap-table list already in state if the read fails. No polling added.
-  const notifyCompanyInvestors = async (
-    eventType: string,
-    title: string,
-    message: string,
-  ) => {
-    if (!company) return;
-
-    let addresses: string[] = [];
-    try {
-      const invRegistryC = getContract({ client, chain: CHAIN, address: DEPLOYED_CONTRACTS.addresses.InvestorRegistry as any });
-      addresses = await readContract({
-        contract: invRegistryC,
-        method: "function getCompanyInvestors(uint256) view returns (address[])",
-        params: [company.id],
-      }) as string[];
-    } catch (e) {
-      console.warn("notifyCompanyInvestors: on-chain investor fetch failed, using cached list", e);
-      addresses = (analytics?.investors ?? []).map((inv) => inv.address);
-    }
-
-    const founderAddr = (account?.address || "").toLowerCase();
-    const seen = new Set<string>();
-    for (const addr of addresses) {
-      if (!addr) continue;
-      const key = addr.toLowerCase();
-      if (key === founderAddr || seen.has(key)) continue;
-      seen.add(key);
-      void safeTriggerClientNotification({
-        client_address: addr,
-        event_type: eventType,
-        entity_type: "company",
-        entity_id: String(company.id),
-        actor_address: account?.address || "",
-        title,
-        message,
-        route: "/investor",
-      });
-    }
-  };
-
-  // Realtime: refresh the dashboard once (debounced) when a company-related
-  // notification arrives (e.g. a new investment). No polling/interval added.
-  useEffect(() => {
-    if (!account?.address) return;
-    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
-    const handleRealtimeUpdate = (event: Event) => {
-      const detail = (event as CustomEvent).detail;
-      const entityTypes = detail?.entityTypes || [];
-      if (!entityTypes.includes("company")) return;
-      if (refreshTimer) clearTimeout(refreshTimer);
-      refreshTimer = setTimeout(() => { fetchAll(); }, 1500);
-    };
-    window.addEventListener("worqs:founder-realtime-update", handleRealtimeUpdate);
-    return () => {
-      if (refreshTimer) clearTimeout(refreshTimer);
-      window.removeEventListener("worqs:founder-realtime-update", handleRealtimeUpdate);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [account?.address]);
-
   // Vault operation handlers
   const handleWithdrawRaised = async () => {
     if (!account || !company) return;
@@ -999,11 +934,6 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
       const saleC = getContract({ client, chain: CHAIN, address: company.sale as any });
       const tx = prepareContractCall({ contract: saleC, method: "function endRound()" });
       await sendTransaction({ transaction: tx, account: exec });
-      await notifyCompanyInvestors(
-        "round_ended",
-        "Funding round ended",
-        `The funding round for ${company.meta?.name || "a company you invested in"} has closed.`,
-      );
       handleRefresh();
     } catch (err: any) { alert("Failed: " + err.message); } finally { setEndRoundLoading(false); }
   };
@@ -1016,11 +946,6 @@ Shares Sold: ${fmtShares(analytics?.sharesSold) || "0"}`;
       const vault = getContract({ client, chain: CHAIN, address: company.vault as any });
       const tx = prepareContractCall({ contract: vault, method: "function closePeriod()" });
       await sendTransaction({ transaction: tx, account: exec });
-      await notifyCompanyInvestors(
-        "dividend_available",
-        "Dividends available",
-        `New dividends are available to claim from ${company.meta?.name || "a company you invested in"}.`,
-      );
       handleRefresh();
     } catch (err: any) { alert("Failed: " + err.message); } finally { setClosePeriodLoading(false); }
   };

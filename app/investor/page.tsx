@@ -229,24 +229,6 @@ export default function InvestorPortfolioPage() {
 
     useEffect(() => { setLoading(true); fetchInvestments().finally(() => setLoading(false)); }, [fetchInvestments]);
 
-    // Realtime: refresh portfolio once (debounced) on company notifications
-    // (dividends available / round ended). No polling/interval added.
-    useEffect(() => {
-        let refreshTimer: ReturnType<typeof setTimeout> | null = null;
-        const handleRealtimeUpdate = (event: Event) => {
-            const detail = (event as CustomEvent).detail;
-            const entityTypes = detail?.entityTypes || [];
-            if (!entityTypes.includes("company")) return;
-            if (refreshTimer) clearTimeout(refreshTimer);
-            refreshTimer = setTimeout(() => { fetchInvestments(); }, 1500);
-        };
-        window.addEventListener("worqs:investor-realtime-update", handleRealtimeUpdate);
-        return () => {
-            if (refreshTimer) clearTimeout(refreshTimer);
-            window.removeEventListener("worqs:investor-realtime-update", handleRealtimeUpdate);
-        };
-    }, [fetchInvestments]);
-
     async function refresh() { setRefreshing(true); await fetchInvestments(); setRefreshing(false); }
 
     async function doClaim(addr: string, method: "function claimInvestor()" | "function claimRefund()") {

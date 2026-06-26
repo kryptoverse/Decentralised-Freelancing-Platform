@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { TopNavbar } from "@/components/dashboard/top-navbar";
 import { WalletSessionGuard } from "@/components/auth/WalletSessionGuard";
-import { FounderRealtimeNotifications } from "@/components/notifications/ClientRealtimeNotifications";
 
 export default function FounderLayout({
   children,
@@ -54,11 +53,8 @@ export default function FounderLayout({
     role: "freelancer" | "client" | "founder" | "investor"
   ) => setUserRole(role);
 
-  const isPublicCompanyView = /^\/founder\/Company\/\d+$/i.test(pathname);
-
   return (
     <WalletSessionGuard>
-      {!isPublicCompanyView && <FounderRealtimeNotifications />}
       <div className="flex h-screen w-full overflow-hidden">
         {/* Sidebar */}
         <Sidebar

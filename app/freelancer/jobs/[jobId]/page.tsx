@@ -42,6 +42,7 @@ import { useIPFSUpload } from "@/hooks/useIPFSUpload";
 
 import { client } from "@/lib/thirdweb-client";
 import { CHAIN } from "@/lib/chains";
+import { avatarEvents } from "@/avatar/avatarEvents";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { ipfsToHttp } from "@/utils/ipfs";
 import { SpacetimeChat } from "@/components/chat/SpacetimeChat";
@@ -251,31 +252,6 @@ export default function FreelancerJobDetailPage() {
       return 0n;
     }
   }, [params?.jobId]);
-
-  useEffect(() => {
-    if (jobId === 0n) return;
-
-    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
-    const currentJobId = jobId.toString();
-    const handleRealtimeUpdate = (event: Event) => {
-      const detail = (event as CustomEvent).detail;
-      const entityTypes = detail?.entityTypes || [];
-      const entityIds = detail?.entityIds || [];
-      if (!entityTypes.includes("job")) return;
-      if (entityIds.length > 0 && !entityIds.includes(currentJobId)) return;
-
-      if (refreshTimer) clearTimeout(refreshTimer);
-      refreshTimer = setTimeout(() => {
-        router.refresh();
-      }, 900);
-    };
-
-    window.addEventListener("worqs:freelancer-realtime-update", handleRealtimeUpdate);
-    return () => {
-      if (refreshTimer) clearTimeout(refreshTimer);
-      window.removeEventListener("worqs:freelancer-realtime-update", handleRealtimeUpdate);
-    };
-  }, [jobId, router]);
 
   /* ============================================================
      LOAD DATA
@@ -571,6 +547,23 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
     }
   }, [job, description, proposal, escrowData, freelancerProfile, isKYCVerified, setChatContext]);
 
+  // Optional avatar reaction: celebrate once when the freelancer first sees the
+  // payment released (escrow finalized, no dispute). Guarded per-escrow per
+  // browser session so it fires a single time. Fail-safe — never affects logic.
+  useEffect(() => {
+    if (!escrowData?.terminal || escrowData?.disputed) return;
+    if (typeof window === "undefined") return;
+    const key = `worqs.paidCelebrated.${escrowData.escrowAddr}`;
+    try {
+      if (!sessionStorage.getItem(key)) {
+        sessionStorage.setItem(key, "1");
+        avatarEvents.paymentReleased();
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [escrowData?.terminal, escrowData?.disputed, escrowData?.escrowAddr]);
+
   /* ============================================================
      ACTION HELPERS
   ============================================================ */
@@ -762,6 +755,7 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
       const transaction = await sendTransaction({ account: requireWalletAccount(), transaction: tx });
 
       setDisputeModal(false);
+      avatarEvents.disputeRaised(); // optional avatar reaction (fail-safe)
       if (job && walletAccount) {
         void safeTriggerClientNotification({
           client_address: job.client,

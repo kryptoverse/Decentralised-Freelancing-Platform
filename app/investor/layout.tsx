@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { TopNavbar } from "@/components/dashboard/top-navbar";
 import { WalletSessionGuard } from "@/components/auth/WalletSessionGuard";
-import { InvestorRealtimeNotifications } from "@/components/notifications/ClientRealtimeNotifications";
 
 export default function InvestorLayout({
   children,
@@ -47,7 +46,6 @@ export default function InvestorLayout({
 
   return (
     <WalletSessionGuard>
-      <InvestorRealtimeNotifications />
       <div
         className="flex h-screen w-full overflow-hidden"
         style={{ '--sidebar-w': isCollapsed ? '5rem' : '16rem' } as React.CSSProperties}

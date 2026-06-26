@@ -10,6 +10,7 @@ import {
   sendTransaction,
 } from "thirdweb";
 import { useActiveAccount } from "thirdweb/react";
+import { avatarEvents } from "@/avatar/avatarEvents";
 
 import { client } from "@/lib/thirdweb-client";
 import { CHAIN } from "@/lib/chains";
@@ -472,6 +473,7 @@ YOUR PROFILE CONTEXT (SIGNED-IN FREELANCER):
       setHasApplied(true);
       setShowProposalModal(false);
       setTxMsg("Proposal submitted successfully!");
+      avatarEvents.proposalSubmitted(); // optional avatar reaction (fail-safe)
       void safeTriggerClientNotification({
         client_address: job.client,
         event_type: "proposal_created",

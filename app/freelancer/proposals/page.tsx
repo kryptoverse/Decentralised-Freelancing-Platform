@@ -1,19 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getContract, readContract, prepareContractCall, sendTransaction } from "thirdweb";
 import { useActiveAccount } from "thirdweb/react";
 import { client } from "@/lib/thirdweb-client";
 import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
+import { avatarEvents } from "@/avatar/avatarEvents";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, DollarSign, Clock, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import { getDirectChatId, initiateChat, initSpacetimeDB, safeTriggerClientNotification } from "@/lib/spacetimedb";
+import { getDirectChatId, initiateChat, initSpacetimeDB } from "@/lib/spacetimedb";
 
 interface DirectOffer {
     jobId: string;
@@ -40,99 +41,79 @@ export default function FreelancerProposalsPage() {
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState<string | null>(null);
 
-    const fetchOffers = useCallback(async () => {
+    useEffect(() => {
         if (!account) return;
 
-        try {
-            setLoading(true);
-            const jobBoard = getContract({
-                client,
-                chain: CHAIN,
-                address: DEPLOYED_CONTRACTS.addresses.JobBoard,
-            });
+        async function fetchOffers() {
+            try {
+                setLoading(true);
+                const jobBoard = getContract({
+                    client,
+                    chain: CHAIN,
+                    address: DEPLOYED_CONTRACTS.addresses.JobBoard,
+                });
 
-            // 1. Get List of Job IDs offered TO this freelancer
-            const jobIds = await readContract({
-                contract: jobBoard,
-                method: "function getOffersToFreelancer(address) view returns (uint256[])",
-                params: [account.address],
-            });
+                // 1. Get List of Job IDs offered TO this freelancer
+                const jobIds = await readContract({
+                    contract: jobBoard,
+                    method: "function getOffersToFreelancer(address) view returns (uint256[])",
+                    params: [account!.address],
+                });
 
-            if (!jobIds || jobIds.length === 0) {
-                setOffers([]);
-                return;
-            }
-
-            // 2. Fetch details for each offer
-            const offerPromises = [...jobIds].reverse().map(async (idBig) => {
-                try {
-                    const offerData = await readContract({
-                        contract: jobBoard,
-                        method: "function getDirectOffer(uint256) view returns ((uint256,address,address,string,string,uint256,uint64,uint64,uint64,bool,bool,bool))",
-                        params: [idBig]
-                    }) as any;
-
-                    // Also check JOB status
-                    const jobData = await readContract({
-                        contract: jobBoard,
-                        method: "function getJob(uint256) view returns (address,string,string,uint256,uint8,address,address,uint64,uint64,uint64,bytes32[],uint256)",
-                        params: [idBig]
-                    }) as any;
-
-                    return {
-                        jobId: idBig.toString(),
-                        client: offerData[1],
-                        freelancer: offerData[2],
-                        title: offerData[3],
-                        descriptionURI: offerData[4],
-                        budgetUSDT: offerData[5].toString(),
-                        deliveryDays: offerData[6].toString(),
-                        createdAt: offerData[7].toString(),
-                        expiresAt: offerData[8].toString(),
-                        accepted: offerData[9],
-                        rejected: offerData[10],
-                        cancelled: offerData[11],
-                        jobStatus: Number(jobData[4])
-                    };
-                } catch (e) {
-                    console.error("Error fetching offer", idBig, e);
-                    return null;
+                if (!jobIds || jobIds.length === 0) {
+                    setOffers([]);
+                    return;
                 }
-            });
 
-            const results = await Promise.all(offerPromises);
-            setOffers(results.filter(o => o !== null) as DirectOffer[]);
+                // 2. Fetch details for each offer
+                const offerPromises = [...jobIds].reverse().map(async (idBig) => {
+                    try {
+                        const offerData = await readContract({
+                            contract: jobBoard,
+                            method: "function getDirectOffer(uint256) view returns ((uint256,address,address,string,string,uint256,uint64,uint64,uint64,bool,bool,bool))",
+                            params: [idBig]
+                        }) as any;
 
-        } catch (err) {
-            console.error("Failed to load offers", err);
-        } finally {
-            setLoading(false);
+                        // Also check JOB status
+                        const jobData = await readContract({
+                            contract: jobBoard,
+                            method: "function getJob(uint256) view returns (address,string,string,uint256,uint8,address,address,uint64,uint64,uint64,bytes32[],uint256)",
+                            params: [idBig]
+                        }) as any;
+
+                        return {
+                            jobId: idBig.toString(),
+                            client: offerData[1],
+                            freelancer: offerData[2],
+                            title: offerData[3],
+                            descriptionURI: offerData[4],
+                            budgetUSDT: offerData[5].toString(),
+                            deliveryDays: offerData[6].toString(),
+                            createdAt: offerData[7].toString(),
+                            expiresAt: offerData[8].toString(),
+                            accepted: offerData[9],
+                            rejected: offerData[10],
+                            cancelled: offerData[11],
+                            jobStatus: Number(jobData[4])
+                        };
+                    } catch (e) {
+                        console.error("Error fetching offer", idBig, e);
+                        return null;
+                    }
+                });
+
+                const results = await Promise.all(offerPromises);
+                setOffers(results.filter(o => o !== null) as DirectOffer[]);
+
+            } catch (err) {
+                console.error("Failed to load offers", err);
+            } finally {
+                setLoading(false);
+            }
         }
-    }, [account]);
 
-    useEffect(() => {
         fetchOffers();
-    }, [fetchOffers]);
-
-    useEffect(() => {
-        let refreshTimer: ReturnType<typeof setTimeout> | null = null;
-        const handleRealtimeUpdate = (event: Event) => {
-            const detail = (event as CustomEvent).detail;
-            const entityTypes = detail?.entityTypes || [];
-            if (!entityTypes.includes("job")) return;
-
-            if (refreshTimer) clearTimeout(refreshTimer);
-            refreshTimer = setTimeout(() => {
-                fetchOffers();
-            }, 1200);
-        };
-
-        window.addEventListener("worqs:freelancer-realtime-update", handleRealtimeUpdate);
-        return () => {
-            if (refreshTimer) clearTimeout(refreshTimer);
-            window.removeEventListener("worqs:freelancer-realtime-update", handleRealtimeUpdate);
-        };
-    }, [fetchOffers]);
+    }, [account]);
 
     const handleAccept = async (jobId: string) => {
         if (!account) return;
@@ -153,24 +134,12 @@ export default function FreelancerProposalsPage() {
 
             await sendTransaction({ transaction: tx, account });
 
+            avatarEvents.offerAccepted(); // optional avatar reaction (fail-safe)
+
             toast({
                 title: "Offer Accepted!",
                 description: "Waiting for client to fund the escrow.",
             });
-
-            const offer = offers.find(o => o.jobId === jobId);
-            if (offer) {
-                void safeTriggerClientNotification({
-                    client_address: offer.client,
-                    event_type: "direct_offer_accepted",
-                    entity_type: "job",
-                    entity_id: jobId,
-                    actor_address: account.address,
-                    title: "Direct offer accepted",
-                    message: `The freelancer accepted your offer for ${offer.title}.`,
-                    route: "/client/offers",
-                });
-            }
 
             // Update local state
             setOffers(prev => prev.map(o =>
@@ -207,20 +176,6 @@ export default function FreelancerProposalsPage() {
 
             await sendTransaction({ transaction: tx, account });
             toast({ title: "Offer Rejected" });
-
-            const offer = offers.find(o => o.jobId === jobId);
-            if (offer) {
-                void safeTriggerClientNotification({
-                    client_address: offer.client,
-                    event_type: "direct_offer_rejected",
-                    entity_type: "job",
-                    entity_id: jobId,
-                    actor_address: account.address,
-                    title: "Direct offer rejected",
-                    message: `The freelancer rejected your offer for ${offer.title}.`,
-                    route: "/client/offers",
-                });
-            }
 
             setOffers(prev => prev.map(o => o.jobId === jobId ? { ...o, rejected: true } : o));
         } catch (err) {

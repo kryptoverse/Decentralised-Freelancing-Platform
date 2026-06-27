@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getContract, readContract } from "thirdweb";
-import { useActiveAccount } from "thirdweb/react";
+import { useActiveAccount, useActiveWallet } from "thirdweb/react";
 import { Building2, Loader2, MessageSquare } from "lucide-react";
 import { CHAIN } from "@/lib/chains";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
@@ -29,6 +29,7 @@ const getGatewayUrl = (uri?: string) => {
 
 export function CompanyGroupChatDashboard({ role }: { role: "founder" | "investor" }) {
   const account = useActiveAccount();
+  const activeWallet = useActiveWallet();
   const searchParams = useSearchParams();
   const requestedChatId = searchParams.get("chatId");
   const [companies, setCompanies] = useState<CompanyChatItem[]>([]);
@@ -53,11 +54,34 @@ export function CompanyGroupChatDashboard({ role }: { role: "founder" | "investo
       let companyIds: bigint[] = [];
 
       if (role === "founder") {
-        const companyId = await readContract({
+        // The company is owned on-chain by whichever address sent createCompany.
+        // Founders create the company from their personal EOA, but chat runs from
+        // the smart wallet — so we must check both addresses (smart wallet first,
+        // then EOA fallback), mirroring the founder dashboard lookup.
+        let companyId = await readContract({
           contract: companyRegistry,
           method: "function ownerToCompanyId(address) view returns (uint256)",
           params: [account.address],
         }).catch(() => 0n) as bigint;
+
+        if (companyId === 0n) {
+          const eoaAddress = (() => {
+            try {
+              return (activeWallet as any)?.getAdminAccount?.()?.address as string | undefined;
+            } catch {
+              return undefined;
+            }
+          })();
+
+          if (eoaAddress && eoaAddress.toLowerCase() !== account.address.toLowerCase()) {
+            companyId = await readContract({
+              contract: companyRegistry,
+              method: "function ownerToCompanyId(address) view returns (uint256)",
+              params: [eoaAddress],
+            }).catch(() => 0n) as bigint;
+          }
+        }
+
         if (companyId > 0n) companyIds = [companyId];
       } else {
         const investorRegistry = getContract({
@@ -129,7 +153,7 @@ export function CompanyGroupChatDashboard({ role }: { role: "founder" | "investo
     } finally {
       setLoading(false);
     }
-  }, [account, role, requestedChatId]);
+  }, [account, activeWallet, role, requestedChatId]);
 
   useEffect(() => {
     loadCompanies();

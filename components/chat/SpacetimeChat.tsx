@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useActiveAccount } from "thirdweb/react";
-import { getChatRoomById, getMessagesForChat, initSpacetimeDB, initiateChat, ensureChatMember, isCompanyChatId, refreshSpacetimeDB, registerUser, sendMessage, type Message } from "@/lib/spacetimedb";
+import { getChatMembersForRoom, getChatRoomById, getMessagesForChat, initSpacetimeDB, initiateChat, ensureChatMember, isCompanyChatId, refreshSpacetimeDB, registerUser, sendMessage, type Message } from "@/lib/spacetimedb";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -44,6 +44,11 @@ export function SpacetimeChat({
 }: SpacetimeChatProps) {
     const account = useActiveAccount();
     const [messages, setMessages] = useState<Message[]>([]);
+    // wallet (lowercased) -> member_role ("founder" | "investor") for this room.
+    // Used to label senders reliably: a founder who created the company from their
+    // EOA but chats from a smart wallet would never match `clientAddress` (the EOA
+    // owner), so address-only matching would mislabel their messages as "Investor".
+    const [memberRoles, setMemberRoles] = useState<Record<string, string>>({});
     const [inputMsg, setInputMsg] = useState("");
     const [connected, setConnected] = useState(false);
     const [sending, setSending] = useState(false);
@@ -55,6 +60,15 @@ export function SpacetimeChat({
         // Initialize SpacetimeDB connection
         const client = initSpacetimeDB();
         setMessages(getMessagesForChat(jobId).sort((a, b) => messageTime(a) - messageTime(b)));
+
+        const syncMemberRoles = () => {
+            const map: Record<string, string> = {};
+            for (const member of getChatMembersForRoom(jobId)) {
+                map[member.wallet_address.toLowerCase()] = member.member_role;
+            }
+            setMemberRoles(map);
+        };
+        syncMemberRoles();
         
         const offConnect = client.onConnect(async (token: string, identity: any) => {
             setConnected(true);
@@ -85,7 +99,8 @@ export function SpacetimeChat({
             // Subscribe to queries
             client.subscribe([
                 "SELECT * FROM Message WHERE job_id = '" + jobId + "'",
-                "SELECT * FROM ChatRoom WHERE job_id = '" + jobId + "'"
+                "SELECT * FROM ChatRoom WHERE job_id = '" + jobId + "'",
+                "SELECT * FROM ChatMember WHERE job_id = '" + jobId + "'"
             ]);
             refreshSpacetimeDB();
         });
@@ -103,6 +118,7 @@ export function SpacetimeChat({
 
         const handleUpdate = () => {
             setMessages(getMessagesForChat(jobId).sort((a, b) => messageTime(a) - messageTime(b)));
+            syncMemberRoles();
             setDirectChatExists(Boolean(directChatId && getChatRoomById(directChatId)));
         };
         window.addEventListener("spacetime_update", handleUpdate);
@@ -151,16 +167,23 @@ export function SpacetimeChat({
                         </div>
                     ) : (
                         messages.map(msg => {
-                            const isMe = msg.sender_address.toLowerCase() === account.address.toLowerCase();
-                            const isClient = msg.sender_address.toLowerCase() === clientAddress.toLowerCase();
-                            const isFreelancer = msg.sender_address.toLowerCase() === freelancerAddress.toLowerCase();
-                            
+                            const sender = msg.sender_address.toLowerCase();
+                            const isMe = sender === account.address.toLowerCase();
+                            const isClient = sender === clientAddress.toLowerCase();
+                            const isFreelancer = sender === freelancerAddress.toLowerCase();
+
                             const isCompanyRoom = isCompanyChatId(jobId);
                             let senderLabel = isCompanyRoom ? "Member" : "Admin";
-                            if (isCompanyRoom && isClient) senderLabel = "Founder";
-                            if (!isCompanyRoom && isClient) senderLabel = "Client";
-                            if (!isCompanyRoom && isFreelancer) senderLabel = "Freelancer";
-                            if (isCompanyRoom && !isClient) senderLabel = "Investor";
+                            if (isCompanyRoom) {
+                                // Prefer the on-record membership role (works no matter which
+                                // address the founder chats from); fall back to matching the
+                                // company owner (`clientAddress`) for legacy rows with no member.
+                                const memberRole = memberRoles[sender];
+                                senderLabel = (memberRole === "founder" || isClient) ? "Founder" : "Investor";
+                            } else {
+                                if (isClient) senderLabel = "Client";
+                                if (isFreelancer) senderLabel = "Freelancer";
+                            }
 
                             return (
                                 <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>

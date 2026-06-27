@@ -176,11 +176,14 @@ contract CompanyRegistry is Ownable2Step {
         distributor.setVault(address(vault));
 
         // 4) Deploy Sale contract (company owner controls rounds)
+        // Pass both the EOA owner (msg.sender) and the founder's Smart Wallet so
+        // the sale can block self-investment from either address.
         ShareSale sale = new ShareSale(
             address(paymentToken),
             address(token),
             address(vault),
             msg.sender,
+            smartWalletAddress,
             platformFeeRecipient,
             platformFeeBps,
             address(investorRegistry),

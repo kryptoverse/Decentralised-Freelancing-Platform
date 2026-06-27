@@ -8,7 +8,7 @@ import {
   sendTransaction,
   waitForReceipt,
 } from "thirdweb";
-import { useActiveAccount } from "thirdweb/react";
+import { useActiveAccount, useActiveWallet } from "thirdweb/react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertCircle,
@@ -51,11 +51,16 @@ export function InvestModal({
   onSuccess: () => void;
 }) {
   const activeAccount = useActiveAccount();
+  const activeWallet = useActiveWallet();
   const [usdtAmount, setUsdtAmount] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [hasProfile, setHasProfile] = useState<boolean | null>(null);
+  // True when the connected user is the founder of THIS company — founders may
+  // not invest in their own company. The company is owned on-chain by the
+  // founder's EOA, but they connect via a Smart Wallet, so we check both.
+  const [isOwnCompany, setIsOwnCompany] = useState(false);
 
   useEffect(() => {
     async function checkProfile() {
@@ -79,11 +84,57 @@ export function InvestModal({
     if (open) checkProfile();
   }, [activeAccount, open]);
 
+  useEffect(() => {
+    async function checkOwnCompany() {
+      if (!activeAccount || !company) {
+        setIsOwnCompany(false);
+        return;
+      }
+      try {
+        const companyRegistry = getContract({
+          client,
+          chain: CHAIN,
+          address: DEPLOYED_CONTRACTS.addresses.CompanyRegistry as `0x${string}`,
+        });
+
+        // Gather the addresses that could own a company: the Smart Wallet the
+        // user transacts from and the underlying personal EOA.
+        const candidates = [activeAccount.address];
+        try {
+          const eoa = (activeWallet as any)?.getAdminAccount?.()?.address as string | undefined;
+          if (eoa && !candidates.some((a) => a.toLowerCase() === eoa.toLowerCase())) {
+            candidates.push(eoa);
+          }
+        } catch {}
+
+        const ownedIds = await Promise.all(
+          candidates.map((addr) =>
+            readContract({
+              contract: companyRegistry,
+              method: "function ownerToCompanyId(address) view returns (uint256)",
+              params: [addr],
+            }).catch(() => 0n) as Promise<bigint>
+          )
+        );
+
+        setIsOwnCompany(ownedIds.some((id) => id > 0n && id === company.id));
+      } catch (err) {
+        // Fail open on a read error — the on-chain guard still blocks the buy.
+        setIsOwnCompany(false);
+      }
+    }
+    if (open) checkOwnCompany();
+  }, [activeAccount, activeWallet, company, open]);
+
   if (!open || !company) return null;
 
   const handleInvest = async () => {
     if (!activeAccount) {
       setErrorMsg("Please connect your wallet first.");
+      return;
+    }
+    if (isOwnCompany) {
+      setErrorMsg("Founders cannot invest in their own company.");
       return;
     }
     setErrorMsg("");
@@ -196,6 +247,13 @@ export function InvestModal({
           <p className="text-sm text-muted-foreground mb-6">Purchase shares to earn dividends from future revenue.</p>
 
           <div className="space-y-4 mb-6">
+            {isOwnCompany && (
+                <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-500 rounded-xl text-sm flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 shrink-0 mt-0.5"/>
+                    <p><strong>Not allowed:</strong> You are the founder of this company. Founders cannot invest in their own company.</p>
+                </div>
+            )}
+
             {hasProfile === false && (
                 <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-500 rounded-xl text-sm flex flex-col gap-3">
                     <div className="flex items-start gap-2">
@@ -236,7 +294,7 @@ export function InvestModal({
           {successMsg && <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-xl text-sm flex gap-2"><CheckCircle2 className="w-5 h-5 shrink-0"/>{successMsg}</div>}
 
           <button 
-             onClick={handleInvest} disabled={loading || !usdtAmount || hasProfile === false}
+             onClick={handleInvest} disabled={loading || !usdtAmount || hasProfile === false || isOwnCompany}
              className="w-full py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {loading ? <><Loader2 className="w-5 h-5 animate-spin" /> Processing...</> : "Confirm Investment"}

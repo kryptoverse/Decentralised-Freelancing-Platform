@@ -28,6 +28,12 @@ contract ShareSale is ReentrancyGuard, Pausable {
     ICompanyShareToken public immutable shareToken;
     ICompanyVault public immutable vault;
     address public immutable companyOwner;
+    // The founder's Smart Wallet (account-abstraction) address. The company is
+    // created from the founder's EOA (so `companyOwner` is the EOA), but the
+    // founder interacts with the dApp through their Smart Wallet. We record it
+    // here so self-investment can be blocked from BOTH addresses. May be the
+    // zero address if no Smart Wallet was provided at creation.
+    address public immutable companyOwnerSmartWallet;
 
     address public immutable feeRecipient;
     uint96 public immutable feeBps;
@@ -60,9 +66,21 @@ contract ShareSale is ReentrancyGuard, Pausable {
     error RoundAlreadyActive();
     error PriceOverflow();
     error PurchaseTooLarge();
+    error SelfInvestmentNotAllowed();
 
     modifier onlyCompanyOwner() {
         if (msg.sender != companyOwner) revert OnlyCompanyOwner();
+        _;
+    }
+
+    /// @dev Founders may not buy shares in their own company. Blocks the EOA
+    ///      owner and the linked Smart Wallet (the address the founder actually
+    ///      transacts from in the dApp).
+    modifier notCompanyOwner() {
+        if (
+            msg.sender == companyOwner ||
+            (companyOwnerSmartWallet != address(0) && msg.sender == companyOwnerSmartWallet)
+        ) revert SelfInvestmentNotAllowed();
         _;
     }
 
@@ -72,12 +90,13 @@ contract ShareSale is ReentrancyGuard, Pausable {
         address _shareToken,
         address _vault,
         address _companyOwner,
+        address _companyOwnerSmartWallet,
         address _feeRecipient,
         uint96 _feeBps,
         address _investorRegistry,
         uint256 _companyId
     ) {
-        if (_paymentToken == address(0) || _shareToken == address(0) || _vault == address(0)) 
+        if (_paymentToken == address(0) || _shareToken == address(0) || _vault == address(0))
             revert InvalidAmount();
         if (_companyOwner == address(0)) revert OnlyCompanyOwner();
         if (_feeRecipient == address(0)) revert InvalidAmount();
@@ -87,6 +106,7 @@ contract ShareSale is ReentrancyGuard, Pausable {
         shareToken = ICompanyShareToken(_shareToken);
         vault = ICompanyVault(_vault);
         companyOwner = _companyOwner;
+        companyOwnerSmartWallet = _companyOwnerSmartWallet; // may be address(0)
         feeRecipient = _feeRecipient;
         feeBps = _feeBps;
 
@@ -128,11 +148,12 @@ contract ShareSale is ReentrancyGuard, Pausable {
     }
 
     /// @notice Buy exact number of shares
-    function buyExactShares(uint256 sharesWei) 
-        external 
-        nonReentrant 
-        whenNotPaused 
-        returns (uint256 usdtCost) 
+    function buyExactShares(uint256 sharesWei)
+        external
+        nonReentrant
+        whenNotPaused
+        notCompanyOwner
+        returns (uint256 usdtCost)
     {
         if (!roundActive) revert RoundNotActive();
         if (sharesWei == 0 || sharesWei > MAX_SHARES_PER_PURCHASE) revert InvalidAmount();
@@ -164,11 +185,12 @@ contract ShareSale is ReentrancyGuard, Pausable {
     }
 
     /// @notice Buy shares with a USDT amount
-    function buyWithUSDT(uint256 usdtAmount) 
-        external 
-        nonReentrant 
-        whenNotPaused 
-        returns (uint256 sharesWei) 
+    function buyWithUSDT(uint256 usdtAmount)
+        external
+        nonReentrant
+        whenNotPaused
+        notCompanyOwner
+        returns (uint256 sharesWei)
     {
         if (!roundActive) revert RoundNotActive();
         if (usdtAmount == 0) revert InvalidAmount();

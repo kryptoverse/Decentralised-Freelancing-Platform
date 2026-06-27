@@ -67,6 +67,9 @@ const SPACETIMEDB_API = normalizeSpacetimeApi(
   process.env.NEXT_PUBLIC_SPACETIMEDB_REST_URI ||
   process.env.NEXT_PUBLIC_SPACETIMEDB_URI
 );
+// Identity endpoint lives next to the database endpoint (…/v1/identity).
+const SPACETIMEDB_IDENTITY_API = SPACETIMEDB_API.replace(/\/v1\/database$/, "/v1/identity");
+const IDENTITY_TOKEN_KEY = "spacetime_identity_token";
 const DB_NAME = (
   process.env.NEXT_PUBLIC_SPACETIMEDB_NAME ||
   process.env.NEXT_PUBLIC_SPACETIMEDB_DB_NAME ||
@@ -171,7 +174,60 @@ export class SpacetimeDBClient {
   public chatMembers: ChatMember[] = [];
   public clientNotifications: ClientNotificationEvent[] = [];
 
-  constructor() {}
+  // A STABLE SpacetimeDB identity for this browser. The REST `/call` endpoint
+  // mints a fresh anonymous identity for every unauthenticated request, so
+  // without this each reducer call would run under a different `ctx.sender()`.
+  // That breaks reducers that correlate calls by identity — e.g. `register_user`
+  // would register a wallet under one identity while `ensure_chat_member` runs
+  // under another, fails its "join as yourself" self-check, and panics with
+  // "the instance encountered a fatal error" (HTTP 530). We acquire one token
+  // once, persist it, and send it as `Authorization: Bearer` on every call.
+  private identityToken: string | null = null;
+  private identityPromise: Promise<void> | null = null;
+
+  constructor() {
+    if (typeof window !== 'undefined') {
+      try {
+        this.identityToken = localStorage.getItem(IDENTITY_TOKEN_KEY);
+      } catch {
+        /* storage unavailable — fall back to acquiring a fresh token */
+      }
+    }
+  }
+
+  // Acquire and cache a stable identity token exactly once. Concurrent callers
+  // share the same in-flight request so they all converge on one identity.
+  private async ensureIdentity(): Promise<void> {
+    if (this.identityToken) return;
+    if (!this.identityPromise) {
+      this.identityPromise = (async () => {
+        try {
+          const res = await fetch(SPACETIMEDB_IDENTITY_API, { method: 'POST' });
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.token) this.setIdentityToken(data.token);
+          }
+        } catch (err) {
+          console.error("Failed to acquire SpacetimeDB identity:", err);
+        } finally {
+          // Allow a retry on the next call if acquisition failed.
+          if (!this.identityToken) this.identityPromise = null;
+        }
+      })();
+    }
+    await this.identityPromise;
+  }
+
+  private setIdentityToken(token: string) {
+    this.identityToken = token;
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(IDENTITY_TOKEN_KEY, token);
+      } catch {
+        /* storage unavailable — keep the in-memory token for this session */
+      }
+    }
+  }
 
   // NOTE: SpacetimeDB's HTTP `/call/:reducer` endpoint expects the body to be a
   // JSON ARRAY of positional arguments in the order the reducer declares them.
@@ -180,13 +236,19 @@ export class SpacetimeDBClient {
   // array here, ordered to match the Rust reducer signature.
   async call(reducer: string, args: any[]) {
     try {
+      await this.ensureIdentity();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (this.identityToken) headers['Authorization'] = `Bearer ${this.identityToken}`;
       const res = await fetch(`${SPACETIMEDB_API}/${DB_NAME}/call/${reducer}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(args)
       });
+      // First call may still return a server-minted token; lock onto it.
+      if (!this.identityToken) {
+        const minted = res.headers.get('spacetime-identity-token');
+        if (minted) this.setIdentityToken(minted);
+      }
       if (!res.ok) {
         console.error(`Reducer ${reducer} failed:`, await res.text());
         return false;
@@ -566,7 +628,9 @@ export const setupCompanyGroupChat = async ({
     setTimeout(resolve, 300);
   });
 
-  registerUser(walletAddress, displayName || `User ${walletAddress.slice(0, 6)}`, memberRole);
+  // Await registration so the User row is committed under this browser's
+  // stable identity BEFORE ensure_chat_member runs its "join as yourself" check.
+  await registerUser(walletAddress, displayName || `User ${walletAddress.slice(0, 6)}`, memberRole);
 
   const chatId = getCompanyChatId(companyId);
   await initiateCompanyChat(companyId, founderAddress);

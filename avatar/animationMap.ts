@@ -58,13 +58,9 @@ for (let i = 1; i <= 10; i += 1) {
   );
 }
 
-// --- Dances (male 1..9,11 ; female 1,4,5,6,7) ---
-const femaleDance = new Set([1, 4, 5, 6, 7]);
+// --- Dances (male 1..9,11 ; female dances removed) ---
 for (const i of [1, 2, 3, 4, 5, 6, 7, 8, 9, 11]) {
-  manifest[`dance_${k2(i)}`] = M(
-    `M_Dances_${pad(i)}.glb`,
-    femaleDance.has(i) ? `F_Dances_${pad(i)}.glb` : undefined
-  );
+  manifest[`dance_${k2(i)}`] = M(`M_Dances_${pad(i)}.glb`);
 }
 
 // --- Standing expressions (male only; no 003) ---

@@ -19,8 +19,9 @@ import type { AvatarExpression } from "./expressionPresets";
 
 // --- Animation pools (logical keys from the streamoji manifest) ---
 
-// Celebratory "stunts": every dance + every jump. (Female resolves to female
-// dances only, since female jumps aren't in the library — handled at runtime.)
+// Celebratory "stunts": every dance + every jump. Dances and jumps are
+// male-only in the library, so for female avatars these keys resolve to
+// nothing and are skipped at runtime (expression still changes).
 const DANCES = [
   "dance_01", "dance_02", "dance_03", "dance_04", "dance_05",
   "dance_06", "dance_07", "dance_08", "dance_09", "dance_11",

@@ -56,14 +56,16 @@ export function SpacetimeChat({
         const client = initSpacetimeDB();
         setMessages(getMessagesForChat(jobId).sort((a, b) => messageTime(a) - messageTime(b)));
         
-        const offConnect = client.onConnect((token: string, identity: any) => {
+        const offConnect = client.onConnect(async (token: string, identity: any) => {
             setConnected(true);
             console.log("Connected to SpacetimeDB with Identity:", identity);
-            
-            // Auto-register user with their wallet
+
+            // Auto-register user with their wallet. Await it so the User row is
+            // committed under this browser's stable identity before initiate_chat
+            // / ensure_chat_member run their identity-based authorization checks.
             const displayName = "User " + account.address.slice(0, 4); // In memory URI simulation
-            registerUser(account.address, displayName, currentUserRole);
-            
+            await registerUser(account.address, displayName, currentUserRole);
+
             // Direct chats start from the client. Project/company chats opt in so participants can open safely.
             if (currentUserRole === "client" || ensureRoom) {
                 const initiatorRole = isCompanyChatId(jobId)

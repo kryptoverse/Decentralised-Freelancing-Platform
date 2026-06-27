@@ -27,6 +27,12 @@ interface SpacetimeChatProps {
     directChatId?: string;
     directChatHref?: string;
     directChatLabel?: string;
+    // Address to send messages AS (and to treat as "me"). Defaults to the
+    // connected account. Used for founders: the company is created from their
+    // EOA (which is the room's client_address / `clientAddress`), but they
+    // connect via a Smart Wallet — sending as the EOA keeps the reducer
+    // authorization and the "Founder" label working for everyone.
+    senderAddress?: string;
 }
 
 export function SpacetimeChat({
@@ -41,8 +47,12 @@ export function SpacetimeChat({
     directChatId,
     directChatHref,
     directChatLabel = "Open main chat",
+    senderAddress,
 }: SpacetimeChatProps) {
     const account = useActiveAccount();
+    // The address this user actually posts as. Founders post as their company's
+    // creation address (EOA); everyone else posts as their connected account.
+    const selfAddress = (senderAddress || account?.address || "").toLowerCase();
     const [messages, setMessages] = useState<Message[]>([]);
     // wallet (lowercased) -> member_role ("founder" | "investor") for this room.
     // Used to label senders reliably: a founder who created the company from their
@@ -140,7 +150,7 @@ export function SpacetimeChat({
         const message = inputMsg.trim();
         setSending(true);
         setInputMsg("");
-        const ok = await sendMessage(jobId, message, account?.address);
+        const ok = await sendMessage(jobId, message, senderAddress || account?.address);
         if (!ok) setInputMsg(message);
         setSending(false);
     };
@@ -168,7 +178,7 @@ export function SpacetimeChat({
                     ) : (
                         messages.map(msg => {
                             const sender = msg.sender_address.toLowerCase();
-                            const isMe = sender === account.address.toLowerCase();
+                            const isMe = sender === selfAddress;
                             const isClient = sender === clientAddress.toLowerCase();
                             const isFreelancer = sender === freelancerAddress.toLowerCase();
 

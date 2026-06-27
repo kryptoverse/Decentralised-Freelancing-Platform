@@ -228,6 +228,9 @@ export function CompanyGroupChatDashboard({ role }: { role: "founder" | "investo
               clientAddress={selectedCompany.owner}
               freelancerAddress={getCompanyChatParticipantAddress(selectedCompany.id)}
               currentUserRole={role}
+              // Founders post as the company's creation address (its on-chain
+              // owner) so their messages are authorized and labeled "Founder".
+              senderAddress={role === "founder" ? selectedCompany.owner : undefined}
               title={`${selectedCompany.meta?.name || `Company #${selectedCompany.id.toString()}`} Group Chat`}
               ensureRoom
             />

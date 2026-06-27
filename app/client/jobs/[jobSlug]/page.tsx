@@ -1021,11 +1021,27 @@ export default function JobAnalyticsPage() {
     }
 
     fetchEscrow();
-    const interval = setInterval(fetchEscrow, 15000);
+    // Poll less aggressively and skip entirely while the tab is hidden, so
+    // multiple testers leaving job tabs open don't sustain RPC load against the
+    // rate limit. Refetch immediately when the tab becomes visible again.
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      fetchEscrow();
+    }, 25000);
+
+    const onVisible = () => {
+      if (typeof document !== "undefined" && !document.hidden) fetchEscrow();
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisible);
+    }
 
     return () => {
       isMounted = false;
       clearInterval(interval);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisible);
+      }
     };
   }, [job?.escrowAddress]);
 

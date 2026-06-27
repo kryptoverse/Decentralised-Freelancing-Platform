@@ -25,78 +25,86 @@ export async function POST(req: Request) {
       ...messages.map((m: any) => ({ role: m.role, content: m.content }))
     ];
 
+    // Only Groq keys that are actually set in the environment.
     const groqKeys = [
       process.env.GROQ_API_KEY,
       process.env.GROQ_API_KEY2,
       process.env.GROQ_API_KEY3,
       process.env.GROQ_API_KEY4
-    ];
-    
+    ].filter(Boolean) as string[];
+
+    // Only currently-supported Groq models (decommissioned models removed so we
+    // don't waste round-trips failing on them).
     const groqModels = [
       'llama-3.3-70b-versatile',
-      'llama-3.1-70b-versatile',
-      'llama-3.1-8b-instant',
-      'mixtral-8x7b-32768'
+      'llama-3.1-8b-instant'
     ];
 
-    const providers: { url: string, key: string | undefined, model: string }[] = [];
-    
-    for (const key of groqKeys) {
-      if (key) {
-        for (const model of groqModels) {
-          providers.push({
-            url: 'https://api.groq.com/openai/v1/chat/completions',
-            key,
-            model
-          });
-        }
-      }
-    }
-
-    providers.push({ 
-      url: 'https://text.pollinations.ai/openai/v1/chat/completions', 
-      key: 'pollinations', 
-      model: 'openai' 
-    });
+    const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
     let response: Response | null = null;
     let lastError: any = null;
 
-    for (const provider of providers) {
-      // Skip if it requires a key but the key is not in .env.local
-      if (!provider.key) continue;
+    const callProvider = async (url: string, key: string, model: string) => {
+      return fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${key}`
+        },
+        body: JSON.stringify({
+          model,
+          messages: formattedMessages,
+          stream: true
+        })
+      });
+    };
 
+    // Try each Groq key in turn. If a key is rate-limited (429) or unauthorized
+    // (401/403), the whole key is exhausted — skip its remaining models and jump
+    // straight to the next key instead of burning extra round-trips.
+    keyLoop:
+    for (let i = 0; i < groqKeys.length && !response; i++) {
+      const key = groqKeys[i];
+      for (const model of groqModels) {
+        try {
+          const res = await callProvider(GROQ_URL, key, model);
+          if (res.ok) {
+            console.log(`[AI Success] Groq key #${i + 1} (${model})`);
+            response = res;
+            break keyLoop;
+          }
+          console.warn(`[AI Fallback] Groq key #${i + 1} (${model}) failed: ${res.status}`);
+          lastError = new Error(`Groq API error: ${res.status}`);
+          // Key-level failures: this key is done, move to the next key.
+          if (res.status === 429 || res.status === 401 || res.status === 403) {
+            break; // exit model loop -> next key
+          }
+        } catch (err) {
+          console.warn(`[AI Fallback] Groq key #${i + 1} (${model}) threw:`, err);
+          lastError = err;
+        }
+      }
+    }
+
+    // Last resort: free, keyless provider.
+    if (!response) {
       try {
-        const res = await fetch(provider.url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${provider.key}`
-          },
-          body: JSON.stringify({
-            model: provider.model,
-            messages: formattedMessages,
-            stream: true
-          })
-        });
-
+        const res = await callProvider('https://text.pollinations.ai/openai/v1/chat/completions', 'pollinations', 'openai');
         if (res.ok) {
-          console.log(`[AI Success] Using provider: ${provider.url} (${provider.model})`);
+          console.log('[AI Success] Pollinations fallback');
           response = res;
-          break; // Successfully connected to an API, break the fallback loop
         } else {
-           console.warn(`[AI Fallback] ${provider.url} failed with status: ${res.status}`);
-           lastError = new Error(`API error: ${res.status}`);
+          lastError = new Error(`Pollinations error: ${res.status}`);
         }
       } catch (err) {
-         console.warn(`[AI Fallback] ${provider.url} fetch threw error:`, err);
-         lastError = err;
+        lastError = err;
       }
     }
 
     if (!response) {
         const errorMessage = lastError?.message || "Unknown error occurred";
-        const fallbackMessage = `⚠️ System Notice: All AI providers (including 4 Groq API keys) have failed to respond. Please check your API keys and try again later.\n\nError details: ${errorMessage}`;
+        const fallbackMessage = `⚠️ System Notice: All AI providers (including ${groqKeys.length} Groq API key${groqKeys.length === 1 ? '' : 's'}) have failed to respond. Please check your API keys and try again later.\n\nError details: ${errorMessage}`;
         
         return new Response(fallbackMessage, {
             headers: {

@@ -33,6 +33,8 @@ interface FreelancerProfileFormProps {
   onSaved?: (uri: string) => void;
 }
 
+const BIO_MAX_LENGTH = 500;
+
 export function FreelancerProfileForm({
   profileAddress,
   existingMetadata,
@@ -140,6 +142,9 @@ export function FreelancerProfileForm({
     if (!form.name.trim()) newErrors.name = "Name is required";
     if (!form.headline.trim()) newErrors.headline = "Professional headline is required";
     if (!form.bio.trim()) newErrors.bio = "Professional summary is required";
+    if (form.bio.length > BIO_MAX_LENGTH) {
+      newErrors.bio = `Professional summary must be ${BIO_MAX_LENGTH} characters or less.`;
+    }
     if (!form.profileImage) newErrors.profileImage = "Profile image is required";
 
     if (form.skills.length === 0 || (form.skills.length === 1 && form.skills[0] === "")) {
@@ -350,14 +355,15 @@ export function FreelancerProfileForm({
             <textarea
               name="bio"
               rows={5}
+              maxLength={BIO_MAX_LENGTH}
               value={form.bio}
               onChange={handleChange}
               placeholder="Write a compelling summary about your experience, skills, and what makes you unique. This is your chance to stand out to potential clients..."
               className={`${inputBase} resize-none ${errors.bio ? inputError : inputNormal}`}
             />
             {errors.bio && <p className="text-xs text-red-500 mt-1.5">{errors.bio}</p>}
-            <p className="text-xs text-muted-foreground mt-1.5">
-              {form.bio.length}/500 characters (recommended: 150-300 words)
+            <p className={`text-xs mt-1.5 ${form.bio.length >= BIO_MAX_LENGTH ? "text-amber-500" : "text-muted-foreground"}`}>
+              {form.bio.length}/{BIO_MAX_LENGTH} characters maximum
             </p>
           </div>
         </div>

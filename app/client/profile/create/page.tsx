@@ -16,6 +16,8 @@ import { Loader2, Upload } from "lucide-react";
 import { useIPFSUpload } from "@/hooks/useIPFSUpload";
 import { ipfsToHttp } from "@/utils/ipfs";
 
+const BIO_MAX_LENGTH = 500;
+
 export default function CreateClientProfilePage() {
   const active = useActiveAccount();
   const router = useRouter();
@@ -123,6 +125,10 @@ const pAddr = await readContract({
   --------------------------------------- */
   const saveProfile = async () => {
     if (!safeAccount) return alert("Connect wallet first");
+    if (form.bio.length > BIO_MAX_LENGTH) {
+      alert(`Bio must be ${BIO_MAX_LENGTH} characters or less.`);
+      return;
+    }
 
     try {
       setLoading(true);
@@ -241,7 +247,7 @@ const pAddr = await readContract({
 
       {/* TEXT FIELDS */}
       <div className="space-y-4">
-        {["name", "bio", "company"].map((field) => (
+        {["name", "company"].map((field) => (
           <div key={field} className="w-full">
             <label className="capitalize mb-1 block text-sm font-medium">
               {field}
@@ -258,6 +264,26 @@ const pAddr = await readContract({
             />
           </div>
         ))}
+        <div className="w-full">
+          <label className="capitalize mb-1 block text-sm font-medium">
+            bio
+          </label>
+          <textarea
+            name="bio"
+            rows={4}
+            maxLength={BIO_MAX_LENGTH}
+            value={form.bio}
+            onChange={handleChange}
+            className="
+                w-full p-3 rounded-xl bg-surface border border-border
+                focus:ring-2 focus:ring-primary outline-none resize-none
+              "
+            placeholder="Enter bio"
+          />
+          <p className={`text-xs mt-1 ${form.bio.length >= BIO_MAX_LENGTH ? "text-amber-500" : "text-muted-foreground"}`}>
+            {form.bio.length}/{BIO_MAX_LENGTH} characters maximum
+          </p>
+        </div>
       </div>
 
       {/* SAVE BUTTON */}

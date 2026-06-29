@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   getContract,
   prepareContractCall,
@@ -42,9 +42,12 @@ export function FreelancerProfileForm({
 }: FreelancerProfileFormProps) {
   const account = useActiveAccount();
   const { uploadFile, uploadMetadata, uploading, progress } = useIPFSUpload();
+  const formRef = useRef<HTMLFormElement>(null);
 
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showLegalConsent, setShowLegalConsent] = useState(false);
+  const [legalConsentAccepted, setLegalConsentAccepted] = useState(false);
 
   const [form, setForm] = useState<Metadata>({
     name: "",
@@ -189,6 +192,11 @@ export function FreelancerProfileForm({
       return;
     }
 
+    if (!profileAddress && !legalConsentAccepted) {
+      setShowLegalConsent(true);
+      return;
+    }
+
     try {
       setLoading(true);
       setMsg("🚀 Uploading metadata to IPFS...");
@@ -289,7 +297,9 @@ export function FreelancerProfileForm({
   const removeBtn = "text-xs font-medium text-red-500 hover:text-red-600 hover:underline transition-colors";
 
   return (
+    <>
     <form
+      ref={formRef}
       onSubmit={handleSubmit}
       className="w-full max-w-3xl mx-auto space-y-5 sm:space-y-6"
     >
@@ -813,5 +823,42 @@ export function FreelancerProfileForm({
         )}
       </div>
     </form>
+    {showLegalConsent && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="freelancer-legal-consent-title"
+          className="w-full max-w-lg rounded-2xl border border-border bg-surface p-5 sm:p-6 shadow-2xl"
+        >
+          <h3 id="freelancer-legal-consent-title" className="text-lg sm:text-xl font-bold mb-3">
+            Freelancer Responsibility Notice
+          </h3>
+          <div className="space-y-3 text-sm leading-relaxed text-foreground-secondary">
+            <p>
+              By creating a freelancer profile on WORQS, you confirm that the information you provide is accurate and belongs to you.
+            </p>
+            <p>
+              If a freelancer uses the platform to scam, mislead, impersonate, steal funds, submit fraudulent work, or harm clients, WORQS reserves the right to use submitted profile details, account activity, wallet information, project records, and related platform data to investigate the matter.
+            </p>
+            <p>
+              WORQS may take appropriate action, including account restrictions, dispute review, legal action, and involvement of local law enforcement or relevant authorities where necessary.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setLegalConsentAccepted(true);
+              setShowLegalConsent(false);
+              window.setTimeout(() => formRef.current?.requestSubmit(), 0);
+            }}
+            className="mt-5 w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+          >
+            OK, I Understand
+          </button>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

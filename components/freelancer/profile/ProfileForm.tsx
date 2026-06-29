@@ -57,11 +57,6 @@ export function FreelancerProfileForm({
     portfolio: [{ title: "", description: "", link: "", image: "" }],
   });
 
-  const getOnChainBio = () => {
-    const source = form.headline.trim() || form.bio.trim();
-    return source.length > 160 ? `${source.slice(0, 157)}...` : source;
-  };
-
   useEffect(() => {
     if (existingMetadata) {
       setForm((prev) => ({
@@ -243,11 +238,10 @@ export function FreelancerProfileForm({
         const bioChanged = currentBio !== form.bio;
 
         if (uriChanged || nameChanged || bioChanged) {
-          const onChainBio = getOnChainBio();
           const tx = await prepareContractCall({
             contract,
             method: "function updateProfile(string,string,string)",
-            params: [form.name, onChainBio, metadataURI],
+            params: [form.name, form.bio, metadataURI],
           });
           await sendTransaction({ account, transaction: tx });
           setMsg("✅ Profile updated successfully!");
@@ -260,11 +254,11 @@ export function FreelancerProfileForm({
           chain: CHAIN,
           address: DEPLOYED_CONTRACTS.addresses.FreelancerFactory as `0x${string}`,
         });
-        const onChainBio = getOnChainBio();
         const tx = await prepareContractCall({
           contract: factory,
           method: "function deployFreelancerProfile(string,string,string) returns (address)",
-          params: [form.name, onChainBio, metadataURI],
+          params: [form.name, form.bio, metadataURI],
+          gas: 3000000n, // Override gas limit to prevent UserOp out-of-gas errors during deployment
         });
         await sendTransaction({ account, transaction: tx });
         setMsg("✅ Profile created successfully!");

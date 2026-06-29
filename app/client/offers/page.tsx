@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getContract, readContract, prepareContractCall, sendTransaction } from "thirdweb";
-import { smartWallet } from "thirdweb/wallets";
+import { getWalletBalance, smartWallet } from "thirdweb/wallets";
 import { useActiveAccount, useActiveWallet } from "thirdweb/react";
 import { client } from "@/lib/thirdweb-client";
 import { CHAIN } from "@/lib/chains";
@@ -31,6 +31,17 @@ interface DirectOffer {
     rejected: boolean;
     cancelled: boolean;
     jobStatus?: number; // 0=Unknown, 1=Open, 2=Hired, etc.
+}
+
+function getFriendlyFundingError(err: any): string {
+    const msg = err?.message || String(err);
+    if (msg.includes("AA21") || msg.includes("AA11") || msg.includes("insufficient funds") || msg.includes("didn't pay prefund")) {
+        return "Funding needs MATIC in your Smart Wallet for gas because escrow deployment is not sponsored. Transfer a small amount of MATIC to your Smart Wallet address, then try funding again.";
+    }
+    if (msg.includes("User denied")) {
+        return "Transaction was cancelled by the user.";
+    }
+    return msg.length > 140 ? `${msg.slice(0, 140)}...` : msg;
 }
 
 export default function ClientOffersPage() {
@@ -193,6 +204,16 @@ export default function ClientOffersPage() {
             const execAccount = await getExecutionAccount();
             const walletAddress = execAccount.address as `0x${string}`;
 
+            const maticBalance = await getWalletBalance({
+                client,
+                chain: CHAIN,
+                address: walletAddress,
+            });
+
+            if (maticBalance.value === 0n) {
+                throw new Error("Your Smart Wallet has 0 MATIC. Funding a direct proposal deploys escrow without sponsorship, so your Smart Wallet needs MATIC for gas.");
+            }
+
             const budgetVal = BigInt(offer.budgetUSDT);
 
             // 1. Approve EscrowFactory to pull USDT
@@ -266,7 +287,7 @@ export default function ClientOffersPage() {
             console.error("Funding failed", err);
             toast({
                 title: "Funding Failed",
-                description: err.message || "Unknown error",
+                description: getFriendlyFundingError(err),
                 variant: "destructive"
             });
         } finally {

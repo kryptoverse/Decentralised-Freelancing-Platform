@@ -258,7 +258,6 @@ export function FreelancerProfileForm({
           contract: factory,
           method: "function deployFreelancerProfile(string,string,string) returns (address)",
           params: [form.name, form.bio, metadataURI],
-          gas: 3000000n, // Override gas limit to prevent UserOp out-of-gas errors during deployment
         });
         await sendTransaction({ account, transaction: tx });
         setMsg("✅ Profile created successfully!");

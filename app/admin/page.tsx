@@ -21,6 +21,7 @@ import {
   ExternalLink,
   Sparkles,
   Brain,
+  Building2,
 } from "lucide-react";
 
 interface Freelancer {
@@ -46,6 +47,20 @@ interface Dispute {
   createdAt: number;
 }
 
+interface Company {
+  id: number;
+  owner: string;
+  token: string;
+  sale: string;
+  vault: string;
+  distributor: string;
+  metadataURI: string;
+  sector: string;
+  name: string;
+  symbol: string;
+  description: string;
+}
+
 export default function AdminPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -55,6 +70,8 @@ export default function AdminPage() {
 
   // Utility function for copying to clipboard
   const copyToClipboard = (text: string) => navigator.clipboard.writeText(text);
+  const shortAddress = (address: string) =>
+    address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "N/A";
 
   // KYC Management State
   const [freelancers, setFreelancers] = useState<Freelancer[]>([]);
@@ -78,6 +95,11 @@ export default function AdminPage() {
   const [selectedDispute, setSelectedDispute] = useState<Dispute | null>(null);
   const [resolvingDispute, setResolvingDispute] = useState(false);
   const [customSplit, setCustomSplit] = useState(50);
+
+  // Freelancer Companies State
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [loadingCompanies, setLoadingCompanies] = useState(false);
+  const [companiesError, setCompaniesError] = useState<string | null>(null);
 
   // AI Dispute Analysis (cached per jobId so re-opening never re-fetches)
   const [aiAnalysisCache, setAiAnalysisCache] = useState<Record<number, string>>({});
@@ -103,9 +125,30 @@ export default function AdminPage() {
     }
   };
 
+  const fetchCompanies = async () => {
+    try {
+      setLoadingCompanies(true);
+      setCompaniesError(null);
+
+      const res = await fetch("/api/admin/companies");
+      const data = await res.json();
+
+      if (data.success) {
+        setCompanies(data.companies || []);
+      } else {
+        setCompaniesError(data.error || "Failed to fetch companies");
+      }
+    } catch (err: any) {
+      setCompaniesError(err.message || "Failed to fetch companies");
+    } finally {
+      setLoadingCompanies(false);
+    }
+  };
+
   useEffect(() => {
     if (isAuthenticated) {
       fetchFreelancers();
+      fetchCompanies();
       fetchDisputes();
     }
   }, [isAuthenticated]);
@@ -565,6 +608,173 @@ Please analyze and give your recommendation.`;
               ))}
             </ul>
           </div>
+        )}
+      </section>
+
+      {/* Freelancer Companies Section */}
+      <section className="space-y-4">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold flex items-center gap-2">
+              <Building2 className="w-6 h-6 text-primary" />
+              Freelancer Companies
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              View companies created by freelancers through the company registry
+            </p>
+          </div>
+
+          <button
+            onClick={fetchCompanies}
+            disabled={loadingCompanies}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border hover:bg-surface-secondary transition disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${loadingCompanies ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
+        </div>
+
+        {loadingCompanies && (
+          <div className="flex items-center justify-center h-32">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          </div>
+        )}
+
+        {!loadingCompanies && companiesError && (
+          <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 flex items-center gap-2">
+            <AlertCircle className="w-5 h-5" />
+            {companiesError}
+          </div>
+        )}
+
+        {!loadingCompanies && !companiesError && companies.length === 0 && (
+          <div className="p-8 rounded-lg border border-border bg-surface-secondary text-center">
+            <Building2 className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+            <p className="text-lg font-semibold">No Companies Created</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Freelancer-created companies will appear here after registry creation.
+            </p>
+          </div>
+        )}
+
+        {!loadingCompanies && !companiesError && companies.length > 0 && (
+          <>
+            <div className="border border-border rounded-xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-surface-secondary border-b border-border">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-semibold">Company</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold">Owner</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold">Vault</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold">Token</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold">Sector</th>
+                      <th className="px-4 py-3 text-right text-sm font-semibold">Links</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {companies.map((company, index) => (
+                      <motion.tr
+                        key={company.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.04 }}
+                        className="hover:bg-surface-secondary/50 transition"
+                      >
+                        <td className="px-4 py-4">
+                          <div className="font-medium">{company.name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            ID #{company.id}{company.symbol ? ` • ${company.symbol}` : ""}
+                          </div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-2 font-mono text-xs">
+                            {shortAddress(company.owner)}
+                            {company.owner && (
+                              <Copy
+                                className="w-3 h-3 cursor-pointer text-primary hover:text-primary/70"
+                                onClick={() => copyToClipboard(company.owner)}
+                              />
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-2 font-mono text-xs">
+                            {shortAddress(company.vault)}
+                            {company.vault && (
+                              <Copy
+                                className="w-3 h-3 cursor-pointer text-primary hover:text-primary/70"
+                                onClick={() => copyToClipboard(company.vault)}
+                              />
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-2 font-mono text-xs">
+                            {shortAddress(company.token)}
+                            {company.token && (
+                              <Copy
+                                className="w-3 h-3 cursor-pointer text-primary hover:text-primary/70"
+                                onClick={() => copyToClipboard(company.token)}
+                              />
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <span className="px-2 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">
+                            {company.sector || "Uncategorized"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                          <div className="flex justify-end gap-2">
+                            {company.vault && (
+                              <a
+                                href={`https://amoy.polygonscan.com/address/${company.vault}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 transition text-xs font-medium"
+                              >
+                                Vault <ExternalLink className="w-3 h-3" />
+                              </a>
+                            )}
+                            {company.metadataURI && (
+                              <a
+                                href={company.metadataURI.replace("ipfs://", "https://ipfs.io/ipfs/")}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border hover:bg-surface-secondary transition text-xs font-medium"
+                              >
+                                Metadata <ExternalLink className="w-3 h-3" />
+                              </a>
+                            )}
+                          </div>
+                        </td>
+                      </motion.tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-4 rounded-lg border border-border bg-surface-secondary">
+                <div className="text-sm text-muted-foreground">Total Companies</div>
+                <div className="text-2xl font-bold mt-1">{companies.length}</div>
+              </div>
+              <div className="p-4 rounded-lg border border-primary/30 bg-primary/10">
+                <div className="text-sm text-primary">Linked Vaults</div>
+                <div className="text-2xl font-bold mt-1 text-primary">
+                  {companies.filter((company) => company.vault).length}
+                </div>
+              </div>
+              <div className="p-4 rounded-lg border border-blue-500/30 bg-blue-500/10">
+                <div className="text-sm text-blue-400">Sectors</div>
+                <div className="text-2xl font-bold mt-1 text-blue-400">
+                  {new Set(companies.map((company) => company.sector).filter(Boolean)).size}
+                </div>
+              </div>
+            </div>
+          </>
         )}
       </section>
 

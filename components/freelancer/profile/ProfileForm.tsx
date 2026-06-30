@@ -13,6 +13,7 @@ import { useIPFSUpload } from "@/hooks/useIPFSUpload";
 import { ipfsToHttp } from "@/utils/ipfs";
 import { DEPLOYED_CONTRACTS } from "@/constants/deployedContracts";
 import { FileUploadButton } from "@/components/ui/file-upload-button";
+import { avatarEvents } from "@/avatar/avatarEvents";
 
 interface Metadata {
   name: string;
@@ -275,6 +276,7 @@ export function FreelancerProfileForm({
         });
         await sendTransaction({ account, transaction: tx });
         setMsg("✅ Profile created successfully!");
+        avatarEvents.profileCreated();
       }
 
       onSaved?.(metadataURI);

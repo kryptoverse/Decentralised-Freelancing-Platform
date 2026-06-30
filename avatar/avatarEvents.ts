@@ -19,18 +19,18 @@ import type { AvatarExpression } from "./expressionPresets";
 
 // --- Animation pools (logical keys from the streamoji manifest) ---
 
-// Celebratory "stunts": every dance + every jump. Dances and jumps are
-// male-only in the library, so for female avatars these keys resolve to
-// nothing and are skipped at runtime (expression still changes).
+// Celebratory reactions for creation/success events. Keep these non-locomotion
+// so creating a job/profile/offer never triggers a walk animation.
 const DANCES = [
   "dance_01", "dance_02", "dance_03", "dance_04", "dance_05",
   "dance_06", "dance_07", "dance_08", "dance_09", "dance_11",
 ];
-const JUMPS = [
-  "walk_jump_1", "walk_jump_2", "walk_jump_3",
-  "run_jump_1", "run_jump_2", "jog_jump_1", "jog_jump_2",
+const SUCCESS_GESTURES = [
+  "talk_04", "talk_05", "talk_06",
+  "idle_var_03", "idle_var_05", "idle_var_08",
+  "expr_05", "expr_06", "expr_10", "expr_14",
 ];
-const CELEBRATE = [...DANCES, ...JUMPS];
+const CELEBRATE = [...DANCES, ...SUCCESS_GESTURES];
 
 // Upbeat gesture for sending a proposal (talking + a couple of expressions).
 const PROPOSAL = [
@@ -78,6 +78,8 @@ function fire(pool: string[], expression: AvatarExpression) {
 export const avatarEvents = {
   /** Freelancer/client posted a new job. */
   jobPosted: () => fire(CELEBRATE, "happy"),
+  /** Freelancer/client created or saved a profile. */
+  profileCreated: () => fire(CELEBRATE, "happy"),
   /** Client hired a freelancer. */
   freelancerHired: () => fire(CELEBRATE, "happy"),
   /** Client approved work and released payment / freelancer received payment. */
